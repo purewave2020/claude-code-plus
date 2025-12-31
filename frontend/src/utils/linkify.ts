@@ -8,7 +8,7 @@ export interface LinkifyResult {
   hasLinks: boolean
 }
 
-// HTML 转义
+// HTML 转义并保留换行
 function escapeHtml(text: string): string {
   const map: Record<string, string> = {
     '&': '&amp;',
@@ -17,7 +17,7 @@ function escapeHtml(text: string): string {
     '"': '&quot;',
     "'": '&#039;',
   }
-  return text.replace(/[&<>"']/g, (m) => map[m])
+  return text.replace(/[&<>"']/g, (m) => map[m]).replace(/\n/g, '<br>')
 }
 
 // 链接类型
