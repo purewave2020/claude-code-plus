@@ -186,7 +186,7 @@ object McpHttpGateway {
                 is ContentItem.Binary -> {
                     val encoded = Base64.getEncoder().encodeToString(item.data)
                     if (item.mimeType.startsWith("image/")) {
-                        McpSchema.ImageContent(encoded, item.mimeType)
+                        McpSchema.ImageContent(null, encoded, item.mimeType)
                     } else {
                         McpSchema.TextContent(encoded)
                     }
