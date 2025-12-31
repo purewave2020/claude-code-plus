@@ -42,6 +42,18 @@ enum class SettingSource {
 }
 
 /**
+ * Union type for MCP server entries.
+ */
+interface McpServerSpec
+
+/**
+ * Union type for MCP server configurations.
+ */
+sealed interface McpServerConfig : McpServerSpec {
+    val type: String
+}
+
+/**
  * MCP stdio server configuration.
  */
 @Serializable
@@ -75,13 +87,6 @@ data class McpHttpServerConfig(
 ) : McpServerConfig
 
 /**
- * Union type for MCP server configurations.
- */
-sealed interface McpServerConfig {
-    val type: String
-}
-
-/**
  * Claude Agent SDK options (formerly ClaudeAgentOptions).
  * Based on Python SDK v0.1.0 ClaudeAgentOptions.
  *
@@ -105,7 +110,7 @@ data class ClaudeAgentOptions(
     val appendSystemPromptFile: String? = null,
 
     // MCP servers (can be McpServerConfig or McpServer instances)
-    val mcpServers: Map<String, Any> = emptyMap(),
+    val mcpServers: Map<String, McpServerSpec> = emptyMap(),
 
     // Permission settings
     val permissionMode: PermissionMode? = null,

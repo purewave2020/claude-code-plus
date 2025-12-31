@@ -157,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { useSessionStore } from '@/stores/sessionStore'
 
 interface McpServerStatus {
@@ -207,14 +207,26 @@ const loadingTools = ref(false)
 const expandedTool = ref<string | null>(null)
 const toolsError = ref<string | null>(null)
 const reconnecting = ref<string | null>(null)
+const toolRefreshIntervalMs = 5000
+let toolRefreshTimer: ReturnType<typeof setInterval> | null = null
+let toolsRequestInFlight = false
 
 // 重置状态当弹窗关闭
 watch(() => props.visible, (visible) => {
   if (!visible) {
+    stopToolRefresh()
     selectedServer.value = null
     tools.value = []
     expandedTool.value = null
     toolsError.value = null
+  }
+})
+
+watch([() => props.visible, selectedServer], ([visible, server]) => {
+  if (visible && server) {
+    startToolRefresh(server)
+  } else {
+    stopToolRefresh()
   }
 })
 
@@ -223,43 +235,71 @@ function getStatusClass(status: string): string {
     case 'connected': return 'status-connected'
     case 'sdk': return 'status-sdk'
     case 'failed': return 'status-failed'
+    case 'needs-auth': return 'status-needs-auth'
     default: return 'status-unknown'
   }
 }
 
-async function selectServer(server: McpServerStatus) {
-  console.log('[McpStatusPopup] selectServer:', server.name, 'status:', server.status)
+function startToolRefresh(serverName: string) {
+  stopToolRefresh()
+  toolRefreshTimer = setInterval(() => {
+    void fetchTools(serverName, { silent: true })
+  }, toolRefreshIntervalMs)
+}
 
-  // 允许 connected 状态的服务器查看工具
-  if (server.status !== 'connected') {
-    console.log('[McpStatusPopup] 服务器状态不是 connected，跳过')
-    return
+function stopToolRefresh() {
+  if (!toolRefreshTimer) return
+  clearInterval(toolRefreshTimer)
+  toolRefreshTimer = null
+}
+
+async function fetchTools(serverName: string, options: { silent?: boolean } = {}) {
+  if (toolsRequestInFlight) return
+  const silent = options.silent ?? false
+  toolsRequestInFlight = true
+  if (!silent) {
+    loadingTools.value = true
+    tools.value = []
+    toolsError.value = null
   }
-
-  selectedServer.value = server.name
-  loadingTools.value = true
-  tools.value = []
-  toolsError.value = null
 
   try {
     const session = sessionStore.currentTab?.session
     console.log('[McpStatusPopup] session:', session ? 'exists' : 'null', 'isConnected:', session?.isConnected)
 
     if (session?.isConnected) {
-      console.log('[McpStatusPopup] 调用 getMcpTools:', server.name)
-      const result = await session.getMcpTools(server.name)
-      console.log('[McpStatusPopup] getMcpTools 结果:', result)
+      console.log('[McpStatusPopup] getMcpTools:', serverName)
+      const result = await session.getMcpTools(serverName)
+      console.log('[McpStatusPopup] getMcpTools result:', result)
       tools.value = result.tools
-    } else {
-      toolsError.value = 'Session 未连接'
-      console.warn('[McpStatusPopup] Session 未连接，无法获取工具')
+    } else if (!silent) {
+      toolsError.value = 'Session not connected'
+      console.warn('[McpStatusPopup] Session not connected, cannot get tools')
     }
   } catch (err) {
     console.error('[McpStatusPopup] Failed to get tools:', err)
-    toolsError.value = err instanceof Error ? err.message : '获取工具失败'
+    if (!silent) {
+      toolsError.value = err instanceof Error ? err.message : 'Failed to get tools'
+    }
   } finally {
-    loadingTools.value = false
+    if (!silent) {
+      loadingTools.value = false
+    }
+    toolsRequestInFlight = false
   }
+}
+
+async function selectServer(server: McpServerStatus) {
+  console.log('[McpStatusPopup] selectServer:', server.name, 'status:', server.status)
+
+  if (server.status !== 'connected') {
+    console.log('[McpStatusPopup] Server status is not connected, skip')
+    return
+  }
+
+  selectedServer.value = server.name
+  expandedTool.value = null
+  await fetchTools(server.name)
 }
 
 async function reconnectServer(server: McpServerStatus) {
@@ -326,6 +366,10 @@ function getToolParameters(tool: McpToolInfo): ParsedParam[] {
       return a.name.localeCompare(b.name)
     })
 }
+
+onBeforeUnmount(() => {
+  stopToolRefresh()
+})
 
 function close() {
   emit('close')
@@ -497,6 +541,11 @@ function close() {
 .status-failed {
   background: #dc3545;
   box-shadow: 0 0 4px #dc3545;
+}
+
+.status-needs-auth {
+  background: #f0ad4e;
+  box-shadow: 0 0 4px #f0ad4e;
 }
 
 .status-unknown {

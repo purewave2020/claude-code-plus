@@ -36,13 +36,18 @@ export class AiAgentService {
      * @param maxResults 最大结果数（默认 50）
      * @returns 历史会话列表
      */
-    async getHistorySessions(maxResults: number = 50, offset: number = 0): Promise<HistorySessionMetadata[]> {
+    async getHistorySessions(
+        maxResults: number = 50,
+        offset: number = 0,
+        provider?: string
+    ): Promise<HistorySessionMetadata[]> {
         try {
             console.log(`📋 [HTTP] 获取历史会话列表 (offset=${offset}, maxResults=${maxResults})`)
 
             // 使用 HTTP 调用（不依赖 RSocket 连接）
             const baseUrl = resolveServerHttpUrl()
-            const url = `${baseUrl}/api/history/sessions?offset=${offset}&maxResults=${maxResults}`
+            const providerQuery = provider ? `&provider=${encodeURIComponent(provider)}` : ''
+            const url = `${baseUrl}/api/history/sessions?offset=${offset}&maxResults=${maxResults}${providerQuery}`
 
             const response = await fetch(url)
             if (!response.ok) {
@@ -122,12 +127,16 @@ export class AiAgentService {
      * @param sessionId 会话 ID
      * @returns 删除结果
      */
-    async deleteHistorySession(sessionId: string): Promise<{ success: boolean; error?: string }> {
+    async deleteHistorySession(
+        sessionId: string,
+        provider?: string
+    ): Promise<{ success: boolean; error?: string }> {
         try {
             console.log(`🗑️ [HTTP] 删除历史会话: ${sessionId}`)
 
             const baseUrl = resolveServerHttpUrl()
-            const url = `${baseUrl}/api/history/sessions/${encodeURIComponent(sessionId)}`
+            const providerQuery = provider ? `?provider=${encodeURIComponent(provider)}` : ''
+            const url = `${baseUrl}/api/history/sessions/${encodeURIComponent(sessionId)}${providerQuery}`
 
             const response = await fetch(url, {
                 method: 'DELETE'

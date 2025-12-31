@@ -44,6 +44,8 @@ class ClaudeCodePlusConfigurable : SearchableConfigurable {
             <ul>
                 <li><b>MCP</b> - MCP server configuration (built-in and custom servers)</li>
                 <li><b>Claude Code</b> - Runtime settings, agents, and permissions</li>
+                <li><b>Codex</b> - Codex CLI path and runtime configuration</li>
+                <li><b>Git Generate</b> - AI-powered commit message generation</li>
             </ul>
             <br>
             <p>Select a sub-page from the left panel to configure specific settings.</p>

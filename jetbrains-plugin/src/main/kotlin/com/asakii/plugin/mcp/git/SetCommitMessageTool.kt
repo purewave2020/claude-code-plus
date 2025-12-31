@@ -1,6 +1,8 @@
 package com.asakii.plugin.mcp.git
 
+import com.asakii.plugin.mcp.getString
 import com.intellij.openapi.project.Project
+import kotlinx.serialization.json.JsonObject
 
 /**
  * 设置 Commit Message 工具
@@ -10,8 +12,8 @@ import com.intellij.openapi.project.Project
  */
 class SetCommitMessageTool(private val project: Project) {
 
-    suspend fun execute(arguments: Map<String, Any?>): String {
-        val message = arguments["message"] as? String
+    suspend fun execute(arguments: JsonObject): String {
+        val message = arguments.getString("message")
         if (message.isNullOrBlank()) {
             return buildString {
                 appendLine("# Set Commit Message")
@@ -20,7 +22,7 @@ class SetCommitMessageTool(private val project: Project) {
             }
         }
 
-        val mode = arguments["mode"] as? String ?: "replace"
+        val mode = arguments.getString("mode") ?: "replace"
         val append = mode == "append"
 
         val accessor = CommitPanelAccessor.getInstance(project)

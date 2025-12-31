@@ -1,8 +1,11 @@
 package com.asakii.plugin.mcp.git
 
+import com.asakii.plugin.mcp.getBoolean
+import com.asakii.plugin.mcp.getInt
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.Change
+import kotlinx.serialization.json.JsonObject
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -15,11 +18,11 @@ private val logger = KotlinLogging.logger {}
  */
 class GetVcsChangesTool(private val project: Project) {
 
-    suspend fun execute(arguments: Map<String, Any?>): String {
-        val selectedOnly = arguments["selectedOnly"] as? Boolean ?: false
-        val includeDiff = arguments["includeDiff"] as? Boolean ?: true
-        val maxFiles = (arguments["maxFiles"] as? Number)?.toInt() ?: 50
-        val maxDiffLines = (arguments["maxDiffLines"] as? Number)?.toInt() ?: 100
+    suspend fun execute(arguments: JsonObject): String {
+        val selectedOnly = arguments.getBoolean("selectedOnly") ?: false
+        val includeDiff = arguments.getBoolean("includeDiff") ?: true
+        val maxFiles = arguments.getInt("maxFiles") ?: 50
+        val maxDiffLines = arguments.getInt("maxDiffLines") ?: 100
 
         val accessor = CommitPanelAccessor.getInstance(project)
 

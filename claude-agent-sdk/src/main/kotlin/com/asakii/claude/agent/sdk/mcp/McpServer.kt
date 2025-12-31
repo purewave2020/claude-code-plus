@@ -1,5 +1,6 @@
 package com.asakii.claude.agent.sdk.mcp
 
+import com.asakii.claude.agent.sdk.types.McpServerSpec
 import kotlinx.serialization.json.*
 
 /**
@@ -7,7 +8,7 @@ import kotlinx.serialization.json.*
  *
  * 提供了创建自定义MCP工具服务器的标准接口，支持工具列表查询和工具调用执行。
  */
-interface McpServer {
+interface McpServer : McpServerSpec {
     /**
      * 服务器名称，用作标识符
      */
@@ -82,7 +83,7 @@ interface McpServer {
     /**
      * 调用指定的工具（Map 参数版本，兼容旧代码）
      */
-    suspend fun callTool(toolName: String, arguments: Map<String, Any>): ToolResult
+    suspend fun callTool(toolName: String, arguments: JsonObject): ToolResult
 
     /**
      * 调用指定的工具（JsonObject 参数版本，推荐使用）
@@ -90,51 +91,20 @@ interface McpServer {
      */
     suspend fun callToolJson(toolName: String, arguments: JsonObject): ToolResult {
         // 默认实现：递归转换 JsonObject 为 Map，调用旧方法
-        val map = JsonConverter.jsonObjectToMap(arguments)
-        return callTool(toolName, map)
+        return callTool(toolName, arguments)
     }
 }
 
 /**
  * JSON 转换工具
  */
-object JsonConverter {
-    /**
-     * 递归将 JsonElement 转换为普通类型
-     */
-    fun jsonElementToAny(element: JsonElement): Any? {
-        return when (element) {
-            is JsonNull -> null
-            is JsonPrimitive -> when {
-                element.isString -> element.content
-                element.booleanOrNull != null -> element.boolean
-                element.intOrNull != null -> element.int
-                element.longOrNull != null -> element.long
-                element.doubleOrNull != null -> element.double
-                else -> element.content
-            }
-            is JsonObject -> jsonObjectToMap(element)
-            is JsonArray -> element.map { jsonElementToAny(it) }
-        }
-    }
-
-    /**
-     * 将 JsonObject 转换为 Map<String, Any>
-     */
-    fun jsonObjectToMap(obj: JsonObject): Map<String, Any> {
-        return obj.entries
-            .mapNotNull { (k, v) -> jsonElementToAny(v)?.let { k to it } }
-            .toMap()
-    }
-}
-
 /**
  * 工具定义
  */
 data class ToolDefinition(
     val name: String,
     val description: String,
-    val inputSchema: Map<String, Any> = emptyMap()
+    val inputSchema: JsonObject = buildJsonObject { }
 ) {
     companion object {
         /**
@@ -143,10 +113,10 @@ data class ToolDefinition(
         fun simple(name: String, description: String) = ToolDefinition(
             name = name,
             description = description,
-            inputSchema = mapOf(
-                "type" to "object",
-                "properties" to emptyMap<String, Any>()
-            )
+            inputSchema = buildJsonObject {
+                put("type", "object")
+                putJsonObject("properties") { }
+            }
         )
         
         /**
@@ -174,29 +144,29 @@ data class ToolDefinition(
         ) = ToolDefinition(
             name = name,
             description = description,
-            inputSchema = mapOf(
-                "type" to "object",
-                "properties" to parameters.mapValues { (_, paramInfo) ->
-                    val schema = mutableMapOf<String, Any>()
-                    
-                    // 设置基础类型
-                    when (paramInfo.type) {
-                        ParameterType.STRING -> schema["type"] = "string"
-                        ParameterType.NUMBER -> schema["type"] = "number" 
-                        ParameterType.BOOLEAN -> schema["type"] = "boolean"
-                        ParameterType.ARRAY -> schema["type"] = "array"
-                        ParameterType.OBJECT -> schema["type"] = "object"
+            inputSchema = buildJsonObject {
+                put("type", "object")
+                putJsonObject("properties") {
+                    parameters.forEach { (paramName, paramInfo) ->
+                        putJsonObject(paramName) {
+                            when (paramInfo.type) {
+                                ParameterType.STRING -> put("type", "string")
+                                ParameterType.NUMBER -> put("type", "number")
+                                ParameterType.BOOLEAN -> put("type", "boolean")
+                                ParameterType.ARRAY -> put("type", "array")
+                                ParameterType.OBJECT -> put("type", "object")
+                            }
+
+                            if (paramInfo.description.isNotEmpty()) {
+                                put("description", paramInfo.description)
+                            }
+                        }
                     }
-                    
-                    // 添加描述信息
-                    if (paramInfo.description.isNotEmpty()) {
-                        schema["description"] = paramInfo.description
-                    }
-                    
-                    schema.toMap()
-                },
-                "required" to parameters.keys.toList() // 所有参数都是必需的，除非有默认值
-            )
+                }
+                putJsonArray("required") {
+                    parameters.keys.forEach { add(it) }
+                }
+            }
         )
     }
 }
@@ -228,7 +198,7 @@ sealed class ToolResult {
      */
     data class Success(
         override val content: List<ContentItem>,
-        val metadata: Map<String, Any> = emptyMap()
+        val metadata: Map<String, JsonElement> = emptyMap()
     ) : ToolResult() {
         override val isError = false
     }
@@ -248,7 +218,7 @@ sealed class ToolResult {
         /**
          * 创建成功结果（文本内容）
          */
-        fun success(text: String, metadata: Map<String, Any> = emptyMap()) = Success(
+        fun success(text: String, metadata: Map<String, JsonElement> = emptyMap()) = Success(
             content = listOf(ContentItem.text(text)),
             metadata = metadata
         )
@@ -256,7 +226,7 @@ sealed class ToolResult {
         /**
          * 创建成功结果（结构化数据）
          */
-        fun success(data: Any, metadata: Map<String, Any> = emptyMap()) = Success(
+        fun success(data: JsonElement, metadata: Map<String, JsonElement> = emptyMap()) = Success(
             content = listOf(ContentItem.json(data)),
             metadata = metadata
         )
@@ -293,33 +263,9 @@ sealed class ContentItem {
     
     companion object {
         fun text(content: String) = Text(content)
-        fun json(data: Any): Json = Json(anyToJsonElement(data))
+        fun json(data: JsonElement): Json = Json(data)
         fun binary(data: ByteArray, mimeType: String) = Binary(data, mimeType)
 
-        /**
-         * 递归将任意对象转换为 JsonElement
-         */
-        private fun anyToJsonElement(value: Any?): JsonElement {
-            return when (value) {
-                null -> JsonNull
-                is JsonElement -> value
-                is String -> JsonPrimitive(value)
-                is Number -> JsonPrimitive(value)
-                is Boolean -> JsonPrimitive(value)
-                is Map<*, *> -> buildJsonObject {
-                    value.forEach { (k, v) ->
-                        put(k.toString(), anyToJsonElement(v))
-                    }
-                }
-                is List<*> -> buildJsonArray {
-                    value.forEach { add(anyToJsonElement(it)) }
-                }
-                is Array<*> -> buildJsonArray {
-                    value.forEach { add(anyToJsonElement(it)) }
-                }
-                else -> JsonPrimitive(value.toString())
-            }
-        }
     }
 }
 
@@ -329,7 +275,7 @@ sealed class ContentItem {
 internal interface ToolHandlerBase {
     val name: String
     val description: String
-    val handler: suspend (Map<String, Any>) -> Any
+    val handler: suspend (JsonObject) -> ToolResult
     fun toDefinition(): ToolDefinition
 }
 
@@ -340,7 +286,7 @@ internal data class ToolHandler(
     override val name: String,
     override val description: String,
     val parameterSchema: Map<String, ParameterInfo>? = null,
-    override val handler: suspend (Map<String, Any>) -> Any
+    override val handler: suspend (JsonObject) -> ToolResult
 ) : ToolHandlerBase {
     override fun toDefinition(): ToolDefinition {
         return if (parameterSchema != null) {
@@ -357,8 +303,8 @@ internal data class ToolHandler(
 internal data class ToolHandlerWithSchema(
     override val name: String,
     override val description: String,
-    val inputSchema: Map<String, Any>,
-    override val handler: suspend (Map<String, Any>) -> Any
+    val inputSchema: JsonObject,
+    override val handler: suspend (JsonObject) -> ToolResult
 ) : ToolHandlerBase {
     override fun toDefinition(): ToolDefinition {
         return ToolDefinition(

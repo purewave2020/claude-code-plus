@@ -6,6 +6,7 @@ import java.io.File
 import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import java.util.logging.Logger
 
 /**
  * Codex App-Server 进程管理器
@@ -57,23 +58,43 @@ class CodexAppServerProcess private constructor(
     }
 
     companion object {
+        private val logger = Logger.getLogger(CodexAppServerProcess::class.java.name)
+
         /**
          * 启动 Codex App-Server 进程
          *
          * @param codexPath Codex 可执行文件路径，null 则自动查找
          * @param workingDirectory 工作目录
          * @param env 环境变量
+         * @param configOverrides CLI 配置覆盖（--config key=value）
          * @param scope 协程作用域
          */
         fun spawn(
             codexPath: Path? = null,
             workingDirectory: Path? = null,
             env: Map<String, String> = emptyMap(),
+            configOverrides: Map<String, String> = emptyMap(),
             scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         ): CodexAppServerProcess {
             val executablePath = codexPath?.toString() ?: findCodexExecutable()
+            logger.info(
+                "Starting codex app-server: path=$executablePath cwd=${workingDirectory?.toAbsolutePath() ?: "default"}"
+            )
 
-            val processBuilder = ProcessBuilder(executablePath, "app-server")
+            val command = mutableListOf(executablePath)
+            configOverrides.forEach { (key, value) ->
+                command.add("--config")
+                command.add("$key=$value")
+            }
+            command.add("app-server")
+
+            val finalCommand = if (isWindowsCmd(executablePath)) {
+                listOf("cmd", "/c") + command
+            } else {
+                command
+            }
+
+            val processBuilder = ProcessBuilder(finalCommand)
                 .redirectErrorStream(false)
 
             workingDirectory?.let {
@@ -90,6 +111,11 @@ class CodexAppServerProcess private constructor(
                 processBuilder.start()
             } catch (e: IOException) {
                 throw CodexAppServerException("Failed to start codex app-server: ${e.message}", e)
+            }
+
+            startStderrLogger(process, scope)
+            process.onExit().thenAccept { exited ->
+                logger.warning("codex app-server exited: code=${exited.exitValue()}")
             }
 
             val stdin = process.outputStream
@@ -150,6 +176,30 @@ class CodexAppServerProcess private constructor(
             throw CodexAppServerException(
                 "Codex executable not found. Please install Codex or set CODEX_BIN environment variable."
             )
+        }
+
+        private fun startStderrLogger(process: Process, scope: CoroutineScope) {
+            val stderr = process.errorStream ?: return
+            scope.launch {
+                try {
+                    stderr.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                        lines.forEach { line ->
+                            if (line.isNotBlank()) {
+                                logger.warning("[codex stderr] $line")
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    logger.warning("[codex stderr] reader failed: ${e.message}")
+                }
+            }
+        }
+
+        private fun isWindowsCmd(executablePath: String): Boolean {
+            val os = System.getProperty("os.name").lowercase()
+            if (!os.contains("windows")) return false
+            val lower = executablePath.lowercase()
+            return lower.endsWith(".cmd") || lower.endsWith(".bat")
         }
     }
 }

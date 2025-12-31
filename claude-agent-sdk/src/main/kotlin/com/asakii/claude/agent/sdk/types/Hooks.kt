@@ -3,6 +3,8 @@ package com.asakii.claude.agent.sdk.types
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 
 /**
  * Supported hook event types.
@@ -36,7 +38,7 @@ data class HookContext(
 /**
  * Hook callback function type.
  */
-typealias HookCallback = suspend (input: Map<String, Any>, toolUseId: String?, context: HookContext) -> HookJSONOutput
+typealias HookCallback = suspend (input: JsonObject, toolUseId: String?, context: HookContext) -> HookJSONOutput
 
 /**
  * Hook matcher configuration.
@@ -99,7 +101,7 @@ class HookRegistry {
 data class HookExecutionEnvironment(
     val sessionId: String?,
     val toolName: String?,
-    val input: Map<String, Any>,
+    val input: JsonObject,
     val timestamp: Long = System.currentTimeMillis(),
-    val metadata: Map<String, Any> = emptyMap()
+    val metadata: JsonObject = buildJsonObject { }
 )

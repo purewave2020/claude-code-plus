@@ -35,7 +35,7 @@ object DisplayItemConverter {
         val timestamp = System.currentTimeMillis()
         
         // 将 JsonElement 转换为 Map
-        val inputMap = jsonElementToMap(block.input)
+        val inputObject = block.input as? JsonObject ?: JsonObject(emptyMap())
         
         // 根据工具类型创建具体的 ToolCall
         val toolCall: ToolCallItem = when (toolType) {
@@ -44,140 +44,140 @@ object DisplayItemConverter {
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.WRITE -> WriteToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.EDIT -> EditToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.MULTI_EDIT -> MultiEditToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.TODO_WRITE -> TodoWriteToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.BASH -> BashToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.GREP -> GrepToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.GLOB -> GlobToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.WEB_SEARCH -> WebSearchToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.WEB_FETCH -> WebFetchToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.TASK -> TaskToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.NOTEBOOK_EDIT -> NotebookEditToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.BASH_OUTPUT -> BashOutputToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.KILL_SHELL -> KillShellToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.EXIT_PLAN_MODE -> ExitPlanModeToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.ASK_USER_QUESTION -> AskUserQuestionToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.SKILL -> SkillToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.SLASH_COMMAND -> SlashCommandToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.LIST_MCP_RESOURCES -> ListMcpResourcesToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             ToolConstants.READ_MCP_RESOURCE -> ReadMcpResourceToolCall(
                 id = block.id,
                 timestamp = timestamp,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
             else -> GenericToolCall(
                 id = block.id,
@@ -185,7 +185,7 @@ object DisplayItemConverter {
                 toolType = toolType,
                 status = ToolCallStatus.RUNNING,
                 startTime = timestamp,
-                input = inputMap
+                input = inputObject
             )
         }
         
@@ -436,45 +436,6 @@ object DisplayItemConverter {
             is AssistantMessage -> "assistant-$index-${System.currentTimeMillis()}"
             is SystemMessage -> "system-${message.subtype}-$index"
             else -> "message-$index-${System.currentTimeMillis()}"
-        }
-    }
-    
-    /**
-     * 将 JsonElement 转换为 Map<String, Any?>
-     */
-    private fun jsonElementToMap(element: JsonElement): Map<String, Any?> {
-        if (element !is kotlinx.serialization.json.JsonObject) {
-            return emptyMap()
-        }
-        
-        return element.entries.associate { (key, value) ->
-            key to jsonElementToAny(value)
-        }
-    }
-    
-    /**
-     * 将 JsonElement 转换为 Any?
-     */
-    private fun jsonElementToAny(element: JsonElement): Any? {
-        return when {
-            element is kotlinx.serialization.json.JsonPrimitive -> {
-                when {
-                    element.isString -> element.content
-                    element.content == "true" -> true
-                    element.content == "false" -> false
-                    element.content.toIntOrNull() != null -> element.content.toInt()
-                    element.content.toLongOrNull() != null -> element.content.toLong()
-                    element.content.toDoubleOrNull() != null -> element.content.toDouble()
-                    else -> element.content
-                }
-            }
-            element is kotlinx.serialization.json.JsonArray -> {
-                element.map { jsonElementToAny(it) }
-            }
-            element is kotlinx.serialization.json.JsonObject -> {
-                jsonElementToMap(element)
-            }
-            else -> null
         }
     }
     

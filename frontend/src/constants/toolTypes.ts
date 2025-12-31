@@ -35,6 +35,18 @@ export const CLAUDE_TOOL_TYPE = {
 } as const
 
 /**
+ * Codex 工具类型常量
+ */
+export const CODEX_TOOL_TYPE = {
+  BASH: 'CODEX_BASH',
+  WRITE: 'CODEX_WRITE',
+  EDIT: 'CODEX_EDIT',
+  MCP: 'CODEX_MCP',
+  WEB_SEARCH: 'CODEX_WEB_SEARCH',
+  UNKNOWN: 'CODEX_UNKNOWN',
+} as const
+
+/**
  * 其他工具类型常量
  */
 export const OTHER_TOOL_TYPE = {
@@ -46,6 +58,7 @@ export const OTHER_TOOL_TYPE = {
  * Claude 工具类型联合类型
  */
 export type ClaudeToolType = typeof CLAUDE_TOOL_TYPE[keyof typeof CLAUDE_TOOL_TYPE]
+export type CodexToolType = typeof CODEX_TOOL_TYPE[keyof typeof CODEX_TOOL_TYPE]
 
 /**
  * 其他工具类型联合类型
@@ -55,7 +68,7 @@ export type OtherToolType = typeof OTHER_TOOL_TYPE[keyof typeof OTHER_TOOL_TYPE]
 /**
  * 所有工具类型联合类型
  */
-export type ToolType = ClaudeToolType | OtherToolType
+export type ToolType = ClaudeToolType | CodexToolType | OtherToolType
 
 /**
  * 工具名称到类型的映射（用于前端本地转换，当后端未提供 toolType 时使用）

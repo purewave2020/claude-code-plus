@@ -3,12 +3,16 @@ package com.asakii.codex.agent.sdk.appserver
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import java.io.*
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.logging.Level
+import java.util.logging.Logger
 
 /**
  * Codex App-Server JSON-RPC 2.0 客户端
@@ -23,6 +27,8 @@ class CodexJsonRpcClient(
     private val stdout: InputStream,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 ) : Closeable {
+    @PublishedApi
+    internal val logger = Logger.getLogger(CodexJsonRpcClient::class.java.name)
 
     @PublishedApi
     internal val json = Json {
@@ -66,12 +72,15 @@ class CodexJsonRpcClient(
                     try {
                         processMessage(line)
                     } catch (e: Exception) {
-                        System.err.println("Error processing message: ${e.message}")
+                        logger.warning("Error processing message: ${e.message}")
+                        if (logger.isLoggable(Level.FINE)) {
+                            logger.fine("Failed message payload: ${line.take(500)}")
+                        }
                     }
                 }
             } catch (e: IOException) {
                 if (isRunning.get()) {
-                    System.err.println("Reader error: ${e.message}")
+                    logger.warning("Reader error: ${e.message}")
                 }
             } finally {
                 isRunning.set(false)
@@ -87,16 +96,25 @@ class CodexJsonRpcClient(
             // 响应: 有 id 且有 result 或 error
             obj.containsKey("id") && (obj.containsKey("result") || obj.containsKey("error")) -> {
                 val response = json.decodeFromJsonElement<JsonRpcResponse>(jsonElement)
+                if (response.error != null) {
+                    logger.warning("RPC response error: id=${response.id} code=${response.error.code} msg=${response.error.message}")
+                } else if (logger.isLoggable(Level.FINE)) {
+                    logger.fine("RPC response: id=${response.id}")
+                }
                 pendingRequests.remove(response.id)?.complete(response)
             }
             // 请求: 有 id 和 method (服务器请求，如审批)
             obj.containsKey("id") && obj.containsKey("method") -> {
                 val request = json.decodeFromJsonElement<JsonRpcRequest>(jsonElement)
+                logger.info("RPC server request: method=${request.method} id=${request.id}")
                 handleServerRequest(request)
             }
             // 通知: 只有 method，没有 id
             obj.containsKey("method") && !obj.containsKey("id") -> {
                 val notification = json.decodeFromJsonElement<JsonRpcNotification>(jsonElement)
+                if (logger.isLoggable(Level.FINE)) {
+                    logger.fine("RPC notification: method=${notification.method}")
+                }
                 _notifications.emit(notification)
             }
         }
@@ -106,13 +124,13 @@ class CodexJsonRpcClient(
         val serverRequest = when (request.method) {
             "item/commandExecution/requestApproval" -> {
                 val params = request.params?.let {
-                    json.decodeFromJsonElement<CommandApprovalRequest>(it)
+                    json.decodeFromJsonElement<CommandExecutionRequestApprovalParams>(it)
                 }
                 params?.let { ServerRequest.CommandApproval(request.id, it) }
             }
             "item/fileChange/requestApproval" -> {
                 val params = request.params?.let {
-                    json.decodeFromJsonElement<FileChangeApprovalRequest>(it)
+                    json.decodeFromJsonElement<FileChangeRequestApprovalParams>(it)
                 }
                 params?.let { ServerRequest.FileChangeApproval(request.id, it) }
             }
@@ -125,16 +143,24 @@ class CodexJsonRpcClient(
     /**
      * 发送请求并等待响应
      */
-    suspend inline fun <reified T> request(method: String, params: Any? = null): T {
+    suspend inline fun <reified T> request(method: String): T {
+        return request<T, JsonElement>(method, null)
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    suspend inline fun <reified T, reified P> request(method: String, params: P? = null): T {
         val requestId = UUID.randomUUID().toString()
         val deferred = CompletableDeferred<JsonRpcResponse>()
         pendingRequests[requestId] = deferred
+        if (logger.isLoggable(Level.FINE)) {
+            logger.fine("RPC request: method=$method id=$requestId")
+        }
 
         val request = buildJsonObject {
             put("method", method)
             put("id", requestId)
             params?.let {
-                put("params", json.encodeToJsonElement(it))
+                put("params", encodeToJsonElementSafely(it))
             }
         }
 
@@ -154,15 +180,37 @@ class CodexJsonRpcClient(
         }
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
+    suspend inline fun <reified P> requestUnit(method: String, params: P? = null) {
+        request<Unit, P>(method, params)
+    }
+
+    /**
+     * 发送通知 (无参数)
+     */
+    suspend fun notify(method: String) {
+        val notification = buildJsonObject {
+            put("method", method)
+        }
+        if (logger.isLoggable(Level.FINE)) {
+            logger.fine("RPC notify: method=$method")
+        }
+        sendLine(json.encodeToString(notification))
+    }
+
     /**
      * 发送通知 (无需响应)
      */
-    suspend fun notify(method: String, params: Any? = null) {
+    @OptIn(ExperimentalSerializationApi::class)
+    suspend inline fun <reified P> notify(method: String, params: P? = null) {
         val notification = buildJsonObject {
             put("method", method)
             params?.let {
-                put("params", json.encodeToJsonElement(it))
+                put("params", encodeToJsonElementSafely(it))
             }
+        }
+        if (logger.isLoggable(Level.FINE)) {
+            logger.fine("RPC notify: method=$method")
         }
         sendLine(json.encodeToString(notification))
     }
@@ -170,10 +218,14 @@ class CodexJsonRpcClient(
     /**
      * 响应服务器请求 (审批)
      */
-    suspend fun respondToServerRequest(requestId: String, result: Any) {
+    @OptIn(ExperimentalSerializationApi::class)
+    suspend inline fun <reified R> respondToServerRequest(requestId: String, result: R) {
         val response = buildJsonObject {
             put("id", requestId)
-            put("result", json.encodeToJsonElement(result))
+            put("result", encodeToJsonElementSafely(result))
+        }
+        if (logger.isLoggable(Level.FINE)) {
+            logger.fine("RPC response to server request: id=$requestId")
         }
         sendLine(json.encodeToString(response))
     }
@@ -188,6 +240,39 @@ class CodexJsonRpcClient(
             }
         }
     }
+
+    @PublishedApi
+    internal inline fun <reified T> encodeToJsonElementSafely(value: T): JsonElement {
+        return try {
+            json.encodeToJsonElement(value)
+        } catch (_: SerializationException) {
+            anyToJsonElement(value)
+        }
+    }
+
+    @PublishedApi
+    internal fun anyToJsonElement(value: Any?): JsonElement {
+        return when (value) {
+            null -> JsonNull
+            is JsonElement -> value
+            is String -> JsonPrimitive(value)
+            is Number -> JsonPrimitive(value)
+            is Boolean -> JsonPrimitive(value)
+            is Map<*, *> -> buildJsonObject {
+                value.forEach { (k, v) ->
+                    put(k.toString(), anyToJsonElement(v))
+                }
+            }
+            is Iterable<*> -> buildJsonArray {
+                value.forEach { add(anyToJsonElement(it)) }
+            }
+            is Array<*> -> buildJsonArray {
+                value.forEach { add(anyToJsonElement(it)) }
+            }
+            else -> JsonPrimitive(value.toString())
+        }
+    }
+
 
     override fun close() {
         isRunning.set(false)
@@ -209,12 +294,12 @@ sealed class ServerRequest {
 
     data class CommandApproval(
         override val requestId: String,
-        val params: CommandApprovalRequest
+        val params: CommandExecutionRequestApprovalParams
     ) : ServerRequest()
 
     data class FileChangeApproval(
         override val requestId: String,
-        val params: FileChangeApprovalRequest
+        val params: FileChangeRequestApprovalParams
     ) : ServerRequest()
 }
 

@@ -38,11 +38,15 @@ object ClaudeCapabilities : AgentCapabilities {
  */
 object CodexCapabilities : AgentCapabilities {
     override val canInterrupt = true
-    override val canSwitchModel = false
-    override val canSwitchPermissionMode = false
-    override val supportedPermissionModes = emptyList<AiPermissionMode>()
-    override val canSkipPermissions = false
-    override val canSendRichContent = false
+    override val canSwitchModel = true
+    override val canSwitchPermissionMode = true
+    override val supportedPermissionModes = listOf(
+        AiPermissionMode.DEFAULT,
+        AiPermissionMode.ACCEPT_EDITS,
+        AiPermissionMode.BYPASS_PERMISSIONS
+    )
+    override val canSkipPermissions = true
+    override val canSendRichContent = true
     override val canThink = false
     override val canResumeSession = true
     override val canRunInBackground = false

@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket RPC 测试工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        :root {
+            --primary: #5b8dee;
+            --primary-dark: #4b73d4;
+            --success: #48bb78;
+            --danger: #f56565;
+            --text-main: #1f2933;
+            --text-secondary: #4a5568;
+            --panel-bg: #ffffff;
+            --surface: #f7f9fc;
+            --border: #e4e9f2;
+            --log-bg: #0f172a;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: radial-gradient(circle at top, #f2f4ff 0%, #eef2ff 45%, #f9fafb 100%);
+            padding: 16px;
+            min-height: 100vh;
+            color: var(--text-main);
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: var(--panel-bg);
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            min-height: calc(100vh - 32px);
+            border: 1px solid var(--border);
+        }
+        .header {
+            background: linear-gradient(135deg, #5b8dee 0%, #7f70f5 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .section {
+            padding: 16px 20px;
+            border-bottom: 1px solid #eee;
+            flex-shrink: 0;
+            background: var(--panel-bg);
+        }
+        .section:last-child {
+            border-bottom: none;
+        }
+        .toolbar-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .toolbar-column {
+            flex: 1 1 320px;
+            min-width: 280px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .control-group label {
+            min-width: 100px;
+            font-size: 14px;
+            color: #666;
+        }
+        .control-group input,
+        .control-group select,
+        .control-group textarea {
+            flex: 1 1 200px;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .control-group textarea {
+            min-height: 80px;
+            font-family: 'Courier New', monospace;
+        }
+        .btn {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #38a169;
+        }
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+        .btn-secondary {
+            background: #718096;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #4a5568;
+        }
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .status.disconnected {
+            background: #fed7d7;
+            color: #c53030;
+        }
+        .status.connected {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        .status.disconnected .status-indicator {
+            background: #f56565;
+        }
+        .status.connected .status-indicator {
+            background: #48bb78;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .quick-test-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .quick-test-buttons .btn {
+            flex: 1 1 160px;
+            justify-content: flex-start;
+        }
+        .log-section {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 0;
+        }
+        .message-log {
+            background: var(--log-bg);
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            flex: 1 1 auto;
+            min-height: 260px;
+            max-height: max(260px, calc(100vh - 360px));
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            min-height: 0;
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+        }
+        .message-log::-webkit-scrollbar {
+            width: 8px;
+        }
+        .message-log::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.08);
+            border-radius: 4px;
+        }
+        .message-log::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 4px;
+        }
+        .message-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .message-item.sent {
+            background: rgba(102, 126, 234, 0.1);
+            border-left: 3px solid #667eea;
+        }
+        .message-item.received {
+            background: rgba(72, 187, 120, 0.1);
+            border-left: 3px solid #48bb78;
+        }
+        .message-item.error {
+            background: rgba(245, 101, 101, 0.1);
+            border-left: 3px solid #f56565;
+        }
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        .message-type {
+            font-weight: 600;
+        }
+        .message-time {
+            opacity: 0.7;
+        }
+        .message-content {
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 12px;
+        }
+        .message-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 6px;
+        }
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            background: rgba(255,255,255,0.15);
+            color: #f8fafc;
+        }
+        /* 图片预览样式 */
+        .image-preview-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 10px;
+            background: var(--surface);
+            border-radius: 6px;
+            min-height: 0;
+        }
+        .image-preview-area:empty {
+            display: none;
+        }
+        .image-preview-item {
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+        .image-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 2px solid var(--border);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .image-preview-item .remove-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--danger);
+            color: white;
+            border: 2px solid white;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.15s;
+        }
+        .image-preview-item .remove-btn:hover {
+            transform: scale(1.1);
+        }
+        .image-count {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔌 WebSocket RPC 测试工具</h1>
+            <p>测试 Claude Code Plus WebSocket RPC 功能</p>
+        </div>
+
+        <!-- 顶部控制区 -->
+        <div class="section toolbar-wrapper">
+            <div class="toolbar-column">
+                <div class="section-title">📡 连接控制</div>
+                <div class="control-group">
+                    <label>WebSocket URL:</label>
+                    <input type="text" id="wsUrl" value="ws://localhost:8765/ws" />
+                    <button class="btn btn-secondary" id="resetUrlBtn" style="padding: 6px 12px; font-size: 12px;" title="重置为默认值 8765">🔄 重置</button>
+                </div>
+                <div class="control-group">
+                    <button class="btn btn-success" id="connectBtn">🟢 连接</button>
+                    <button class="btn btn-danger" id="disconnectBtn" disabled>🔴 断开</button>
+                    <span class="status disconnected" id="statusIndicator">
+                        <span class="status-indicator"></span>
+                        未连接
+                    </span>
+                </div>
+            </div>
+            <div class="toolbar-column">
+                <div class="section-title">🎮 RPC 方法</div>
+                <div class="quick-test-buttons">
+                    <button class="btn btn-success" id="rpcConnectBtn" disabled>🔌 Connect</button>
+                    <button class="btn btn-danger" id="rpcDisconnectBtn" disabled>🔌 Disconnect</button>
+                    <button class="btn btn-secondary" id="rpcInterruptBtn" disabled>⏸️ Interrupt</button>
+                    <button class="btn btn-secondary" id="rpcSetModelBtn" disabled>⚙️ SetModel</button>
+                    <button class="btn btn-secondary" id="rpcGetHistoryBtn" disabled>📜 GetHistory</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query 消息发送区 -->
+        <div class="section">
+            <div class="section-title">💬 QueryWithContent - 发送消息查询（支持图片）</div>
+            <div class="control-group">
+                <label>消息内容:</label>
+                <textarea id="messageContent" placeholder='输入消息，支持添加图片一起发送...'>使用todowrite工具记录进度，演示edit write read multiEdit工具的使用</textarea>
+            </div>
+            <div class="control-group">
+                <label>添加图片:</label>
+                <input type="file" id="imageInput" accept="image/*" multiple style="display:none" />
+                <button class="btn btn-secondary" id="addImageBtn">📷 选择图片</button>
+                <span class="image-count" id="imageCount"></span>
+            </div>
+            <div id="imagePreviewArea" class="image-preview-area">
+                <!-- 图片预览将动态添加 -->
+            </div>
+            <div class="control-group">
+                <button class="btn btn-primary" id="sendQueryBtn" disabled>📨 发送 QueryWithContent</button>
+                <button class="btn btn-secondary" id="clearImagesBtn">🗑️ 清空图片</button>
+            </div>
+        </div>
+
+        <!-- 消息日志区 -->
+        <div class="section log-section">
+            <div class="section-title">
+                📋 消息日志
+                <button class="btn btn-secondary" id="clearLogBtn" style="float: right; padding: 5px 15px;">清空日志</button>
+            </div>
+            <div class="message-log" id="messageLog">
+                <div style="opacity: 0.5; text-align: center; padding: 20px;">
+                    等待连接...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let messageId = 1;
+        let isAutoScroll = true;
+        let selectedImages = []; // 存储 { file: File, base64: string, previewUrl: string, mimeType: string }
+
+        const wsUrlInput = document.getElementById('wsUrl');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const messageContentTextarea = document.getElementById('messageContent');
+        const sendQueryBtn = document.getElementById('sendQueryBtn');
+        const messageLog = document.getElementById('messageLog');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+        const resetUrlBtn = document.getElementById('resetUrlBtn');
+        const imageInput = document.getElementById('imageInput');
+        const addImageBtn = document.getElementById('addImageBtn');
+        const imagePreviewArea = document.getElementById('imagePreviewArea');
+        const imageCount = document.getElementById('imageCount');
+        const clearImagesBtn = document.getElementById('clearImagesBtn');
+
+        // 从 localStorage 恢复保存的 WebSocket URL，强制使用 8765 作为默认值
+        const defaultUrl = 'ws://localhost:8765/ws';
+        const savedWsUrl = localStorage.getItem('wsTestUrl');
+        
+        // 调试信息
+        console.log('[ws-test] 检查 localStorage:', {
+            savedWsUrl: savedWsUrl,
+            defaultUrl: defaultUrl
+        });
+        
+        // 如果保存的值不是 8765，强制清除并使用默认值
+        if (savedWsUrl && savedWsUrl.includes(':8765')) {
+            // 保存的值是 8765，使用它
+            wsUrlInput.value = savedWsUrl;
+            console.log('[ws-test] 使用保存的 8765 URL:', savedWsUrl);
+        } else {
+            // 保存的值不是 8765 或不存在，强制使用默认值 8765
+            wsUrlInput.value = defaultUrl;
+            if (savedWsUrl) {
+                console.log('[ws-test] 清除非 8765 的旧值:', savedWsUrl);
+                localStorage.removeItem('wsTestUrl');
+            }
+            console.log('[ws-test] 使用默认值 8765:', defaultUrl);
+        }
+
+        // 保存 WebSocket URL 到 localStorage
+        function saveWsUrl() {
+            localStorage.setItem('wsTestUrl', wsUrlInput.value);
+        }
+
+        // 当 URL 输入框改变时保存
+        wsUrlInput.addEventListener('change', saveWsUrl);
+        wsUrlInput.addEventListener('blur', saveWsUrl);
+
+        // RPC 方法按钮
+        const rpcConnectBtn = document.getElementById('rpcConnectBtn');
+        const rpcDisconnectBtn = document.getElementById('rpcDisconnectBtn');
+        const rpcInterruptBtn = document.getElementById('rpcInterruptBtn');
+        const rpcSetModelBtn = document.getElementById('rpcSetModelBtn');
+        const rpcGetHistoryBtn = document.getElementById('rpcGetHistoryBtn');
+
+        function escapeHtml(str = '') {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function normalizeContent(content) {
+            if (typeof content === 'string') {
+                return content;
+            }
+            try {
+                return JSON.stringify(content, null, 2);
+            } catch (err) {
+                return String(content ?? '');
+            }
+        }
+
+        // 添加日志消息
+        function addLog(type, method, content, timestamp = new Date()) {
+            if (!messageLog.dataset.hasEntries) {
+                messageLog.innerHTML = '';
+                messageLog.dataset.hasEntries = 'true';
+            }
+
+            const messageItem = document.createElement('div');
+            messageItem.className = `message-item ${type}`;
+
+            const typeLabel = type === 'sent' ? '⬆️ 发送' : type === 'received' ? '⬇️ 接收' : '❌ 错误';
+            const timeStr = timestamp.toLocaleTimeString('zh-CN', { hour12: false });
+            const normalized = normalizeContent(content);
+            const safeContent = escapeHtml(normalized);
+
+            messageItem.innerHTML = `
+                <div class="message-header">
+                    <span class="message-type">${typeLabel}: ${method}</span>
+                    <span class="message-time">${timeStr}</span>
+                </div>
+                <div class="message-content">${safeContent}</div>
+                <div class="message-actions">
+                    <span class="tag">${method}</span>
+                    <button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;">复制</button>
+                </div>
+            `;
+
+            const copyBtn = messageItem.querySelector('button');
+            copyBtn.addEventListener('click', () => {
+                const textToCopy = normalized;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        copyBtn.textContent = '已复制';
+                        setTimeout(() => copyBtn.textContent = '复制', 1500);
+                    }).catch(() => {
+                        copyBtn.textContent = '失败';
+                        setTimeout(() => copyBtn.textContent = '复制', 1500);
+                    });
+                } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = textToCopy;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        copyBtn.textContent = '已复制';
+                    } catch (err) {
+                        copyBtn.textContent = '失败';
+                    }
+                    document.body.removeChild(textarea);
+                    setTimeout(() => copyBtn.textContent = '复制', 1500);
+                }
+            });
+
+            messageLog.appendChild(messageItem);
+            if (isAutoScroll) {
+                messageLog.scrollTop = messageLog.scrollHeight;
+            }
+        }
+
+        // 连接 WebSocket
+        function connect() {
+            const url = wsUrlInput.value;
+            addLog('sent', 'WebSocket', `正在连接到: ${url}`);
+
+            try {
+                ws = new WebSocket(url);
+
+                ws.onopen = () => {
+                    addLog('received', 'WebSocket', '✅ WebSocket 连接成功!');
+                    updateConnectionStatus(true);
+                };
+
+                ws.onmessage = (event) => {
+                    addLog('received', 'Message', event.data);
+                };
+
+                ws.onerror = (error) => {
+                    addLog('error', 'WebSocket', `连接错误: ${error.message || '未知错误'}`);
+                };
+
+                ws.onclose = () => {
+                    addLog('received', 'WebSocket', '❌ WebSocket 连接已关闭');
+                    updateConnectionStatus(false);
+                };
+            } catch (error) {
+                addLog('error', 'WebSocket', `连接失败: ${error.message}`);
+            }
+        }
+
+        // 断开连接
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        // 发送 RPC 消息的通用函数
+        function sendRpcMessage(method, params = {}) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addLog('error', 'Send', '❌ WebSocket 未连接');
+                return;
+            }
+
+            const message = {
+                jsonrpc: '2.0',
+                id: messageId++,
+                method: method,
+                params: params
+            };
+
+            const messageStr = JSON.stringify(message, null, 2);
+            try {
+                ws.send(messageStr);
+                addLog('sent', method, messageStr);
+            } catch (err) {
+                addLog('error', method, `发送失败: ${err.message}`);
+            }
+        }
+
+        // ============================================
+        // 图片处理函数
+        // ============================================
+
+        // 图片转 base64
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const result = e.target.result;
+                    // 移除 data:image/xxx;base64, 前缀
+                    const base64 = result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 添加图片
+        async function addImages(files) {
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) {
+                    addLog('error', 'Image', `❌ 不支持的文件类型: ${file.type}`);
+                    continue;
+                }
+                try {
+                    const base64 = await fileToBase64(file);
+                    const previewUrl = URL.createObjectURL(file);
+                    selectedImages.push({
+                        file,
+                        base64,
+                        previewUrl,
+                        mimeType: file.type,
+                        name: file.name
+                    });
+                    addLog('received', 'Image', `✅ 已添加图片: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+                } catch (err) {
+                    addLog('error', 'Image', `❌ 读取图片失败: ${file.name}`);
+                }
+            }
+            renderImagePreviews();
+            updateImageCount();
+        }
+
+        // 渲染图片预览
+        function renderImagePreviews() {
+            imagePreviewArea.innerHTML = selectedImages.map((img, index) => `
+                <div class="image-preview-item">
+                    <img src="${img.previewUrl}" alt="${img.name}" title="${img.name}" />
+                    <button class="remove-btn" onclick="removeImage(${index})" title="删除">×</button>
+                </div>
+            `).join('');
+        }
+
+        // 删除单张图片
+        function removeImage(index) {
+            const img = selectedImages[index];
+            if (img) {
+                URL.revokeObjectURL(img.previewUrl);
+                addLog('received', 'Image', `🗑️ 已删除图片: ${img.name}`);
+            }
+            selectedImages.splice(index, 1);
+            renderImagePreviews();
+            updateImageCount();
+        }
+
+        // 清空所有图片
+        function clearAllImages() {
+            selectedImages.forEach(img => URL.revokeObjectURL(img.previewUrl));
+            selectedImages = [];
+            renderImagePreviews();
+            updateImageCount();
+            addLog('received', 'Image', '🗑️ 已清空所有图片');
+        }
+
+        // 更新图片计数显示
+        function updateImageCount() {
+            if (selectedImages.length > 0) {
+                imageCount.textContent = `已选择 ${selectedImages.length} 张图片`;
+            } else {
+                imageCount.textContent = '';
+            }
+        }
+
+        // ============================================
+        // 发送消息（使用 queryWithContent）
+        // ============================================
+
+        function sendQuery() {
+            const messageText = messageContentTextarea.value.trim();
+
+            // 构建 ContentBlock[]
+            const content = [];
+
+            // 添加文本块
+            if (messageText) {
+                content.push({ type: 'text', text: messageText });
+            }
+
+            // 添加图片块
+            for (const img of selectedImages) {
+                content.push({
+                    type: 'image',
+                    source: {
+                        type: 'base64',
+                        media_type: img.mimeType,
+                        data: img.base64
+                    }
+                });
+            }
+
+            if (content.length === 0) {
+                addLog('error', 'Query', '❌ 请输入消息或添加图片');
+                return;
+            }
+
+            // 使用 queryWithContent 方法发送
+            const contentSummary = content.map(c => {
+                if (c.type === 'text') return `text(${c.text.length}字)`;
+                if (c.type === 'image') return `image(${c.source.media_type})`;
+                return c.type;
+            }).join(', ');
+            addLog('sent', 'QueryWithContent', `发送 ${content.length} 个内容块: [${contentSummary}]`);
+
+            sendRpcMessage('queryWithContent', { content });
+
+            // 发送后清空图片（保留文本）
+            selectedImages.forEach(img => URL.revokeObjectURL(img.previewUrl));
+            selectedImages = [];
+            renderImagePreviews();
+            updateImageCount();
+        }
+
+        // RPC 方法按钮处理函数
+        function rpcConnect() {
+            sendRpcMessage('connect', {});
+        }
+
+        function rpcDisconnect() {
+            sendRpcMessage('disconnect', {});
+        }
+
+        function rpcInterrupt() {
+            sendRpcMessage('interrupt', {});
+        }
+
+        function rpcSetModel() {
+            const model = prompt('请输入模型名称:', 'claude-sonnet-4-5-20250929');
+            if (model) {
+                sendRpcMessage('setModel', { model: model });
+            }
+        }
+
+        function rpcGetHistory() {
+            sendRpcMessage('getHistory', {});
+        }
+
+        // 更新连接状态
+        function updateConnectionStatus(connected) {
+            if (connected) {
+                statusIndicator.className = 'status connected';
+                statusIndicator.innerHTML = '<span class="status-indicator"></span>已连接';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                sendQueryBtn.disabled = false;
+
+                // 启用所有 RPC 方法按钮
+                rpcConnectBtn.disabled = false;
+                rpcDisconnectBtn.disabled = false;
+                rpcInterruptBtn.disabled = false;
+                rpcSetModelBtn.disabled = false;
+                rpcGetHistoryBtn.disabled = false;
+            } else {
+                statusIndicator.className = 'status disconnected';
+                statusIndicator.innerHTML = '<span class="status-indicator"></span>未连接';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                sendQueryBtn.disabled = true;
+
+                // 禁用所有 RPC 方法按钮
+                rpcConnectBtn.disabled = true;
+                rpcDisconnectBtn.disabled = true;
+                rpcInterruptBtn.disabled = true;
+                rpcSetModelBtn.disabled = true;
+                rpcGetHistoryBtn.disabled = true;
+            }
+        }
+
+        // 清空日志
+        function clearLog() {
+            messageLog.dataset.hasEntries = '';
+            messageLog.innerHTML = '<div style="opacity: 0.5; text-align: center; padding: 20px;">日志已清空</div>';
+        }
+
+        // 重置 URL 为默认值 8765
+        function resetUrl() {
+            const defaultUrl = 'ws://localhost:8765/ws';
+            wsUrlInput.value = defaultUrl;
+            localStorage.removeItem('wsTestUrl');
+            addLog('received', 'System', `🔄 URL 已重置为默认值: ${defaultUrl}`);
+            console.log('[ws-test] URL 已重置为:', defaultUrl);
+        }
+
+        // 事件监听器
+        connectBtn.addEventListener('click', connect);
+        disconnectBtn.addEventListener('click', disconnect);
+        sendQueryBtn.addEventListener('click', sendQuery);
+        clearLogBtn.addEventListener('click', clearLog);
+        resetUrlBtn.addEventListener('click', resetUrl);
+
+        // 图片相关事件监听
+        addImageBtn.addEventListener('click', () => imageInput.click());
+        imageInput.addEventListener('change', (e) => {
+            addImages(e.target.files);
+            imageInput.value = ''; // 清空 input，允许重复选择同一文件
+        });
+        clearImagesBtn.addEventListener('click', clearAllImages);
+
+        // 支持拖拽上传图片
+        const dropZone = document.querySelector('.section:has(#messageContent)');
+        if (dropZone) {
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.style.background = 'rgba(91, 141, 238, 0.1)';
+            });
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.style.background = '';
+            });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.style.background = '';
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+                if (files.length > 0) {
+                    addImages(files);
+                }
+            });
+        }
+
+        // RPC 方法按钮事件监听
+        rpcConnectBtn.addEventListener('click', rpcConnect);
+        rpcDisconnectBtn.addEventListener('click', rpcDisconnect);
+        rpcInterruptBtn.addEventListener('click', rpcInterrupt);
+        rpcSetModelBtn.addEventListener('click', rpcSetModel);
+        rpcGetHistoryBtn.addEventListener('click', rpcGetHistory);
+
+        // 日志滚动监听，用户向上滚动时关闭自动滚动
+        messageLog.addEventListener('scroll', () => {
+            const nearBottom = messageLog.scrollTop + messageLog.clientHeight >= messageLog.scrollHeight - 20;
+            isAutoScroll = nearBottom;
+        });
+
+        // 支持 Ctrl+Enter 发送消息
+        messageContentTextarea.addEventListener('keydown', (e) => {
+            if ((e.key === 'Enter' && e.ctrlKey) || (e.key === 'Enter' && e.metaKey)) {
+                e.preventDefault();
+                sendQuery();
+            }
+        });
+
+        // 支持粘贴图片 (Ctrl+V)
+        document.addEventListener('paste', async (e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+
+            const imageFiles = [];
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        // 生成文件名
+                        const ext = item.type.split('/')[1] || 'png';
+                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                        Object.defineProperty(file, 'name', {
+                            value: `clipboard-${timestamp}.${ext}`,
+                            writable: false
+                        });
+                        imageFiles.push(file);
+                    }
+                }
+            }
+
+            if (imageFiles.length > 0) {
+                e.preventDefault();
+                addLog('received', 'Clipboard', `📋 从剪贴板粘贴 ${imageFiles.length} 张图片`);
+                await addImages(imageFiles);
+            }
+        });
+
+        // 初始化日志
+        addLog('received', 'System', '🚀 WebSocket RPC 测试工具已就绪');
+        addLog('received', 'System', '📝 请先点击"连接"按钮建立 WebSocket 连接');
+    </script>
+</body>
+</html>

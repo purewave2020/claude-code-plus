@@ -807,13 +807,13 @@ export function useSessionTab(initialOrder: number = 0) {
             // 连接并获取 sessionId
             const newSessionId = await session.connect(connectOptions)
 
-            // 连接成功后，设置具体的思考级别（如果启用了思考）
-            if (thinkingLevel.value > 0) {
+            // 连接成功后，设置具体的思考级别（如果启用了思考且 provider 支持）
+            if (thinkingLevel.value > 0 && session.capabilities?.canThink) {
                 try {
                     await session.setMaxThinkingTokens(thinkingLevel.value)
                     log.info(`[Tab ${tabId}] 思考级别已设置: ${thinkingLevel.value}`)
                 } catch (e) {
-                    log.warn(`[Tab ${tabId}] 设置思考级别失败:`, e)
+                    // 静默处理，不输出警告
                 }
             }
 
@@ -1085,13 +1085,13 @@ export function useSessionTab(initialOrder: number = 0) {
             // 使用 reconnectSession 复用 WebSocket
             const newSessionId = await rsocketSession.value.reconnectSession(connectOptions)
 
-            // 重连成功后，设置具体的思考级别（如果启用了思考）
-            if (thinkingLevel.value > 0) {
+            // 重连成功后，设置具体的思考级别（如果启用了思考且 provider 支持）
+            if (thinkingLevel.value > 0 && rsocketSession.value.capabilities?.canThink) {
                 try {
                     await rsocketSession.value.setMaxThinkingTokens(thinkingLevel.value)
                     log.info(`[Tab ${tabId}] 重连后思考级别已设置: ${thinkingLevel.value}`)
                 } catch (e) {
-                    log.warn(`[Tab ${tabId}] 重连后设置思考级别失败:`, e)
+                    // 静默处理，不输出警告
                 }
             }
 

@@ -5,8 +5,16 @@ import com.networknt.schema.SchemaRegistry
 import com.networknt.schema.dialect.Dialects
 import com.networknt.schema.Error
 import mu.KotlinLogging
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 private val logger = KotlinLogging.logger {}
 
@@ -85,8 +93,8 @@ object SchemaValidator {
      */
     fun validate(
         toolName: String,
-        arguments: Map<String, Any>,
-        customValidators: List<(Map<String, Any>) -> ValidationError?> = emptyList()
+        arguments: JsonObject,
+        customValidators: List<(JsonObject) -> ValidationError?> = emptyList()
     ): ValidationResult {
         val schema = ToolSchemaLoader.getSchema(toolName)
         if (schema.isEmpty()) {
@@ -106,17 +114,17 @@ object SchemaValidator {
      * @return 校验结果
      */
     fun validateWithSchema(
-        schema: Map<String, Any>,
-        arguments: Map<String, Any>,
-        customValidators: List<(Map<String, Any>) -> ValidationError?> = emptyList()
+        schema: JsonObject,
+        arguments: JsonObject,
+        customValidators: List<(JsonObject) -> ValidationError?> = emptyList()
     ): ValidationResult {
         val errors = mutableListOf<ValidationError>()
 
         // 1. 使用 JSON Schema 库校验
         try {
-            val schemaJson = json.encodeToString(schema)
+            val schemaJson = json.encodeToString(JsonElement.serializer(), schema)
             val jsonSchema = schemaRegistry.getSchema(schemaJson, InputFormat.JSON)
-            val dataJson = json.encodeToString(arguments)
+            val dataJson = json.encodeToString(JsonElement.serializer(), arguments)
 
             val validationErrors = jsonSchema.validate(dataJson, InputFormat.JSON)
 
@@ -146,7 +154,7 @@ object SchemaValidator {
      */
     private fun convertToValidationError(
         error: Error,
-        schema: Map<String, Any>
+        schema: JsonObject
     ): ValidationError {
         // 从 instanceLocation 提取参数名
         val path = error.instanceLocation?.toString() ?: ""
@@ -215,37 +223,37 @@ object SchemaValidator {
     /**
      * 生成提示信息
      */
-    private fun generateHint(paramName: String, errorType: String?, schema: Map<String, Any>): String? {
-        @Suppress("UNCHECKED_CAST")
-        val properties = schema["properties"] as? Map<String, Map<String, Any>> ?: return null
-        val paramSchema = properties[paramName] ?: return null
+    private fun generateHint(paramName: String, errorType: String?, schema: JsonObject): String? {
+        val properties = schema["properties"]?.jsonObject ?: return null
+        val paramSchema = properties[paramName]?.jsonObject ?: return null
 
         return when {
             errorType?.contains("enum") == true -> {
-                @Suppress("UNCHECKED_CAST")
-                val enumValues = paramSchema["enum"] as? List<Any>
-                enumValues?.let { "Valid values: ${it.joinToString(", ")}" }
+                val enumValues = paramSchema["enum"] as? JsonArray
+                enumValues?.let { values ->
+                    "Valid values: ${values.joinToString(", ") { it.asReadableString() }}"
+                }
             }
             errorType?.contains("required") == true -> {
-                val description = paramSchema["description"] as? String
+                val description = paramSchema["description"]?.jsonPrimitive?.contentOrNull
                 description?.let { "Description: $it" }
             }
             errorType?.contains("type") == true -> {
-                val expectedType = paramSchema["type"] as? String
+                val expectedType = paramSchema["type"]?.jsonPrimitive?.contentOrNull
                 getTypeHint(expectedType)
             }
             errorType?.contains("minimum") == true || errorType?.contains("maximum") == true -> {
                 val min = paramSchema["minimum"]
                 val max = paramSchema["maximum"]
                 when {
-                    min != null && max != null -> "Valid range: $min to $max"
-                    min != null -> "Minimum value: $min"
-                    max != null -> "Maximum value: $max"
+                    min != null && max != null -> "Valid range: ${min.asReadableString()} to ${max.asReadableString()}"
+                    min != null -> "Minimum value: ${min.asReadableString()}"
+                    max != null -> "Maximum value: ${max.asReadableString()}"
                     else -> null
                 }
             }
             else -> {
-                val description = paramSchema["description"] as? String
+                val description = paramSchema["description"]?.jsonPrimitive?.contentOrNull
                 description?.let { "Description: $it" }
             }
         }
@@ -267,45 +275,40 @@ object SchemaValidator {
      * 回退校验：当 JSON Schema 库校验失败时使用
      */
     private fun fallbackValidation(
-        schema: Map<String, Any>,
-        arguments: Map<String, Any>
+        schema: JsonObject,
+        arguments: JsonObject
     ): List<ValidationError> {
         val errors = mutableListOf<ValidationError>()
 
-        @Suppress("UNCHECKED_CAST")
-        val properties = schema["properties"] as? Map<String, Map<String, Any>> ?: return errors
-        @Suppress("UNCHECKED_CAST")
-        val required = schema["required"] as? List<String> ?: emptyList()
+        val properties = schema["properties"]?.jsonObject ?: return errors
+        val required = schema["required"]
+            ?.jsonArray
+            ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+            ?: emptyList()
 
         // 校验必填参数
         for (paramName in required) {
             val value = arguments[paramName]
-            if (value == null) {
-                val paramSchema = properties[paramName] ?: emptyMap()
-                val description = paramSchema["description"] as? String
+            if (value.isNullOrBlank()) {
+                val paramSchema = properties[paramName]?.jsonObject
+                val description = paramSchema?.get("description")?.jsonPrimitive?.contentOrNull
                 errors.add(ValidationError(
                     parameter = paramName,
                     message = "Missing required parameter",
                     hint = description?.let { "Description: $it" }
                 ))
-            } else if (value is String && value.isBlank()) {
-                errors.add(ValidationError(
-                    parameter = paramName,
-                    message = "Required parameter cannot be empty"
-                ))
             }
         }
 
         // 校验枚举值
-        for ((paramName, value) in arguments) {
-            val paramSchema = properties[paramName] ?: continue
-            @Suppress("UNCHECKED_CAST")
-            val enumValues = paramSchema["enum"] as? List<Any>
-            if (enumValues != null && value !in enumValues) {
+        arguments.forEach { (paramName, value) ->
+            val paramSchema = properties[paramName]?.jsonObject ?: return@forEach
+            val enumValues = paramSchema["enum"] as? JsonArray
+            if (enumValues != null && enumValues.none { it == value }) {
                 errors.add(ValidationError(
                     parameter = paramName,
-                    message = "Invalid value: '$value'",
-                    hint = "Valid values: ${enumValues.joinToString(", ")}"
+                    message = "Invalid value: '${value.asReadableString()}'",
+                    hint = "Valid values: ${enumValues.joinToString(", ") { it.asReadableString() }}"
                 ))
             }
         }
@@ -313,14 +316,31 @@ object SchemaValidator {
         return errors
     }
 
+    private fun JsonElement?.isNullOrBlank(): Boolean {
+        if (this == null || this is JsonNull) return true
+        val primitive = this as? JsonPrimitive ?: return false
+        return primitive.isString && primitive.content.isBlank()
+    }
+
+    private fun JsonElement.asReadableString(): String {
+        return when (this) {
+            is JsonNull -> "null"
+            is JsonPrimitive -> this.content
+            else -> this.toString()
+        }
+    }
+
+    private val JsonPrimitive.contentOrNull: String?
+        get() = if (isString) content else null
+
     /**
      * 便捷方法：创建自定义校验器，用于"至少需要其中一个参数"的场景
      */
-    fun requireAtLeastOne(vararg params: String, message: String? = null): (Map<String, Any>) -> ValidationError? {
+    fun requireAtLeastOne(vararg params: String, message: String? = null): (JsonObject) -> ValidationError? {
         return { arguments ->
             val hasAny = params.any { param ->
                 val value = arguments[param]
-                value != null && (value !is String || value.isNotBlank())
+                !value.isNullOrBlank()
             }
             if (!hasAny) {
                 ValidationError(
@@ -335,15 +355,15 @@ object SchemaValidator {
     /**
      * 便捷方法：创建自定义校验器，用于"参数 A 依赖参数 B"的场景
      */
-    fun requireIfPresent(trigger: String, triggerValues: List<Any>, required: String): (Map<String, Any>) -> ValidationError? {
+    fun requireIfPresent(trigger: String, triggerValues: List<JsonElement>, required: String): (JsonObject) -> ValidationError? {
         return { arguments ->
             val triggerValue = arguments[trigger]
-            if (triggerValue != null && triggerValue in triggerValues) {
+            if (triggerValue != null && triggerValues.any { it == triggerValue }) {
                 val requiredValue = arguments[required]
-                if (requiredValue == null || (requiredValue is String && requiredValue.isBlank())) {
+                if (requiredValue.isNullOrBlank()) {
                     ValidationError(
                         parameter = required,
-                        message = "Required when $trigger is ${triggerValues.joinToString(" or ") { "'$it'" }}",
+                        message = "Required when $trigger is ${triggerValues.joinToString(" or ") { "'${it.asReadableString()}'" }}",
                         hint = "Please provide '$required' parameter"
                     )
                 } else null

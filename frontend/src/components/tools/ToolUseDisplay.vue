@@ -67,9 +67,9 @@ import CompactToolCard from './CompactToolCard.vue'
 
 // 工具显示组件
 import ToolCallDisplay from '@/components/chat/ToolCallDisplay.vue'
-import BashToolDisplay from './BashToolDisplay.vue'
-import WriteToolDisplay from './WriteToolDisplay.vue'
-import EditToolDisplay from './EditToolDisplay.vue'
+import BashToolDisplay from './base/BashToolDisplay.vue'
+import WriteToolDisplay from './base/WriteToolDisplay.vue'
+import EditToolDisplay from './base/EditToolDisplay.vue'
 import GenericMcpToolDisplay from './GenericMcpToolDisplay.vue'
 
 interface Props {

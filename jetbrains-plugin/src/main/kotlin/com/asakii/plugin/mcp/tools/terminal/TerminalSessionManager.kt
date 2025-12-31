@@ -11,6 +11,9 @@ import com.asakii.plugin.compat.TerminalCompat
 import com.asakii.plugin.compat.TerminalWidgetWrapper
 import com.asakii.plugin.compat.createShellWidget
 import org.jetbrains.plugins.terminal.TerminalToolWindowFactory
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -245,12 +248,12 @@ class TerminalSessionManager(private val project: Project) {
      * 验证会话所有权，如果验证失败返回错误响应，否则返回 null
      * 用于各工具统一的会话验证逻辑
      */
-    fun validateSessionOwnership(sessionId: String): Map<String, Any>? {
+    fun validateSessionOwnership(sessionId: String): JsonObject? {
         return if (!isSessionOwnedByCurrentAiSession(sessionId)) {
-            mapOf(
-                "success" to false,
-                "error" to "Session not found or not owned by current AI session: $sessionId"
-            )
+            buildJsonObject {
+                put("success", false)
+                put("error", "Session not found or not owned by current AI session: $sessionId")
+            }
         } else {
             null
         }

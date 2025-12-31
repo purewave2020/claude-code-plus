@@ -543,11 +543,11 @@ IMPORTANT: When working with third-party libraries, ALWAYS query Context7 first 
       "session_ids": {
         "type": "array",
         "items": { "type": "string" },
-        "description": "Session IDs to close"
+        "description": "Session IDs to close. Only sessions belonging to the current AI session can be closed."
       },
       "all": {
         "type": "boolean",
-        "description": "Close all sessions (ignores session_ids)",
+        "description": "Close all sessions of the current AI session (ignores session_ids)",
         "default": false
       }
     },

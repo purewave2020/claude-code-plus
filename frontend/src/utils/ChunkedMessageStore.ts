@@ -65,6 +65,17 @@ export class ChunkedMessageStore<T> {
     return this.queue.length
   }
 
+  reindexKeys(): void {
+    if (!this.keySet || !this.keySelector) return
+    this.keySet.clear()
+    for (const item of this.queue.toArray()) {
+      const key = this.keySelector(item)
+      if (key !== undefined) {
+        this.keySet.add(key)
+      }
+    }
+  }
+
   private shouldSkip(item: T): boolean {
     if (!this.keySet || !this.keySelector) return false
     const key = this.keySelector(item)

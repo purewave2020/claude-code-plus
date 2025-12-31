@@ -3,6 +3,7 @@ package com.asakii.claude.agent.sdk.examples
 import com.asakii.claude.agent.sdk.mcp.*
 import com.asakii.claude.agent.sdk.mcp.annotations.*
 import com.asakii.claude.agent.sdk.builders.*
+import kotlinx.serialization.json.*
 
 /**
  * MCP Server 实现示例 - 展示简化后的最佳实现方式
@@ -60,15 +61,15 @@ class TextProcessorServer : McpServerBase() {
     suspend fun reverse(text: String): String = text.reversed()
     
     @McpTool("计算文本长度和统计信息")
-    suspend fun analyzeText(text: String): Map<String, Any> {
+    suspend fun analyzeText(text: String): JsonObject {
         val words = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
-        return mapOf(
-            "length" to text.length,
-            "wordCount" to words.size,
-            "lineCount" to text.split("\n").size,
-            "isEmpty" to text.isEmpty(),
-            "isBlank" to text.isBlank()
-        )
+        return buildJsonObject {
+            put("length", text.length)
+            put("wordCount", words.size)
+            put("lineCount", text.split("\n").size)
+            put("isEmpty", text.isEmpty())
+            put("isBlank", text.isBlank())
+        }
     }
     
     @McpTool("替换文本内容")
@@ -110,24 +111,32 @@ class MathToolsServer : McpServerBase() {
     }
     
     @McpTool("检查是否为质数")
-    suspend fun isPrime(n: Int): Map<String, Any> {
+    suspend fun isPrime(n: Int): JsonObject {
         if (n < 2) {
-            return mapOf("isPrime" to false, "number" to n, "reason" to "小于2的数不是质数")
-        }
-        
-        for (i in 2..Math.sqrt(n.toDouble()).toInt()) {
-            if (n % i == 0) {
-                return mapOf(
-                    "isPrime" to false, 
-                    "number" to n, 
-                    "divisor" to i,
-                    "reason" to "能被 $i 整除"
-                )
+            return buildJsonObject {
+                put("isPrime", false)
+                put("number", n)
+                put("reason", "Numbers less than 2 are not prime")
             }
         }
-        
-        return mapOf("isPrime" to true, "number" to n)
+
+        for (i in 2..Math.sqrt(n.toDouble()).toInt()) {
+            if (n % i == 0) {
+                return buildJsonObject {
+                    put("isPrime", false)
+                    put("number", n)
+                    put("divisor", i)
+                    put("reason", "Divisible by $i")
+                }
+            }
+        }
+
+        return buildJsonObject {
+            put("isPrime", true)
+            put("number", n)
+        }
     }
+
     
     @McpTool("计算最大公约数")
     suspend fun gcd(a: Int, b: Int): Int {
@@ -150,29 +159,31 @@ class MathToolsServer : McpServerBase() {
 class SystemToolsServer : McpServerBase() {
     
     @McpTool("获取当前时间戳")
-    suspend fun getCurrentTimestamp(): Map<String, Any> {
+    suspend fun getCurrentTimestamp(): JsonObject {
         val timestamp = System.currentTimeMillis()
-        return mapOf(
-            "timestamp" to timestamp,
-            "iso" to java.time.Instant.ofEpochMilli(timestamp).toString(),
-            "readable" to java.time.LocalDateTime.now().toString()
-        )
+        return buildJsonObject {
+            put("timestamp", timestamp)
+            put("iso", java.time.Instant.ofEpochMilli(timestamp).toString())
+            put("readable", java.time.LocalDateTime.now().toString())
+        }
     }
+
     
     @McpTool("生成随机数")
-    suspend fun randomNumber(min: Int = 0, max: Int = 100): Map<String, Any> {
+    suspend fun randomNumber(min: Int = 0, max: Int = 100): JsonObject {
         if (min >= max) {
-            throw IllegalArgumentException("最小值必须小于最大值")
+            throw IllegalArgumentException("min must be less than max")
         }
-        
+
         val random = kotlin.random.Random.nextInt(min, max + 1)
-        return mapOf(
-            "value" to random,
-            "min" to min,
-            "max" to max,
-            "range" to (max - min + 1)
-        )
+        return buildJsonObject {
+            put("value", random)
+            put("min", min)
+            put("max", max)
+            put("range", max - min + 1)
+        }
     }
+
     
     // 手动注册工具的示例
     override suspend fun onInitialize() {
@@ -182,17 +193,18 @@ class SystemToolsServer : McpServerBase() {
             description = "获取系统信息",
             parameterSchema = mapOf()
         ) { _ ->
-            mapOf(
-                "os" to System.getProperty("os.name"),
-                "javaVersion" to System.getProperty("java.version"),
-                "userHome" to System.getProperty("user.home"),
-                "workingDir" to System.getProperty("user.dir"),
-                "availableProcessors" to Runtime.getRuntime().availableProcessors(),
-                "maxMemory" to Runtime.getRuntime().maxMemory(),
-                "totalMemory" to Runtime.getRuntime().totalMemory(),
-                "freeMemory" to Runtime.getRuntime().freeMemory()
-            )
+            ToolResult.success(buildJsonObject {
+                put("os", System.getProperty("os.name"))
+                put("javaVersion", System.getProperty("java.version"))
+                put("userHome", System.getProperty("user.home"))
+                put("workingDir", System.getProperty("user.dir"))
+                put("availableProcessors", Runtime.getRuntime().availableProcessors())
+                put("maxMemory", Runtime.getRuntime().maxMemory())
+                put("totalMemory", Runtime.getRuntime().totalMemory())
+                put("freeMemory", Runtime.getRuntime().freeMemory())
+            })
         }
+
     }
 }
 
@@ -210,22 +222,29 @@ class PingServer : McpServerBase() {
 class DataProcessorServer : McpServerBase() {
     
     @McpTool("对数组进行排序")
-    suspend fun sortArray(numbers: List<Double>, ascending: Boolean = true): Map<String, Any> {
+    suspend fun sortArray(numbers: List<Double>, ascending: Boolean = true): JsonObject {
         val sorted = if (ascending) numbers.sorted() else numbers.sortedDescending()
-        return mapOf(
-            "original" to numbers,
-            "sorted" to sorted,
-            "ascending" to ascending,
-            "count" to numbers.size
-        )
+        return buildJsonObject {
+            putJsonArray("original") {
+                numbers.forEach { add(it) }
+            }
+            putJsonArray("sorted") {
+                sorted.forEach { add(it) }
+            }
+            put("ascending", ascending)
+            put("count", numbers.size)
+        }
     }
+
     
     @McpTool("计算数组统计信息")
-    suspend fun arrayStats(numbers: List<Double>): Map<String, Any> {
+    suspend fun arrayStats(numbers: List<Double>): JsonObject {
         if (numbers.isEmpty()) {
-            return mapOf("error" to "数组不能为空")
+            return buildJsonObject {
+                put("error", "Array cannot be empty")
+            }
         }
-        
+
         val sum = numbers.sum()
         val average = sum / numbers.size
         val min = numbers.minOrNull() ?: 0.0
@@ -236,17 +255,18 @@ class DataProcessorServer : McpServerBase() {
         } else {
             sorted[sorted.size / 2]
         }
-        
-        return mapOf(
-            "count" to numbers.size,
-            "sum" to sum,
-            "average" to average,
-            "min" to min,
-            "max" to max,
-            "median" to median,
-            "range" to (max - min)
-        )
+
+        return buildJsonObject {
+            put("count", numbers.size)
+            put("sum", sum)
+            put("average", average)
+            put("min", min)
+            put("max", max)
+            put("median", median)
+            put("range", max - min)
+        }
     }
+
 }
 
 /**
@@ -254,9 +274,13 @@ class DataProcessorServer : McpServerBase() {
  */
 fun createSimpleCalculator(): McpServer = simpleTool(
     name = "simple_add",
-    description = "简单加法工具"
+    description = "simple add tool"
 ) { args ->
-    val a = (args["a"] as Number).toDouble()
-    val b = (args["b"] as Number).toDouble()
-    a + b
+    val a = args["a"]?.jsonPrimitive?.doubleOrNull
+    val b = args["b"]?.jsonPrimitive?.doubleOrNull
+    if (a == null || b == null) {
+        return@simpleTool ToolResult.error("Missing or invalid parameters")
+    }
+    ToolResult.success(JsonPrimitive(a + b))
 }
+

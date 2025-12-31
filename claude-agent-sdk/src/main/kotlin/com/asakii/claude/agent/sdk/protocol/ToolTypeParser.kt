@@ -2,7 +2,6 @@ package com.asakii.claude.agent.sdk.protocol
 
 import com.asakii.claude.agent.sdk.exceptions.MessageParsingException
 import com.asakii.claude.agent.sdk.types.*
-import kotlinx.serialization.Contextual
 import kotlinx.serialization.json.*
 
 /**
@@ -296,8 +295,7 @@ object ToolTypeParser {
         val serverName = if (nameParts.size >= 2) nameParts[1] else "unknown"
         val functionName = if (nameParts.size >= 3) nameParts[2] else block.name
 
-        // 将JsonElement转换为Map<String, Any>
-        val parameters = parseJsonElementToMap(block.input)
+        val parameters = normalizeToJsonObject(block.input)
 
         return McpToolUse(
             id = block.id,
@@ -386,7 +384,7 @@ object ToolTypeParser {
      * 解析未知工具
      */
     private fun parseUnknownTool(block: ToolUseBlock): UnknownToolUse {
-        val parameters = parseJsonElementToMap(block.input)
+        val parameters = normalizeToJsonObject(block.input)
         return UnknownToolUse(
             id = block.id,
             name = block.name,
@@ -397,41 +395,12 @@ object ToolTypeParser {
     }
 
     /**
-     * 将JsonElement转换为Map<String, Any>
-     * 这是一个递归函数，用于处理嵌套的JSON结构
+     * Normalize JsonElement to JsonObject for tool parameters.
      */
-    private fun parseJsonElementToMap(element: JsonElement): Map<String, @Contextual Any> {
+    private fun normalizeToJsonObject(element: JsonElement): JsonObject {
         return when (element) {
-            is JsonObject -> {
-                element.mapValues { (_, value) ->
-                    parseJsonValue(value)
-                }
-            }
-            else -> mapOf("value" to parseJsonValue(element))
-        }
-    }
-
-    /**
-     * 递归解析JsonElement为Kotlin类型
-     */
-    private fun parseJsonValue(element: JsonElement): Any {
-        return when (element) {
-            is JsonPrimitive -> {
-                when {
-                    element.isString -> element.content
-                    element.booleanOrNull != null -> element.boolean
-                    element.intOrNull != null -> element.int
-                    element.longOrNull != null -> element.long
-                    element.doubleOrNull != null -> element.double
-                    else -> element.content
-                }
-            }
-            is JsonArray -> {
-                element.map { parseJsonValue(it) }
-            }
-            is JsonObject -> {
-                element.mapValues { (_, value) -> parseJsonValue(value) }
-            }
+            is JsonObject -> element
+            else -> buildJsonObject { put("value", element) }
         }
     }
 }

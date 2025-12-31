@@ -1,4 +1,4 @@
-package com.asakii.server.codex
+﻿package com.asakii.server.codex
 
 import com.asakii.codex.agent.sdk.appserver.*
 import kotlinx.coroutines.*
@@ -11,16 +11,16 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Codex 后端提供者
+ * Codex 鍚庣鎻愪緵鑰?
  *
- * 使用 codex app-server 模式提供完整的 Codex 功能：
- * 1. 管理 Codex app-server 进程生命周期
- * 2. 管理 JSON-RPC 2.0 通信
- * 3. 提供统一的会话管理接口
- * 4. 事件映射和转发
- * 5. 处理 Approval 请求回调
+ * 浣跨敤 codex app-server 妯″紡鎻愪緵瀹屾暣鐨?Codex 鍔熻兘锛?
+ * 1. 绠＄悊 Codex app-server 杩涚▼鐢熷懡鍛ㄦ湡
+ * 2. 绠＄悊 JSON-RPC 2.0 閫氫俊
+ * 3. 鎻愪緵缁熶竴鐨勪細璇濈鐞嗘帴鍙?
+ * 4. 浜嬩欢鏄犲皠鍜岃浆鍙?
+ * 5. 澶勭悊 Approval 璇锋眰鍥炶皟
  *
- * 参考：external/openai-codex/codex-rs/app-server/README.md
+ * 鍙傝€冿細external/openai-codex/codex-rs/app-server/README.md
  */
 class CodexBackendProvider(
     private val workingDirectory: String,
@@ -30,16 +30,16 @@ class CodexBackendProvider(
 
     private val logger = LoggerFactory.getLogger(CodexBackendProvider::class.java)
 
-    // App-Server 客户端
+    // App-Server 瀹㈡埛绔?
     private var appServerClient: CodexAppServerClient? = null
 
-    // 运行状态
+    // 杩愯鐘舵€?
     private val isRunning = AtomicBoolean(false)
 
-    // 会话管理：threadId -> ThreadState
+    // 浼氳瘽绠＄悊锛歵hreadId -> ThreadState
     private val threads = ConcurrentHashMap<String, ThreadState>()
 
-    // 事件流：用于向外部发送事件
+    // 浜嬩欢娴侊細鐢ㄤ簬鍚戝閮ㄥ彂閫佷簨浠?
     private val _events = MutableSharedFlow<CodexEvent>(
         replay = 0,
         extraBufferCapacity = 100,
@@ -47,15 +47,15 @@ class CodexBackendProvider(
     )
     val events: SharedFlow<CodexEvent> = _events.asSharedFlow()
 
-    // Approval 请求回调
+    // Approval 璇锋眰鍥炶皟
     private val _approvalRequests = Channel<ApprovalRequest>(Channel.UNLIMITED)
     val approvalRequests: Flow<ApprovalRequest> = _approvalRequests.receiveAsFlow()
 
-    // 事件处理任务
+    // 浜嬩欢澶勭悊浠诲姟
     private var eventProcessingJob: Job? = null
 
     /**
-     * 会话状态
+     * 浼氳瘽鐘舵€?
      */
     data class ThreadState(
         val threadId: String,
@@ -65,7 +65,7 @@ class CodexBackendProvider(
     )
 
     /**
-     * 会话配置
+     * 浼氳瘽閰嶇疆
      */
     data class ThreadConfig(
         val model: String? = null,
@@ -75,7 +75,7 @@ class CodexBackendProvider(
     )
 
     /**
-     * Codex 事件（统一格式）
+     * Codex 浜嬩欢锛堢粺涓€鏍煎紡锛?
      */
     sealed class CodexEvent {
         data class ThreadCreated(val threadId: String, val thread: ThreadInfo) : CodexEvent()
@@ -101,27 +101,32 @@ class CodexBackendProvider(
             val requestId: String,
             val threadId: String,
             val turnId: String,
-            val command: String,
+            val command: String?,
             val cwd: String?,
             val reason: String?,
-            val risk: String?
+            val proposedExecpolicyAmendment: ExecPolicyAmendment?
         ) : CodexEvent()
 
         data class FileChangeApprovalRequired(
             val requestId: String,
             val threadId: String,
             val turnId: String,
-            val changes: List<FileChange>,
-            val reason: String?
+            val changes: List<FileUpdateChange>,
+            val reason: String?,
+            val grantRoot: String?
         ) : CodexEvent()
 
-        data class TokenUsage(val threadId: String, val usage: com.asakii.codex.agent.sdk.appserver.TokenUsage) : CodexEvent()
+        data class TokenUsage(
+            val threadId: String,
+            val turnId: String,
+            val usage: ThreadTokenUsage
+        ) : CodexEvent()
 
         data class Error(val message: String, val cause: Throwable? = null) : CodexEvent()
     }
 
     /**
-     * Approval 请求 (保持向后兼容)
+     * Approval 璇锋眰 (淇濇寔鍚戝悗鍏煎)
      */
     data class ApprovalRequest(
         val threadId: String,
@@ -129,7 +134,7 @@ class CodexBackendProvider(
         val requestId: String,
         val type: ApprovalType,
         val command: String? = null,
-        val changes: List<FileChange>? = null,
+        val changes: List<FileUpdateChange>? = null,
         val reason: String? = null
     )
 
@@ -138,7 +143,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 启动后端
+     * 鍚姩鍚庣
      */
     suspend fun start() {
         if (isRunning.getAndSet(true)) {
@@ -148,7 +153,7 @@ class CodexBackendProvider(
         logger.info("Starting Codex backend provider (app-server mode)...")
 
         try {
-            // 1. 启动 App-Server 客户端
+            // 1. 鍚姩 App-Server 瀹㈡埛绔?
             val codexPathObj = codexPath?.let { Paths.get(it) }
             val workingDirPath = Paths.get(workingDirectory)
 
@@ -160,7 +165,7 @@ class CodexBackendProvider(
 
             logger.info("Codex app-server process started")
 
-            // 2. 执行初始化握手
+            // 2. 鎵ц鍒濆鍖栨彙鎵?
             val initResult = appServerClient!!.initialize(
                 clientName = "claude-code-plus",
                 clientTitle = "Claude Code Plus",
@@ -169,7 +174,7 @@ class CodexBackendProvider(
 
             logger.info("Codex app-server initialized, userAgent: ${initResult.userAgent}")
 
-            // 3. 启动事件监听
+            // 3. 鍚姩浜嬩欢鐩戝惉
             eventProcessingJob = scope.launch {
                 listenToAppServerEvents()
             }
@@ -186,7 +191,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 停止后端
+     * 鍋滄鍚庣
      */
     suspend fun stop() {
         if (!isRunning.getAndSet(false)) {
@@ -197,14 +202,14 @@ class CodexBackendProvider(
         logger.info("Stopping Codex backend provider...")
 
         try {
-            // 1. 取消事件处理
+            // 1. 鍙栨秷浜嬩欢澶勭悊
             eventProcessingJob?.cancel()
 
-            // 2. 关闭 App-Server 客户端
+            // 2. 鍏抽棴 App-Server 瀹㈡埛绔?
             appServerClient?.close()
             appServerClient = null
 
-            // 3. 清理状态
+            // 3. 娓呯悊鐘舵€?
             threads.clear()
             _approvalRequests.close()
 
@@ -217,7 +222,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 创建新线程（会话）
+     * 鍒涘缓鏂扮嚎绋嬶紙浼氳瘽锛?
      */
     suspend fun createThread(config: ThreadConfig = ThreadConfig()): String {
         ensureRunning()
@@ -233,14 +238,14 @@ class CodexBackendProvider(
             sandbox = config.sandbox
         )
 
-        // 保存线程状态
+        // 淇濆瓨绾跨▼鐘舵€?
         threads[thread.id] = ThreadState(
             threadId = thread.id,
             config = config,
             isActive = true
         )
 
-        // 发送事件
+        // 鍙戦€佷簨浠?
         _events.emit(CodexEvent.ThreadCreated(thread.id, thread))
 
         logger.info("Thread created successfully: ${thread.id}")
@@ -249,7 +254,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 恢复线程
+     * 鎭㈠绾跨▼
      */
     suspend fun resumeThread(threadId: String): ThreadInfo {
         ensureRunning()
@@ -260,7 +265,7 @@ class CodexBackendProvider(
 
         val thread = client.resumeThread(threadId)
 
-        // 更新线程状态
+        // 鏇存柊绾跨▼鐘舵€?
         val existing = threads[threadId]
         if (existing != null) {
             existing.isActive = true
@@ -272,7 +277,7 @@ class CodexBackendProvider(
             )
         }
 
-        // 发送事件
+        // 鍙戦€佷簨浠?
         _events.emit(CodexEvent.ThreadResumed(threadId, thread))
 
         logger.info("Thread resumed successfully: $threadId")
@@ -281,7 +286,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 归档线程
+     * 褰掓。绾跨▼
      */
     suspend fun archiveThread(threadId: String) {
         ensureRunning()
@@ -292,17 +297,17 @@ class CodexBackendProvider(
 
         client.archiveThread(threadId)
 
-        // 更新本地状态
+        // 鏇存柊鏈湴鐘舵€?
         threads[threadId]?.isActive = false
 
-        // 发送事件
+        // 鍙戦€佷簨浠?
         _events.emit(CodexEvent.ThreadArchived(threadId))
 
         logger.info("Thread archived successfully: $threadId")
     }
 
     /**
-     * 列出所有线程
+     * 鍒楀嚭鎵€鏈夌嚎绋?
      */
     suspend fun listThreads(
         cursor: String? = null,
@@ -315,7 +320,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 开始新的对话轮次
+     * 寮€濮嬫柊鐨勫璇濊疆娆?
      */
     suspend fun startTurn(
         threadId: String,
@@ -345,10 +350,10 @@ class CodexBackendProvider(
             model = model
         )
 
-        // 更新线程状态
+        // 鏇存柊绾跨▼鐘舵€?
         thread.currentTurnId = turn.id
 
-        // 发送事件
+        // 鍙戦€佷簨浠?
         _events.emit(CodexEvent.TurnStarted(threadId, turn.id, turn))
 
         logger.info("Turn started successfully: ${turn.id} for thread: $threadId")
@@ -357,7 +362,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 中断当前轮次
+     * 涓柇褰撳墠杞
      */
     suspend fun interruptTurn(threadId: String) {
         ensureRunning()
@@ -374,14 +379,14 @@ class CodexBackendProvider(
 
         client.interruptTurn(threadId, turnId)
 
-        // 发送事件
+        // 鍙戦€佷簨浠?
         _events.emit(CodexEvent.TurnInterrupted(threadId, turnId))
 
         logger.info("Turn interrupted successfully: $turnId")
     }
 
     /**
-     * 响应命令审批
+     * 鍝嶅簲鍛戒护瀹℃壒
      */
     suspend fun respondToCommandApproval(requestId: String, approved: Boolean, forSession: Boolean = false) {
         ensureRunning()
@@ -398,7 +403,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 响应文件修改审批
+     * 鍝嶅簲鏂囦欢淇敼瀹℃壒
      */
     suspend fun respondToFileChangeApproval(requestId: String, approved: Boolean) {
         ensureRunning()
@@ -415,21 +420,21 @@ class CodexBackendProvider(
     }
 
     /**
-     * 获取线程状态
+     * 鑾峰彇绾跨▼鐘舵€?
      */
     fun getThreadState(threadId: String): ThreadState? {
         return threads[threadId]
     }
 
     /**
-     * 获取所有活跃线程
+     * 鑾峰彇鎵€鏈夋椿璺冪嚎绋?
      */
     fun getActiveThreads(): List<ThreadState> {
         return threads.values.filter { it.isActive }
     }
 
     /**
-     * 监听 App-Server 事件并转换为统一格式
+     * 鐩戝惉 App-Server 浜嬩欢骞惰浆鎹负缁熶竴鏍煎紡
      */
     private suspend fun listenToAppServerEvents() {
         val client = appServerClient ?: return
@@ -450,7 +455,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 将 App-Server 事件映射为统一格式
+     * 灏?App-Server 浜嬩欢鏄犲皠涓虹粺涓€鏍煎紡
      */
     private suspend fun mapAndEmitEvent(event: AppServerEvent) {
         when (event) {
@@ -459,18 +464,13 @@ class CodexBackendProvider(
             }
 
             is AppServerEvent.TurnStarted -> {
-                val threadId = threads.entries.find { it.value.currentTurnId == event.turn.id }?.key
-                if (threadId != null) {
-                    _events.emit(CodexEvent.TurnStarted(threadId, event.turn.id, event.turn))
-                }
+                threads[event.threadId]?.currentTurnId = event.turn.id
+                _events.emit(CodexEvent.TurnStarted(event.threadId, event.turn.id, event.turn))
             }
 
             is AppServerEvent.TurnCompleted -> {
-                val threadId = threads.entries.find { it.value.currentTurnId == event.turn.id }?.key
-                if (threadId != null) {
-                    threads[threadId]?.currentTurnId = null
-                    _events.emit(CodexEvent.TurnCompleted(threadId, event.turn.id, event.turn))
-                }
+                threads[event.threadId]?.currentTurnId = null
+                _events.emit(CodexEvent.TurnCompleted(event.threadId, event.turn.id, event.turn))
             }
 
             is AppServerEvent.ItemStarted -> {
@@ -484,7 +484,7 @@ class CodexBackendProvider(
             is AppServerEvent.AgentMessageDelta -> {
                 _events.emit(
                     CodexEvent.StreamingContent(
-                        threadId = "",  // 从 itemId 无法直接获取 threadId
+                        threadId = event.threadId,
                         itemId = event.itemId,
                         contentType = "text",
                         content = event.delta
@@ -495,7 +495,7 @@ class CodexBackendProvider(
             is AppServerEvent.ReasoningDelta -> {
                 _events.emit(
                     CodexEvent.StreamingContent(
-                        threadId = "",
+                        threadId = event.threadId,
                         itemId = event.itemId,
                         contentType = "reasoning",
                         content = event.delta
@@ -506,7 +506,7 @@ class CodexBackendProvider(
             is AppServerEvent.CommandOutputDelta -> {
                 _events.emit(
                     CodexEvent.StreamingContent(
-                        threadId = "",
+                        threadId = event.threadId,
                         itemId = event.itemId,
                         contentType = "command_output",
                         content = event.delta
@@ -523,11 +523,11 @@ class CodexBackendProvider(
                         command = event.command,
                         cwd = event.cwd,
                         reason = event.reason,
-                        risk = event.risk
+                        proposedExecpolicyAmendment = event.proposedExecpolicyAmendment
                     )
                 )
 
-                // 同时发送到 approvalRequests channel (向后兼容)
+                // 鍚屾椂鍙戦€佸埌 approvalRequests channel (鍚戝悗鍏煎)
                 _approvalRequests.send(
                     ApprovalRequest(
                         threadId = event.threadId,
@@ -547,11 +547,12 @@ class CodexBackendProvider(
                         threadId = event.threadId,
                         turnId = event.turnId,
                         changes = event.changes,
-                        reason = event.reason
+                        reason = event.reason,
+                        grantRoot = event.grantRoot
                     )
                 )
 
-                // 同时发送到 approvalRequests channel (向后兼容)
+                // 鍚屾椂鍙戦€佸埌 approvalRequests channel (鍚戝悗鍏煎)
                 _approvalRequests.send(
                     ApprovalRequest(
                         threadId = event.threadId,
@@ -565,7 +566,7 @@ class CodexBackendProvider(
             }
 
             is AppServerEvent.TokenUsageUpdated -> {
-                _events.emit(CodexEvent.TokenUsage(event.threadId, event.usage))
+                _events.emit(CodexEvent.TokenUsage(event.threadId, event.turnId, event.usage))
             }
 
             is AppServerEvent.Error -> {
@@ -575,7 +576,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 确保后端正在运行
+     * 纭繚鍚庣姝ｅ湪杩愯
      */
     private fun ensureRunning() {
         if (!isRunning.get()) {
@@ -584,7 +585,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 检查后端是否正在运行
+     * 妫€鏌ュ悗绔槸鍚︽鍦ㄨ繍琛?
      */
     val running: Boolean get() = isRunning.get()
 }

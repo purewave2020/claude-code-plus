@@ -1,5 +1,9 @@
 package com.asakii.plugin.mcp.tools.terminal
 
+import com.asakii.plugin.mcp.getString
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -27,25 +31,25 @@ class TerminalInterruptTool(private val sessionManager: TerminalSessionManager) 
      *   - session_id: String - 会话 ID（必需）
      *   - signal: String - 信号类型（可选，默认 SIGINT）
      */
-    fun execute(arguments: Map<String, Any>): Map<String, Any> {
-        val sessionId = arguments["session_id"] as? String
-            ?: return mapOf(
-                "success" to false,
-                "error" to "Missing required parameter: session_id"
-            )
+    fun execute(arguments: JsonObject): JsonObject {
+        val sessionId = arguments.getString("session_id")
+            ?: return buildJsonObject {
+                put("success", false)
+                put("error", "Missing required parameter: session_id")
+            }
 
         // 验证会话所有权
         sessionManager.validateSessionOwnership(sessionId)?.let { return it }
 
         // 解析 signal 参数，默认 SIGINT
-        val signal = (arguments["signal"] as? String)?.uppercase() ?: "SIGINT"
+        val signal = arguments.getString("signal")?.uppercase() ?: "SIGINT"
 
         // 验证 signal 值
         if (signal !in VALID_SIGNALS) {
-            return mapOf(
-                "success" to false,
-                "error" to "Invalid signal: $signal. Valid values: ${VALID_SIGNALS.joinToString(", ")}"
-            )
+            return buildJsonObject {
+                put("success", false)
+                put("error", "Invalid signal: $signal. Valid values: ${VALID_SIGNALS.joinToString(", ")}")
+            }
         }
 
         logger.info { "Sending $signal to session: $sessionId" }
@@ -53,7 +57,7 @@ class TerminalInterruptTool(private val sessionManager: TerminalSessionManager) 
         val result = sessionManager.interruptCommand(sessionId, signal)
 
         return if (result.success) {
-            buildMap {
+            buildJsonObject {
                 put("success", true)
                 put("session_id", result.sessionId)
                 result.signal?.let { put("signal", it) }
@@ -62,7 +66,7 @@ class TerminalInterruptTool(private val sessionManager: TerminalSessionManager) 
                 result.message?.let { put("message", it) }
             }
         } else {
-            buildMap {
+            buildJsonObject {
                 put("success", false)
                 put("session_id", result.sessionId)
                 result.signal?.let { put("signal", it) }

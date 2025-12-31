@@ -165,6 +165,9 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             val serviceConfigProvider: () -> AiAgentServiceConfig = {
                 val settings = AgentSettingsService.getInstance()
                 val thinkingLevelName = settings.getThinkingLevelById(settings.defaultThinkingLevelId)?.name ?: "Ultra"
+                val codexPath = settings.codexPath
+                    .takeIf { it.isNotBlank() }
+                    ?: AgentSettingsService.detectCodexPath().takeIf { it.isNotBlank() }
                 logger.info("📦 Loading agent settings: nodePath=${settings.nodePath.ifBlank { "(system PATH)" }}, model=${settings.defaultModelEnum.displayName}, thinkingLevel=$thinkingLevelName (${settings.defaultThinkingTokens} tokens), permissionMode=${settings.permissionMode}, userInteractionMcp=${settings.enableUserInteractionMcp}, jetbrainsMcp=${settings.enableJetBrainsMcp}, defaultBypass=${settings.defaultBypassPermissions}")
 
                 // 创建 IDEA 文件同步 hooks
@@ -189,7 +192,10 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         defaultThinkingTokens = settings.defaultThinkingTokens,
                         ideaFileSyncHooks = fileSyncHooks
                     ),
-                    codex = CodexDefaults(),  // Codex 配置已移除，使用默认值
+                    codex = CodexDefaults(
+                        binaryPath = codexPath,
+                        webSearchEnabled = settings.codexWebSearchEnabled
+                    ),
                     customModels = settings.getCustomModels().map { model ->
                         CustomModelInfo(
                             id = model.id,

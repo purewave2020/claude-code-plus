@@ -9,10 +9,7 @@
       </div>
 
       <div class="dialog-body">
-        <BackendSelector
-          v-model="selectedBackend"
-          :is-session-active="isSessionActive"
-        />
+        <BackendSelector v-model="selectedBackend" />
       </div>
 
       <div class="dialog-footer">
@@ -41,15 +38,11 @@ import type { BackendType } from '@/types/backend'
 import BackendSelector from '@/components/settings/BackendSelector.vue'
 
 interface Props {
-  /** 当前会话是否活跃 */
-  isSessionActive?: boolean
   /** 当前后端类型 */
   currentBackend: BackendType
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  isSessionActive: false,
-})
+const props = defineProps<Props>()
 
 interface Emits {
   (e: 'confirm', backendType: BackendType): void

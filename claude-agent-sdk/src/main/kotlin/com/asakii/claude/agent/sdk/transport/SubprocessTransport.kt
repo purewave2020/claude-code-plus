@@ -507,50 +507,40 @@ class SubprocessTransport(
         
         // MCP servers configuration - 参考 Python SDK 实现
         if (options.mcpServers.isNotEmpty()) {
-            val serversForCli = mutableMapOf<String, Map<String, Any?>>()
+            val serversForCli = mutableMapOf<String, JsonObject>()
 
             options.mcpServers.forEach { (name, config) ->
-                when (config) {
-                    is Map<*, *> -> {
-                        // 直接传递 Map 配置（支持 http, stdio, sse 等类型）
-                        @Suppress("UNCHECKED_CAST")
-                        val configMap = config as Map<String, Any?>
-                        serversForCli[name] = configMap
-                        logger.info("📦 添加 MCP 服务器配置: $name -> type=${configMap["type"]}")
+                val serverConfig = when (config) {
+                    is McpStdioServerConfig -> buildJsonObject {
+                        put("type", config.type)
+                        put("command", config.command)
+                        putJsonArray("args") { config.args.forEach { add(it) } }
+                        putJsonObject("env") { config.env.forEach { (k, v) -> put(k, v) } }
                     }
-                    is McpServerConfig -> {
-                        // McpServerConfig 子类：转换为 Map
-                        val serverConfig = when (config) {
-                            is McpStdioServerConfig -> mapOf(
-                                "type" to config.type,
-                                "command" to config.command,
-                                "args" to config.args,
-                                "env" to config.env
-                            )
-                            is McpSSEServerConfig -> mapOf(
-                                "type" to config.type,
-                                "url" to config.url,
-                                "headers" to config.headers
-                            )
-                            is McpHttpServerConfig -> mapOf(
-                                "type" to config.type,
-                                "url" to config.url,
-                                "headers" to config.headers
-                            )
-                        }
-                        serversForCli[name] = serverConfig
-                        logger.info("📦 添加 MCP 服务器配置: $name -> type=${config.type}")
+                    is McpSSEServerConfig -> buildJsonObject {
+                        put("type", config.type)
+                        put("url", config.url)
+                        putJsonObject("headers") { config.headers.forEach { (k, v) -> put(k, v) } }
                     }
-                    is McpServer -> {
-                        // SDK MCP 服务器：使用 type="sdk" 告诉 CLI 通过控制协议处理
-                        // CLI 会发送 mcp_message 控制请求，由 ControlProtocol.handleMcpMessage 处理
-                        serversForCli[name] = mapOf("type" to "sdk", "name" to name)
-                        logger.info("📦 添加 SDK MCP 服务器: $name -> type=sdk (${config::class.simpleName})")
+                    is McpHttpServerConfig -> buildJsonObject {
+                        put("type", config.type)
+                        put("url", config.url)
+                        putJsonObject("headers") { config.headers.forEach { (k, v) -> put(k, v) } }
+                    }
+                    is McpServer -> buildJsonObject {
+                        put("type", "sdk")
+                        put("name", name)
                     }
                     else -> {
-                        // 不支持的类型，跳过并警告
-                        logger.warn("⚠️ 不支持的 MCP 服务器配置类型: $name -> ${config::class.simpleName}，请使用 Map、McpServerConfig 或 McpServer")
+                        logger.warn("Unsupported MCP server config type $name -> ${config::class.simpleName}")
+                        null
                     }
+                }
+
+                if (serverConfig != null) {
+                    serversForCli[name] = serverConfig
+                    val typeLabel = serverConfig["type"]?.jsonPrimitive?.contentOrNull ?: "unknown"
+                    logger.info("Added MCP server config $name -> type=$typeLabel")
                 }
             }
 
@@ -558,40 +548,7 @@ class SubprocessTransport(
                 val mcpConfigJson = buildJsonObject {
                     putJsonObject("mcpServers") {
                         serversForCli.forEach { (serverName, serverConfig) ->
-                            putJsonObject(serverName) {
-                                serverConfig.forEach { (key, value) ->
-                                    when (value) {
-                                        is String -> put(key, value)
-                                        is Number -> put(key, value)
-                                        is Boolean -> put(key, value)
-                                        null -> put(key, JsonNull)
-                                        is List<*> -> putJsonArray(key) {
-                                            value.forEach { item ->
-                                                when (item) {
-                                                    is String -> add(item)
-                                                    is Number -> add(item)
-                                                    is Boolean -> add(item)
-                                                    null -> add(JsonNull)
-                                                    else -> add(item.toString())
-                                                }
-                                            }
-                                        }
-                                        is Map<*, *> -> putJsonObject(key) {
-                                            @Suppress("UNCHECKED_CAST")
-                                            (value as Map<String, Any?>).forEach { (k, v) ->
-                                                when (v) {
-                                                    is String -> put(k, v)
-                                                    is Number -> put(k, v)
-                                                    is Boolean -> put(k, v)
-                                                    null -> put(k, JsonNull)
-                                                    else -> put(k, v.toString())
-                                                }
-                                            }
-                                        }
-                                        else -> put(key, value.toString())
-                                    }
-                                }
-                            }
+                            put(serverName, serverConfig)
                         }
                     }
                 }.toString()

@@ -6,6 +6,7 @@ import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ChangeListManager
+import kotlinx.serialization.json.JsonObject
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -22,7 +23,7 @@ private val logger = KotlinLogging.logger {}
  */
 class GetVcsStatusTool(private val project: Project) {
 
-    suspend fun execute(arguments: Map<String, Any?>): String {
+    suspend fun execute(arguments: JsonObject): String {
         return ReadAction.compute<String, Throwable> {
             try {
                 val changeListManager = ChangeListManager.getInstance(project)

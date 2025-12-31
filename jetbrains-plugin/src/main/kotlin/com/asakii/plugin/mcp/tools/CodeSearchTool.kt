@@ -1,6 +1,9 @@
 package com.asakii.plugin.mcp.tools
 
 import com.asakii.claude.agent.sdk.mcp.ToolResult
+import com.asakii.plugin.mcp.getBoolean
+import com.asakii.plugin.mcp.getInt
+import com.asakii.plugin.mcp.getString
 import com.asakii.server.mcp.schema.ToolSchemaLoader
 import com.intellij.find.FindModel
 import com.intellij.find.impl.FindInProjectUtil
@@ -15,6 +18,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.usageView.UsageInfo
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 
@@ -55,21 +59,21 @@ data class CodeSearchResult(
  */
 class CodeSearchTool(private val project: Project) {
 
-    fun getInputSchema(): Map<String, Any> = ToolSchemaLoader.getSchema("CodeSearch")
+    fun getInputSchema(): JsonObject = ToolSchemaLoader.getSchema("CodeSearch")
 
-    suspend fun execute(arguments: Map<String, Any>): Any {
-        val query = arguments["query"] as? String
+    suspend fun execute(arguments: JsonObject): Any {
+        val query = arguments.getString("query")
             ?: return ToolResult.error("Missing required parameter: query")
-        val isRegex = arguments["isRegex"] as? Boolean ?: false
-        val caseSensitive = arguments["caseSensitive"] as? Boolean ?: false
-        val wholeWords = arguments["wholeWords"] as? Boolean ?: false
-        val fileMask = arguments["fileMask"] as? String
-        val scopeStr = arguments["scope"] as? String ?: "Project"
-        val scopeArg = arguments["scopeArg"] as? String
-        val maxResults = ((arguments["maxResults"] as? Number)?.toInt() ?: 10).coerceAtLeast(1)
-        val offset = ((arguments["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
-        val includeContext = arguments["includeContext"] as? Boolean ?: false
-        val maxLineLength = ((arguments["maxLineLength"] as? Number)?.toInt() ?: 200).coerceAtLeast(1)
+        val isRegex = arguments.getBoolean("isRegex") ?: false
+        val caseSensitive = arguments.getBoolean("caseSensitive") ?: false
+        val wholeWords = arguments.getBoolean("wholeWords") ?: false
+        val fileMask = arguments.getString("fileMask")
+        val scopeStr = arguments.getString("scope") ?: "Project"
+        val scopeArg = arguments.getString("scopeArg")
+        val maxResults = (arguments.getInt("maxResults") ?: 10).coerceAtLeast(1)
+        val offset = (arguments.getInt("offset") ?: 0).coerceAtLeast(0)
+        val includeContext = arguments.getBoolean("includeContext") ?: false
+        val maxLineLength = (arguments.getInt("maxLineLength") ?: 200).coerceAtLeast(1)
 
         val scope = try {
             SearchScope.valueOf(scopeStr)

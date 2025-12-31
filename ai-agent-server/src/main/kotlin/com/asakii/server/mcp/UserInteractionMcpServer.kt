@@ -1,4 +1,4 @@
-package com.asakii.server.mcp
+﻿package com.asakii.server.mcp
 
 import com.asakii.claude.agent.sdk.mcp.McpServerBase
 import com.asakii.claude.agent.sdk.mcp.ToolResult
@@ -11,12 +11,18 @@ import com.asakii.server.mcp.schema.ValidationResult
 import com.asakii.server.rpc.ClientCaller
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 
-/**
- * 用户回答项（前端返回的数组元素）
- */
 @Serializable
 data class UserAnswerItem(
     val question: String,
@@ -24,9 +30,6 @@ data class UserAnswerItem(
     val answer: String
 )
 
-/**
- * 权限行为类型
- */
 @Serializable
 enum class PermissionBehavior {
     @kotlinx.serialization.SerialName("allow")
@@ -37,9 +40,6 @@ enum class PermissionBehavior {
     ASK
 }
 
-/**
- * 权限模式
- */
 @Serializable
 enum class PermissionMode {
     @kotlinx.serialization.SerialName("default")
@@ -52,9 +52,6 @@ enum class PermissionMode {
     BYPASS_PERMISSIONS
 }
 
-/**
- * 权限更新目标
- */
 @Serializable
 enum class PermissionUpdateDestination {
     @kotlinx.serialization.SerialName("userSettings")
@@ -67,9 +64,6 @@ enum class PermissionUpdateDestination {
     SESSION
 }
 
-/**
- * 权限更新类型
- */
 @Serializable
 enum class PermissionUpdateType {
     @kotlinx.serialization.SerialName("addRules")
@@ -86,18 +80,12 @@ enum class PermissionUpdateType {
     REMOVE_DIRECTORIES
 }
 
-/**
- * 权限规则值
- */
 @Serializable
 data class PermissionRuleValue(
     val toolName: String,
     val ruleContent: String? = null
 )
 
-/**
- * 权限更新配置
- */
 @Serializable
 data class PermissionUpdate(
     val type: PermissionUpdateType,
@@ -108,47 +96,32 @@ data class PermissionUpdate(
     val destination: PermissionUpdateDestination? = null
 )
 
-/**
- * 授权响应数据类（前端 RequestPermission 回调的返回格式，与官方 SDK 保持一致）
- */
 @Serializable
 data class PermissionResponse(
     val approved: Boolean,
-    val permissionUpdates: List<PermissionUpdate>? = null,  // 改为数组，与官方 SDK 保持一致
+    val permissionUpdates: List<PermissionUpdate>? = null,
     val denyReason: String? = null
 )
 
-/**
- * AskUserQuestion 请求参数
- */
 @Serializable
 data class AskUserQuestionParams(
     val questions: List<QuestionItem>
 )
 
-/**
- * 问题项（兼容 Claude 格式）
- */
 @Serializable
 data class QuestionItem(
     val question: String,
-    val header: String? = null,  // Claude 可能不传
-    val options: List<OptionItem>? = null,  // 可能是对象数组
+    val header: String? = null,
+    val options: List<OptionItem>? = null,
     val multiSelect: Boolean = false
 )
 
-/**
- * 选项项
- */
 @Serializable
 data class OptionItem(
     val label: String,
     val description: String = ""
 )
 
-/**
- * Claude 原生格式的问题项
- */
 @Serializable
 data class ClaudeQuestionItem(
     val question: String,
@@ -157,21 +130,12 @@ data class ClaudeQuestionItem(
     val multiSelect: Boolean = false
 )
 
-/**
- * Claude 原生格式的选项（可能是字符串或对象）
- */
 @Serializable
 data class ClaudeOptionItem(
     val label: String,
     val description: String = ""
 )
 
-/**
- * 用户交互 MCP Server
- *
- * 提供需要用户交互的工具，如 AskUserQuestion。
- * 通过 ClientCaller 与前端通信，获取用户输入。
- */
 private val mcpLogger = KotlinLogging.logger {}
 
 @McpServerConfig(
@@ -182,79 +146,78 @@ private val mcpLogger = KotlinLogging.logger {}
 class UserInteractionMcpServer : McpServerBase() {
     private var clientCaller: ClientCaller? = null
 
-    /**
-     * 工具调用超时时间
-     * AskUserQuestion 需要等待用户响应，设置为 null 表示无限超时
-     */
     override val timeout: Long? = null
 
-    /**
-     * 获取需要自动允许的工具列表
-     * AskUserQuestion 工具需要自动允许，避免向用户提问还需要授权
-     */
     override fun getAllowedTools(): List<String> = listOf("AskUserQuestion")
 
-    /**
-     * 提供该 MCP 服务器的系统提示词追加内容
-     *
-     * 告知 AI 如何正确使用 AskUserQuestion 工具与用户进行交互
-     */
     override fun getSystemPromptAppendix(): String {
         return DEFAULT_INSTRUCTIONS
     }
 
     companion object {
-        /**
-         * 默认系统提示词
-         */
         const val DEFAULT_INSTRUCTIONS = "When you need clarification from the user, especially when presenting multiple options or choices, use the `mcp__user_interaction__AskUserQuestion` tool to ask questions. The user's response will be returned to you through this tool."
 
-        /** AskUserQuestion tool JSON Schema definition */
-        val ASK_USER_QUESTION_SCHEMA: Map<String, Any> = mapOf(
-            "type" to "object",
-            "description" to "Ask the user questions and get their choices. Use this tool to interact with users when input or confirmation is needed.",
-            "properties" to mapOf(
-                "questions" to mapOf(
-                    "type" to "array",
-                    "description" to "List of questions",
-                    "items" to mapOf(
-                        "type" to "object",
-                        "properties" to mapOf(
-                            "question" to mapOf("type" to "string", "description" to "Question content"),
-                            "header" to mapOf("type" to "string", "description" to "Question header/category label"),
-                            "options" to mapOf(
-                                "type" to "array",
-                                "description" to "List of options",
-                                "items" to mapOf(
-                                    "type" to "object",
-                                    "properties" to mapOf(
-                                        "label" to mapOf("type" to "string", "description" to "Option display text"),
-                                        "description" to mapOf("type" to "string", "description" to "Option description (optional)")
-                                    ),
-                                    "required" to listOf("label")
-                                )
-                            ),
-                            "multiSelect" to mapOf("type" to "boolean", "description" to "Allow multiple selections, default false")
-                        ),
-                        "required" to listOf("question", "header", "options")
-                    )
-                )
-            ),
-            "required" to listOf("questions")
-        )
+        val ASK_USER_QUESTION_SCHEMA: JsonObject = buildJsonObject {
+            put("type", "object")
+            put(
+                "description",
+                "Ask the user questions and get their choices. Use this tool to interact with users when input or confirmation is needed."
+            )
+            putJsonObject("properties") {
+                putJsonObject("questions") {
+                    put("type", "array")
+                    put("description", "List of questions")
+                    putJsonObject("items") {
+                        put("type", "object")
+                        putJsonObject("properties") {
+                            putJsonObject("question") {
+                                put("type", "string")
+                                put("description", "Question content")
+                            }
+                            putJsonObject("header") {
+                                put("type", "string")
+                                put("description", "Question header/category label")
+                            }
+                            putJsonObject("options") {
+                                put("type", "array")
+                                put("description", "List of options")
+                                putJsonObject("items") {
+                                    put("type", "object")
+                                    putJsonObject("properties") {
+                                        putJsonObject("label") {
+                                            put("type", "string")
+                                            put("description", "Option display text")
+                                        }
+                                        putJsonObject("description") {
+                                            put("type", "string")
+                                            put("description", "Option description (optional)")
+                                        }
+                                    }
+                                    putJsonArray("required") { add("label") }
+                                }
+                            }
+                            putJsonObject("multiSelect") {
+                                put("type", "boolean")
+                                put("description", "Allow multiple selections, default false")
+                            }
+                        }
+                        putJsonArray("required") {
+                            add("question")
+                            add("header")
+                            add("options")
+                        }
+                    }
+                }
+            }
+            putJsonArray("required") { add("questions") }
+        }
     }
 
-    /**
-     * 设置客户端调用器
-     */
     fun setClientCaller(caller: ClientCaller) {
         this.clientCaller = caller
         mcpLogger.info { "✅ [UserInteractionMcpServer] ClientCaller 已设置" }
     }
 
-    /**
-     * 重写 callToolJson，直接从 JsonObject 反序列化为强类型
-     */
     override suspend fun callToolJson(toolName: String, arguments: JsonObject): ToolResult {
         return when (toolName) {
             "AskUserQuestion" -> handleAskUserQuestionJson(arguments)
@@ -262,27 +225,19 @@ class UserInteractionMcpServer : McpServerBase() {
         }
     }
 
-    /**
-     * 处理 AskUserQuestion（直接从 JsonObject 反序列化）
-     *
-     * 使用 Protobuf 序列化与前端通信
-     */
     private suspend fun handleAskUserQuestionJson(arguments: JsonObject): ToolResult {
         val caller = clientCaller
             ?: return ToolResult.error("ClientCaller 未设置，无法与前端通信")
 
         mcpLogger.info { "📩 [AskUserQuestion] 收到工具调用，参数: $arguments" }
 
-        // 1. 使用 SchemaValidator 进行参数校验
-        val argumentsMap = jsonObjectToMap(arguments)
         val validationResult = SchemaValidator.validateWithSchema(
             schema = ASK_USER_QUESTION_SCHEMA,
-            arguments = argumentsMap,
+            arguments = arguments,
             customValidators = listOf(
-                // 自定义校验：检测误传字符串的情况
                 { args ->
                     val questions = args["questions"]
-                    if (questions is String) {
+                    if (questions is JsonPrimitive && questions.isString) {
                         com.asakii.server.mcp.schema.ValidationError(
                             parameter = "questions",
                             message = "Parameter should be an array, not a string",
@@ -300,13 +255,11 @@ class UserInteractionMcpServer : McpServerBase() {
         }
 
         return try {
-            // 直接从 JsonObject 反序列化为强类型
             val normalized = normalizeQuestions(arguments)
-            val params: AskUserQuestionParams = Json.decodeFromJsonElement(normalized)
+            val params = Json.decodeFromJsonElement(AskUserQuestionParams.serializer(), normalized)
 
             mcpLogger.info { "📤 [AskUserQuestion] 解析后的参数: ${params.questions.size} 个问题" }
 
-            // 构建 Protobuf 请求
             val protoRequest = AskUserQuestionRequest.newBuilder().apply {
                 params.questions.forEach { q ->
                     addQuestions(ProtoQuestionItem.newBuilder().apply {
@@ -325,12 +278,10 @@ class UserInteractionMcpServer : McpServerBase() {
                 }
             }.build()
 
-            // 使用 Protobuf 类型化调用
             val protoResponse = caller.callAskUserQuestion(protoRequest)
 
             mcpLogger.info { "📥 [AskUserQuestion] 收到前端响应: ${protoResponse.answersCount} 个回答" }
 
-            // 转换为 Map<问题, 回答>
             val answersMap: Map<String, String> = protoResponse.answersList.associate {
                 it.question to it.answer
             }
@@ -349,36 +300,6 @@ class UserInteractionMcpServer : McpServerBase() {
         }
     }
 
-
-    /**
-     * 将 JsonObject 转换为 Map<String, Any> 供 SchemaValidator 使用
-     */
-    private fun jsonObjectToMap(jsonObject: JsonObject): Map<String, Any> {
-        return jsonObject.mapValues { (_, value) -> jsonElementToAnyForValidation(value) }
-    }
-
-    /**
-     * 将 JsonElement 转换为 Any
-     */
-    private fun jsonElementToAnyForValidation(element: JsonElement): Any {
-        return when (element) {
-            is JsonNull -> ""
-            is JsonPrimitive -> when {
-                element.isString -> element.content
-                element.booleanOrNull != null -> element.boolean
-                element.intOrNull != null -> element.int
-                element.longOrNull != null -> element.long
-                element.doubleOrNull != null -> element.double
-                else -> element.content
-            }
-            is JsonArray -> element.map { jsonElementToAnyForValidation(it) }
-            is JsonObject -> jsonObjectToMap(element)
-        }
-    }
-
-    /**
-     * 对字符串化的 questions 进行修正，确保为 JsonArray
-     */
     private fun normalizeQuestions(arguments: JsonObject): JsonObject {
         val rawQuestions = arguments["questions"]
         if (rawQuestions is JsonPrimitive && rawQuestions.isString) {
@@ -394,7 +315,7 @@ class UserInteractionMcpServer : McpServerBase() {
                         }
                     }
                 } catch (e: Exception) {
-                    mcpLogger.warn { "⚠️ [AskUserQuestion] 无法从字符串解析 questions: " }
+                    mcpLogger.warn { "⚠️ [AskUserQuestion] 无法从字符串解析 questions" }
                 }
             }
         }
@@ -402,134 +323,14 @@ class UserInteractionMcpServer : McpServerBase() {
     }
 
     override suspend fun onInitialize() {
-        // 注册 AskUserQuestion 工具
         registerToolWithSchema(
             name = "AskUserQuestion",
             description = "向用户询问问题并获取选择。使用此工具在需要用户输入或确认时与用户交互。",
             inputSchema = ASK_USER_QUESTION_SCHEMA
         ) { arguments ->
-            handleAskUserQuestion(arguments)
+            handleAskUserQuestionJson(arguments)
         }
 
         mcpLogger.info { "✅ [UserInteractionMcpServer] 初始化完成，已注册 AskUserQuestion 工具" }
-    }
-
-    /**
-     * 处理 AskUserQuestion 工具调用
-     *
-     * 使用 Protobuf 序列化与前端通信
-     */
-    private suspend fun handleAskUserQuestion(arguments: Map<String, Any>): Any {
-        val caller = clientCaller
-            ?: return ToolResult.error("ClientCaller 未设置，无法与前端通信")
-
-        mcpLogger.info { "📩 [AskUserQuestion] 收到工具调用，参数: $arguments" }
-
-        // 调试：打印参数类型
-        arguments.forEach { (key, value) ->
-            mcpLogger.debug { "📦 参数 '$key' 类型: ${value?.let { it::class.qualifiedName } ?: "null"}, 值: $value" }
-        }
-
-        try {
-            // 将 Map<String, Any> 转换为 JsonElement，再解析为类型化对象
-            val paramsJson = anyToJsonElement(arguments)
-            mcpLogger.debug { "📦 转换后的 JSON: $paramsJson" }
-            val paramsJsonNormalized = normalizeQuestions(paramsJson.jsonObject)
-
-
-            val params: AskUserQuestionParams = Json.decodeFromJsonElement(paramsJsonNormalized)
-
-            mcpLogger.info { "📤 [AskUserQuestion] 解析后的参数: ${params.questions.size} 个问题" }
-
-            // 构建 Protobuf 请求
-            val protoRequest = AskUserQuestionRequest.newBuilder().apply {
-                params.questions.forEach { q ->
-                    addQuestions(ProtoQuestionItem.newBuilder().apply {
-                        question = q.question
-                        q.header?.let { header = it }
-                        q.options?.forEach { opt ->
-                            addOptions(ProtoQuestionOption.newBuilder().apply {
-                                label = opt.label
-                                if (opt.description.isNotEmpty()) {
-                                    description = opt.description
-                                }
-                            }.build())
-                        }
-                        multiSelect = q.multiSelect
-                    }.build())
-                }
-            }.build()
-
-            // 使用 Protobuf 类型化调用
-            val protoResponse = caller.callAskUserQuestion(protoRequest)
-
-            mcpLogger.info { "📥 [AskUserQuestion] 收到前端响应: ${protoResponse.answersCount} 个回答" }
-
-            // 转换为 Map<问题, 回答>
-            val answersMap: Map<String, String> = protoResponse.answersList.associate {
-                it.question to it.answer
-            }
-
-            // 序列化返回给 Claude
-            val content = Json.encodeToString(answersMap)
-
-            mcpLogger.info { "✅ [AskUserQuestion] 完成，返回: $content" }
-            return content
-
-        } catch (e: kotlinx.serialization.SerializationException) {
-            mcpLogger.error { "❌ [AskUserQuestion] 参数格式错误: ${e.message}" }
-            return ToolResult.error("参数格式错误，请检查 questions 数组结构是否正确")
-        } catch (e: Exception) {
-            mcpLogger.error { "❌ [AskUserQuestion] 处理失败: ${e.message}" }
-            e.printStackTrace()
-            return ToolResult.error("处理用户问题时发生错误，请稍后重试")
-        }
-    }
-
-    /**
-     * 将 Any 类型递归转换为 JsonElement
-     * 用于将 MCP 框架传入的 Map<String, Any> 转换为可序列化的 JsonElement
-     */
-    private fun anyToJsonElement(value: Any?): JsonElement {
-        return when (value) {
-            null -> JsonNull
-            is JsonElement -> value
-            is String -> JsonPrimitive(value)
-            is Number -> JsonPrimitive(value)
-            is Boolean -> JsonPrimitive(value)
-            is Map<*, *> -> buildJsonObject {
-                value.forEach { (k, v) ->
-                    put(k.toString(), anyToJsonElement(v))
-                }
-            }
-            is List<*> -> buildJsonArray {
-                value.forEach { add(anyToJsonElement(it)) }
-            }
-            is Array<*> -> buildJsonArray {
-                value.forEach { add(anyToJsonElement(it)) }
-            }
-            is Iterable<*> -> buildJsonArray {
-                value.forEach { add(anyToJsonElement(it)) }
-            }
-            is Sequence<*> -> buildJsonArray {
-                value.forEach { add(anyToJsonElement(it)) }
-            }
-            else -> {
-                // 尝试处理其他可迭代类型或 JSON 字符串
-                val str = value.toString()
-                // 如果看起来像 JSON 数组或对象，尝试解析
-                if (str.startsWith("[") || str.startsWith("{")) {
-                    try {
-                        Json.parseToJsonElement(str)
-                    } catch (e: Exception) {
-                        mcpLogger.warn { "⚠️ 无法解析为 JSON: $str, 类型: ${value::class.qualifiedName}" }
-                        JsonPrimitive(str)
-                    }
-                } else {
-                    mcpLogger.debug { "📦 未知类型转为字符串: ${value::class.qualifiedName}" }
-                    JsonPrimitive(str)
-                }
-            }
-        }
     }
 }

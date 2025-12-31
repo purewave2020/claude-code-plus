@@ -19,14 +19,14 @@ object ToolSchemaLoader {
         isLenient = true
     }
 
-    private var cachedSchemas: MutableMap<String, Map<String, Any>>? = null
+    private var cachedSchemas: MutableMap<String, JsonObject>? = null
     private val additionalSources = mutableListOf<SchemaSource>()
 
     /**
      * Schema 来源接口
      */
     interface SchemaSource {
-        fun loadSchemas(): Map<String, Map<String, Any>>
+        fun loadSchemas(): Map<String, JsonObject>
     }
 
     /**
@@ -40,20 +40,20 @@ object ToolSchemaLoader {
     /**
      * 获取指定工具的 Schema
      */
-    fun getSchema(toolName: String): Map<String, Any> {
+    fun getSchema(toolName: String): JsonObject {
         return getAllSchemas()[toolName] ?: run {
             logger.warn { "Schema not found for tool: $toolName" }
-            emptyMap()
+            buildJsonObject {}
         }
     }
 
     /**
      * 获取所有工具的 Schema
      */
-    fun getAllSchemas(): Map<String, Map<String, Any>> {
+    fun getAllSchemas(): Map<String, JsonObject> {
         cachedSchemas?.let { return it }
 
-        val schemas = mutableMapOf<String, Map<String, Any>>()
+        val schemas = mutableMapOf<String, JsonObject>()
 
         // 1. 加载内置 Schema
         schemas.putAll(loadBuiltInSchemas())
@@ -82,7 +82,7 @@ object ToolSchemaLoader {
     /**
      * 加载内置工具 Schema
      */
-    private fun loadBuiltInSchemas(): Map<String, Map<String, Any>> {
+    private fun loadBuiltInSchemas(): Map<String, JsonObject> {
         return mapOf(
             "AskUserQuestion" to UserInteractionMcpServer.ASK_USER_QUESTION_SCHEMA
         )
@@ -91,35 +91,13 @@ object ToolSchemaLoader {
     /**
      * 从 JSON 字符串解析 Schema
      */
-    fun parseSchemaJson(content: String): Map<String, Map<String, Any>> {
+    fun parseSchemaJson(content: String): Map<String, JsonObject> {
         return try {
             val jsonObject = json.parseToJsonElement(content).jsonObject
-            jsonObject.mapValues { (_, value) ->
-                jsonElementToMap(value.jsonObject)
-            }
+            jsonObject.mapValues { (_, value) -> value.jsonObject }
         } catch (e: Exception) {
             logger.error(e) { "Failed to parse schema JSON" }
             emptyMap()
-        }
-    }
-
-    private fun jsonElementToMap(obj: JsonObject): Map<String, Any> {
-        return obj.mapValues { (_, v) -> jsonElementToAny(v) }
-    }
-
-    private fun jsonElementToAny(element: JsonElement): Any {
-        return when (element) {
-            is JsonPrimitive -> when {
-                element.isString -> element.content
-                element.booleanOrNull != null -> element.boolean
-                element.intOrNull != null -> element.int
-                element.longOrNull != null -> element.long
-                element.doubleOrNull != null -> element.double
-                else -> element.content
-            }
-            is JsonArray -> element.map { jsonElementToAny(it) }
-            is JsonObject -> jsonElementToMap(element)
-            is JsonNull -> ""
         }
     }
 }

@@ -83,9 +83,11 @@ data class McpServerConfig(
  * Codex 相关默认配置
  */
 data class CodexDefaults(
+    val binaryPath: String? = null,
     val baseUrl: String? = null,
     val apiKey: String? = null,
-    val sandboxMode: String? = null
+    val sandboxMode: String? = null,
+    val webSearchEnabled: Boolean? = null
 )
 
 

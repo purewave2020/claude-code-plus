@@ -45,7 +45,7 @@ class McpServerAdapter(
                 ToolDefinition(
                     name = tool.name,
                     description = tool.description ?: "",
-                    inputSchema = convertToolSchemaToMap(tool.inputSchema)
+                    inputSchema = convertToolSchemaToJson(tool.inputSchema)
                 )
             }
         } catch (e: Exception) {
@@ -54,7 +54,7 @@ class McpServerAdapter(
         }
     }
 
-    override suspend fun callTool(toolName: String, arguments: Map<String, Any>): ToolResult {
+    override suspend fun callTool(toolName: String, arguments: JsonObject): ToolResult {
         return try {
             logger.info("🔧 调用官方 SDK 工具: $toolName, 参数: $arguments")
 
@@ -63,17 +63,11 @@ class McpServerAdapter(
                 ?: return ToolResult.error("Tool '$toolName' not found")
 
             // 构建 CallToolRequest
-            val jsonArgs = buildJsonObject {
-                arguments.forEach { (key, value) ->
-                    put(key, anyToJsonElement(value))
-                }
-            }
-
             // 创建 CallToolRequest 并调用处理器
             val request = CallToolRequest(
                 CallToolRequestParams(
                     name = toolName,
-                    arguments = jsonArgs
+                    arguments = arguments
                 )
             )
 
@@ -102,57 +96,20 @@ class McpServerAdapter(
             ToolResult.error(e.message ?: "Unknown error")
         }
     }
-
-    private fun convertToolSchemaToMap(schema: ToolSchema?): Map<String, Any> {
-        if (schema == null) return mapOf("type" to "object", "properties" to emptyMap<String, Any>())
-
-        return mapOf(
-            "type" to schema.type,
-            "properties" to (schema.properties?.let { jsonObjectToMap(it) } ?: emptyMap()),
-            "required" to (schema.required ?: emptyList())
-        )
-    }
-
-    private fun jsonObjectToMap(jsonObject: JsonObject): Map<String, Any?> {
-        return jsonObject.entries.associate { (key, value) ->
-            key to jsonElementToAny(value)
+    private fun convertToolSchemaToJson(schema: ToolSchema?): JsonObject {
+        if (schema == null) return buildJsonObject {
+            put("type", "object")
+            putJsonObject("properties") { }
         }
-    }
 
-    private fun anyToJsonElement(value: Any?): JsonElement {
-        return when (value) {
-            null -> JsonNull
-            is String -> JsonPrimitive(value)
-            is Number -> JsonPrimitive(value)
-            is Boolean -> JsonPrimitive(value)
-            is Map<*, *> -> buildJsonObject {
-                value.forEach { (k, v) ->
-                    if (k is String) {
-                        put(k, anyToJsonElement(v))
-                    }
+        return buildJsonObject {
+            schema.type?.let { put("type", it) }
+            put("properties", schema.properties ?: buildJsonObject { })
+            schema.required?.let { required ->
+                putJsonArray("required") {
+                    required.forEach { add(it) }
                 }
             }
-            is List<*> -> JsonArray(value.map { anyToJsonElement(it) })
-            is JsonElement -> value
-            else -> JsonPrimitive(value.toString())
-        }
-    }
-
-    private fun jsonElementToAny(element: JsonElement): Any? {
-        return when (element) {
-            is JsonNull -> null
-            is JsonPrimitive -> {
-                when {
-                    element.isString -> element.content
-                    element.booleanOrNull != null -> element.boolean
-                    element.intOrNull != null -> element.int
-                    element.longOrNull != null -> element.long
-                    element.doubleOrNull != null -> element.double
-                    else -> element.content
-                }
-            }
-            is JsonObject -> jsonObjectToMap(element)
-            is JsonArray -> element.map { jsonElementToAny(it) }
         }
     }
 

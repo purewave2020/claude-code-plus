@@ -3,6 +3,7 @@ package com.asakii.claude.agent.sdk
 import com.asakii.claude.agent.sdk.types.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import java.util.concurrent.TimeUnit
@@ -115,7 +116,7 @@ class DynamicSwitchDuringGenerationTest {
             // 检查 serverInfo 中的模型
             val serverInfo = client.getServerInfo()
             println("   📊 ServerInfo: $serverInfo")
-            val currentModel = serverInfo?.get("model") as? String
+            val currentModel = serverInfo?.get("model")?.jsonPrimitive?.contentOrNull
             println("   📊 当前模型 (from serverInfo): $currentModel")
 
             // 发送验证问题 - 同时验证模型和模式

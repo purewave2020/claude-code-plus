@@ -1,0 +1,10 @@
+// 这是通过 JetBrains WriteFile 工具创建的新文件
+// Created by JetBrains MCP WriteFile Tool
+
+const demo = {
+    tool: "WriteFile",
+    action: "创建新文件",
+    timestamp: new Date().toISOString()
+};
+
+console.log("文件创建成功！", demo);

@@ -56,6 +56,19 @@
         </div>
       </div>
       <button
+        class="icon-btn"
+        type="button"
+        title="Reconnect"
+        :disabled="!canReconnect"
+        :class="{ loading: isReconnecting }"
+        @click="handleReconnect"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12a9 9 0 1 1-3-6.7"/>
+          <polyline points="21 3 21 9 15 9"/>
+        </svg>
+      </button>
+      <button
         class="icon-btn server-btn"
         type="button"
         title="MCP Servers"
@@ -80,14 +93,6 @@
       @close="handleCloseMcpPopup"
     />
 
-    <!-- 新会话对话框（带后端选择器） -->
-    <NewSessionDialog
-      v-if="showNewSessionDialog"
-      :is-session-active="hasActiveSession"
-      :current-backend="currentBackendType"
-      @confirm="handleNewSessionConfirm"
-      @cancel="handleNewSessionCancel"
-    />
   </div>
 </template>
 
@@ -95,6 +100,7 @@
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useToastStore } from '@/stores/toastStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { ConnectionStatus } from '@/types/display'
 import type { BackendType } from '@/types/backend'
 import { BackendTypes } from '@/types/backend'
@@ -104,18 +110,24 @@ import BackendIcon from '@/components/icons/BackendIcon.vue'
 import ThemeSwitcher from '@/components/toolbar/ThemeSwitcher.vue'
 import LanguageSwitcher from '@/components/toolbar/LanguageSwitcher.vue'
 import McpStatusPopup from '@/components/toolbar/McpStatusPopup.vue'
-import NewSessionDialog from './NewSessionDialog.vue'
 
 // MCP 状态弹窗
 const showMcpStatus = ref(false)
 const fetchedMcpServers = ref<Array<{ name: string; status: string }> | null>(null)
-
-// 新会话对话框
-const showNewSessionDialog = ref(false)
+const mcpRefreshIntervalMs = 5000
+let mcpRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 // 后端切换菜单
 const showBackendMenu = ref(false)
 const availableBackends = computed(() => getAvailableBackends())
+const isReconnecting = ref(false)
+
+const canReconnect = computed(() => {
+  const tab = sessionStore.currentTab
+  if (!tab) return false
+  if (isReconnecting.value) return false
+  return !tab.isConnecting.value
+})
 
 function toggleBackendMenu() {
   showBackendMenu.value = !showBackendMenu.value
@@ -138,7 +150,17 @@ async function handleSwitchBackend(newBackend: BackendType) {
   // 切换后端并重置会话
   await sessionStore.switchTabBackend(currentTab, newBackend)
   await sessionStore.resetCurrentTab()
-  toastStore.success(`已切换到 ${getBackendDisplayName(newBackend)}`)
+}
+
+async function handleReconnect() {
+  const tab = sessionStore.currentTab
+  if (!tab || isReconnecting.value) return
+  isReconnecting.value = true
+  try {
+    await tab.reconnect()
+  } finally {
+    isReconnecting.value = false
+  }
 }
 
 // 点击外部关闭菜单
@@ -155,20 +177,46 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
+  stopMcpRefresh()
 })
 
 // 打开弹窗时调用 getMcpStatus API
-watch(showMcpStatus, async (visible) => {
-  if (visible && sessionStore.currentTab?.session?.isConnected) {
-    // 立即清空，避免显示旧数据
+async function refreshMcpStatus() {
+  const session = sessionStore.currentTab?.session
+  if (!session?.isConnected) {
     fetchedMcpServers.value = []
-    try {
-      const result = await sessionStore.currentTab.session.getMcpStatus()
-      fetchedMcpServers.value = result.servers
-      console.log('🔌 getMcpStatus result:', result)
-    } catch (err) {
-      console.error('[ChatHeader] getMcpStatus failed:', err)
-    }
+    return
+  }
+
+  try {
+    const result = await session.getMcpStatus()
+    fetchedMcpServers.value = result.servers
+    console.log('[MCP] getMcpStatus result:', result)
+  } catch (err) {
+    console.error('[ChatHeader] getMcpStatus failed:', err)
+  }
+}
+
+function startMcpRefresh() {
+  if (mcpRefreshTimer) return
+  mcpRefreshTimer = setInterval(() => {
+    void refreshMcpStatus()
+  }, mcpRefreshIntervalMs)
+}
+
+function stopMcpRefresh() {
+  if (!mcpRefreshTimer) return
+  clearInterval(mcpRefreshTimer)
+  mcpRefreshTimer = null
+}
+
+watch(showMcpStatus, (visible) => {
+  if (visible) {
+    fetchedMcpServers.value = []
+    void refreshMcpStatus()
+    startMcpRefresh()
+  } else {
+    stopMcpRefresh()
   }
 })
 
@@ -183,21 +231,21 @@ const emit = defineEmits<{
 
 const sessionStore = useSessionStore()
 const toastStore = useToastStore()
+const settingsStore = useSettingsStore()
 
 const activeTabs = computed(() => sessionStore.activeTabs)
 const currentTabId = computed(() => sessionStore.currentTabId)
 
+watch(currentTabId, () => {
+  if (showMcpStatus.value) {
+    fetchedMcpServers.value = []
+    void refreshMcpStatus()
+  }
+})
+
 // 当前会话的后端类型
 const currentBackendType = computed<BackendType>(() => {
   return sessionStore.currentTab?.backendType.value ?? BackendTypes.CLAUDE
-})
-
-// 是否有活动会话（连接中或已连接）
-const hasActiveSession = computed(() => {
-  const tab = sessionStore.currentTab
-  if (!tab) return false
-  const status = tab.connectionState.status
-  return status === ConnectionStatus.CONNECTING || status === ConnectionStatus.CONNECTED
 })
 
 // 当前 Tab 的 MCP 服务器状态（优先使用 API 获取的数据）
@@ -250,14 +298,11 @@ async function handleCloseTab(tabId: string) {
 }
 
 function handleNewSession() {
-  // 总是显示新会话对话框，让用户选择后端
-  // 如果用户选择了不同的后端，会自动重置当前会话
-  showNewSessionDialog.value = true
+  const defaultBackend = settingsStore.settings.defaultBackendType || BackendTypes.CLAUDE
+  void startNewSessionWithBackend(defaultBackend)
 }
 
-async function handleNewSessionConfirm(backendType: BackendType) {
-  showNewSessionDialog.value = false
-
+async function startNewSessionWithBackend(backendType: BackendType) {
   const currentTab = sessionStore.currentTab
   const isGenerating = currentTab?.isGenerating.value ?? false
   const isConnecting = currentTab?.connectionState.status === ConnectionStatus.CONNECTING
@@ -269,15 +314,10 @@ async function handleNewSessionConfirm(backendType: BackendType) {
   }
 
   // 否则重置当前 Tab
-  if (backendType !== currentBackendType.value) {
-    // 切换到不同后端，需要先切换后端再重置
-    await sessionStore.switchTabBackend(currentTab!, backendType)
+  if (currentTab && backendType !== currentBackendType.value) {
+    await sessionStore.switchTabBackend(currentTab, backendType)
   }
   await sessionStore.resetCurrentTab()
-}
-
-function handleNewSessionCancel() {
-  showNewSessionDialog.value = false
 }
 
 function handleReorder(newOrder: string[]) {
@@ -389,6 +429,16 @@ function handleRename(tabId: string, newName: string) {
   transform: translateY(1px);
 }
 
+.icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.icon-btn.loading svg,
+.icon-btn.loading polyline {
+  animation: icon-spin 0.9s linear infinite;
+}
+
 .icon-btn.primary {
   background: var(--theme-accent, #0366d6);
   color: #ffffff;
@@ -425,6 +475,12 @@ function handleRename(tabId: string, newName: string) {
 
 .new-session-btn svg {
   flex-shrink: 0;
+}
+
+@keyframes icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 后端切换按钮 */

@@ -1,12 +1,24 @@
 package com.asakii.ai.agent.sdk.adapter
 
+import com.asakii.ai.agent.sdk.AiAgentProvider
 import com.asakii.ai.agent.sdk.model.*
 import com.asakii.claude.agent.sdk.types.ToolType
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * 将归一化事件转换为前端直接使用的 UI 事件。
  */
 class UiStreamAdapter {
+    private object CodexToolTypes {
+        const val BASH = "CODEX_BASH"
+        const val WRITE = "CODEX_WRITE"
+        const val EDIT = "CODEX_EDIT"
+        const val MCP = "CODEX_MCP"
+        const val WEB_SEARCH = "CODEX_WEB_SEARCH"
+        const val UNKNOWN = "CODEX_UNKNOWN"
+    }
 
     // 维护 index → toolId 的映射，用于在 delta 事件中获取正确的 toolId
     private val indexToToolIdMap = mutableMapOf<Int, String>()
@@ -83,16 +95,7 @@ class UiStreamAdapter {
                 )
             }
             is CommandDeltaPayload -> {
-                val toolId = indexToToolIdMap[event.index] ?: event.index.toString()
-                val parentToolUseId = event.parentToolUseId ?: indexToParentToolUseIdMap[event.index]
-                listOf(
-                    UiToolProgress(
-                        toolId = toolId,
-                        status = ContentStatus.IN_PROGRESS,
-                        outputPreview = delta.output,
-                        parentToolUseId = parentToolUseId
-                    )
-                )
+                emptyList()
             }
         }
 
@@ -100,10 +103,15 @@ class UiStreamAdapter {
     private var contentIndexCounter = 0
 
     private fun convertContentStart(event: ContentStartedEvent): List<UiStreamEvent> {
+        val isToolLike = event.contentType.contains("tool") ||
+            event.contentType.contains("command") ||
+            event.contentType.contains("file_change") ||
+            event.contentType.contains("web_search")
+
         return when {
-            event.contentType.contains("tool") || event.contentType.contains("command") -> {
+            isToolLike -> {
                 val toolName = event.toolName ?: event.contentType
-                val toolTypeEnum = ToolType.fromToolName(toolName)
+                val resolvedToolType = resolveToolType(event, toolName)
                 // 对于工具调用，从 content 中获取原生 id（如果有）
                 val toolId = (event.content as? ToolUseContent)?.id ?: event.index.toString()
                 // 记录 index → toolId 映射，供后续 delta 事件使用
@@ -114,7 +122,9 @@ class UiStreamAdapter {
                     UiToolStart(
                         toolId = toolId,
                         toolName = toolName,
-                        toolType = toolTypeEnum.type,
+                        toolType = resolvedToolType,
+                        inputPreview = event.content?.let { it.toString() },
+                        input = (event.content as? ToolUseContent)?.input,
                         parentToolUseId = event.parentToolUseId
                     )
                 )
@@ -149,16 +159,44 @@ class UiStreamAdapter {
             )
             is CommandExecutionContent,
             is ToolResultContent,
-            is McpToolCallContent -> listOf(
-                UiToolComplete(
-                    toolId = event.index.toString(),
-                    result = content,
-                    parentToolUseId = parentToolUseId
+            is McpToolCallContent,
+            is FileChangeContent,
+            is WebSearchContent -> {
+                val toolId = when (content) {
+                    is ToolResultContent -> content.toolUseId
+                    else -> indexToToolIdMap[event.index] ?: event.index.toString()
+                }
+                listOf(
+                    UiToolComplete(
+                        toolId = toolId,
+                        result = content,
+                        parentToolUseId = parentToolUseId
+                    )
                 )
-            )
+            }
             else -> emptyList()
         }
     }
+
+    private fun resolveToolType(event: ContentStartedEvent, toolName: String): String {
+        if (event.provider != AiAgentProvider.CODEX) {
+            return ToolType.fromToolName(toolName).type
+        }
+
+        return when (event.contentType) {
+            "command_execution" -> CodexToolTypes.BASH
+            "file_change" -> {
+                val operation = (event.content as? ToolUseContent)
+                    ?.input
+                    ?.jsonObject
+                    ?.get("operation")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                if (operation == "create") CodexToolTypes.WRITE else CodexToolTypes.EDIT
+            }
+            "mcp_tool_call" -> CodexToolTypes.MCP
+            "web_search" -> CodexToolTypes.WEB_SEARCH
+            else -> CodexToolTypes.UNKNOWN
+        }
+    }
 }
-
-

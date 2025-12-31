@@ -1,6 +1,7 @@
 package com.asakii.plugin.types
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 /**
  * UI 模型类型定义（向后兼容）
@@ -95,7 +96,7 @@ data class LegacyToolCall(
     val name: String,
     val id: String,
     val status: String,
-    val input: Map<String, Any?> = emptyMap(),
+    val input: JsonObject = JsonObject(emptyMap()),
     val result: String? = null,
     val viewModel: Any? = null
 )

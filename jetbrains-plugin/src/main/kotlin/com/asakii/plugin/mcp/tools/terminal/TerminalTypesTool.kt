@@ -1,5 +1,10 @@
 package com.asakii.plugin.mcp.tools.terminal
 
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -14,7 +19,7 @@ class TerminalTypesTool(private val sessionManager: TerminalSessionManager) {
      *
      * @param arguments 参数（无需参数）
      */
-    fun execute(arguments: Map<String, Any>): Map<String, Any> {
+    fun execute(arguments: JsonObject): JsonObject {
         logger.info { "Getting available shell types" }
 
         val types = sessionManager.getAvailableShellTypes()
@@ -26,18 +31,20 @@ class TerminalTypesTool(private val sessionManager: TerminalSessionManager) {
 
         val defaultType = types.find { it.isDefault }?.name ?: types.firstOrNull()?.name ?: "bash"
 
-        return mapOf(
-            "success" to true,
-            "platform" to platform,
-            "types" to types.map { type ->
-                buildMap {
-                    put("name", type.name)
-                    put("display_name", type.displayName)
-                    type.command?.let { put("command", it) }
-                    put("is_default", type.isDefault)
+        return buildJsonObject {
+            put("success", true)
+            put("platform", platform)
+            put("types", buildJsonArray {
+                types.forEach { type ->
+                    add(buildJsonObject {
+                        put("name", type.name)
+                        put("display_name", type.displayName)
+                        type.command?.let { put("command", it) }
+                        put("is_default", type.isDefault)
+                    })
                 }
-            },
-            "default_type" to defaultType
-        )
+            })
+            put("default_type", defaultType)
+        }
     }
 }

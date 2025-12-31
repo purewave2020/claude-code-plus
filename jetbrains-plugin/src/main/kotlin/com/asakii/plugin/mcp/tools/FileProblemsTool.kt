@@ -1,6 +1,9 @@
 package com.asakii.plugin.mcp.tools
 
 import com.asakii.claude.agent.sdk.mcp.ToolResult
+import com.asakii.plugin.mcp.getBoolean
+import com.asakii.plugin.mcp.getInt
+import com.asakii.plugin.mcp.getString
 import com.asakii.server.mcp.schema.ToolSchemaLoader
 import com.intellij.codeHighlighting.HighlightDisplayLevel
 import com.intellij.codeInsight.daemon.impl.HighlightInfo
@@ -24,6 +27,7 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiRecursiveElementVisitor
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import mu.KotlinLogging
 import java.io.File
 
@@ -83,16 +87,16 @@ data class FileProblemsResult(
  */
 class FileProblemsTool(private val project: Project) {
 
-    fun getInputSchema(): Map<String, Any> = ToolSchemaLoader.getSchema("FileProblems")
+    fun getInputSchema(): JsonObject = ToolSchemaLoader.getSchema("FileProblems")
 
-    suspend fun execute(arguments: Map<String, Any>): Any {
-        val filePath = arguments["filePath"] as? String
+    suspend fun execute(arguments: JsonObject): Any {
+        val filePath = arguments.getString("filePath")
             ?: return ToolResult.error("Missing required parameter: filePath")
-        val includeWarnings = arguments["includeWarnings"] as? Boolean ?: true
-        val includeSuggestions = arguments["includeSuggestions"] as? Boolean ?: false
+        val includeWarnings = arguments.getBoolean("includeWarnings") ?: true
+        val includeSuggestions = arguments.getBoolean("includeSuggestions") ?: false
         // 兼容旧参数名
-        val includeWeakWarnings = arguments["includeWeakWarnings"] as? Boolean ?: includeSuggestions
-        val maxProblems = ((arguments["maxProblems"] as? Number)?.toInt() ?: 50).coerceAtLeast(1)
+        val includeWeakWarnings = arguments.getBoolean("includeWeakWarnings") ?: includeSuggestions
+        val maxProblems = (arguments.getInt("maxProblems") ?: 50).coerceAtLeast(1)
 
         val projectPath = project.basePath
             ?: return ToolResult.error("Cannot get project path")

@@ -1,5 +1,7 @@
 package com.asakii.claude.agent.sdk.exceptions
 
+import kotlinx.serialization.json.JsonElement
+
 /**
  * Base exception for all Claude Code SDK errors.
  * Maps to Python SDK's ClaudeSDKError.
@@ -111,7 +113,7 @@ class TransportException(
  */
 class MessageParsingException(
     message: String,
-    val data: Map<String, Any>? = null,
+    val data: JsonElement? = null,
     cause: Throwable? = null
 ) : ClaudeCodeSdkException(message, cause)
 

@@ -3,6 +3,7 @@ package com.asakii.claude.agent.sdk.plugin.interfaces
 import com.asakii.claude.agent.sdk.plugin.types.SessionState
 import com.asakii.claude.agent.sdk.plugin.types.SessionUpdate
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.json.JsonObject
 
 /**
  * 会话状态同步接口
@@ -80,7 +81,7 @@ interface SessionStateSync {
      * 
      * @return 统计信息Map
      */
-    suspend fun getBackgroundServiceStats(): Map<String, Any>
+    suspend fun getBackgroundServiceStats(): JsonObject
     
     /**
      * 按需恢复会话历史

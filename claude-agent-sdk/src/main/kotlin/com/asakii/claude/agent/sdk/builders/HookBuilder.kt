@@ -37,13 +37,13 @@ class HookBuilder {
     class ToolCall(
         val toolName: String,
         val toolUseId: String?,
-        val input: Map<String, Any>,
+        val input: JsonObject,
         val context: HookContext
     ) {
-        fun getStringParam(name: String): String = input[name] as? String ?: ""
-        fun getNumberParam(name: String): Double = (input[name] as? Number)?.toDouble() ?: 0.0
-        fun getBooleanParam(name: String): Boolean = input[name] as? Boolean ?: false
-        fun getMapParam(name: String): Map<*, *> = input[name] as? Map<*, *> ?: emptyMap<String, Any>()
+        fun getStringParam(name: String): String = input[name]?.jsonPrimitive?.contentOrNull ?: ""
+        fun getNumberParam(name: String): Double = input[name]?.jsonPrimitive?.doubleOrNull ?: 0.0
+        fun getBooleanParam(name: String): Boolean = input[name]?.jsonPrimitive?.booleanOrNull ?: false
+        fun getMapParam(name: String): JsonObject = input[name]?.jsonObject ?: buildJsonObject { }
         
         override fun toString(): String = "ToolCall(name='$toolName', params=$input)"
     }
@@ -100,9 +100,8 @@ class HookBuilder {
         handler: HookResult.(ToolCall) -> HookJSONOutput
     ) {
         val hookCallback: HookCallback = { input, toolUseId, context ->
-            val toolName = input["tool_name"] as? String ?: ""
-            @Suppress("UNCHECKED_CAST")
-            val toolInput = (input["tool_input"] as? Map<*, *> ?: emptyMap<String, Any>()) as Map<String, Any>
+            val toolName = input["tool_name"]?.jsonPrimitive?.contentOrNull ?: ""
+            val toolInput = input["tool_input"]?.jsonObject ?: buildJsonObject { }
 
             val toolCall = ToolCall(
                 toolName = toolName,

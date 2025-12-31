@@ -1,0 +1,18 @@
+// JetBrains MCP 工具演示
+// Demo: ReadFile, WriteFile, EditFile
+
+const tools = {
+    readFile: "读取文件内容",
+    writeFile: "创建或覆盖文件",
+    editFile: "精确替换文本"
+};
+
+function showToolList() {
+    console.log("=== 🛠️ JetBrains MCP Tools Demo ===");
+    for (const [name, desc] of Object.entries(tools)) {
+        console.log(`  📦 ${name}: ${desc}`);
+    }
+    console.log("===========================");
+}
+
+showToolList();

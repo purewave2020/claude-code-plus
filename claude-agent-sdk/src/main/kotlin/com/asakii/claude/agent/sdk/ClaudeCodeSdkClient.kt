@@ -87,7 +87,7 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
     private var actualTransport: Transport? = null
     private var controlProtocol: ControlProtocol? = null
     private var clientScope: CoroutineScope? = null
-    private var serverInfo: Map<String, Any>? = null
+    private var serverInfo: JsonObject? = null
     private val commandMutex = Mutex()
     private var pendingModelUpdate: CompletableDeferred<String?>? = null
     
@@ -174,7 +174,10 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
             controlProtocol!!.initialize()
             logger.info("✅ 控制协议初始化完成")
 
-            serverInfo = mapOf("status" to "connected", "mode" to "stream-json")
+            serverInfo = buildJsonObject {
+                put("status", "connected")
+                put("mode", "stream-json")
+            }
             logger.info("🎉 Claude SDK客户端连接成功!")
             
             // Send initial prompt if provided
@@ -242,16 +245,15 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
      * Send a stream of messages to Claude.
      */
     @JvmOverloads
-    suspend fun queryStream(messages: Flow<Map<String, Any>>, sessionId: String = "default") {
+    suspend fun queryStream(messages: Flow<JsonObject>, sessionId: String = "default") {
         runCommand {
             ensureConnected()
             messages.collect { messageData ->
-                val enhancedMessage = messageData.toMutableMap().apply {
+                val enhancedMessage = buildJsonObject {
+                    messageData.forEach { (key, value) -> put(key, value) }
                     put("session_id", sessionId)
                 }
-
-                val messageJson = Json.encodeToJsonElement(enhancedMessage)
-                actualTransport!!.write(messageJson.toString())
+                actualTransport!!.write(enhancedMessage.toString())
             }
         }
     }
@@ -544,7 +546,7 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
     /**
      * Get server initialization information.
      */
-    fun getServerInfo(): Map<String, Any>? = serverInfo
+    fun getServerInfo(): JsonObject? = serverInfo
     
     /**
      * Check if the client is connected.
@@ -584,16 +586,17 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
     }
 
     private fun updateCachedModel(model: String?) {
-        val updated = (serverInfo?.toMutableMap() ?: mutableMapOf()).apply {
+        val existing = serverInfo
+        serverInfo = buildJsonObject {
+            existing?.forEach { (key, value) -> put(key, value) }
             put("model", model ?: "default")
-            if (!containsKey("status")) {
+            if (existing?.containsKey("status") != true) {
                 put("status", "connected")
             }
-            if (!containsKey("mode")) {
+            if (existing?.containsKey("mode") != true) {
                 put("mode", "stream-json")
             }
         }
-        serverInfo = updated
     }
 
     private suspend fun <T> runCommand(block: suspend () -> T): T {

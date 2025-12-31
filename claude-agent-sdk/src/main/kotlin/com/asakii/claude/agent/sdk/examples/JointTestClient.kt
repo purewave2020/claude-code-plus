@@ -2,6 +2,7 @@ package com.asakii.claude.agent.sdk.examples
 
 import com.asakii.claude.agent.sdk.ClaudeCodeSdkClient
 import com.asakii.claude.agent.sdk.types.ClaudeAgentOptions
+import com.asakii.claude.agent.sdk.types.McpServerSpec
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -15,7 +16,7 @@ fun main() = runBlocking {
     val client = ClaudeCodeSdkClient(
         ClaudeAgentOptions(
             model = "claude-sonnet-4-5-20250929",
-            mcpServers = mapOf(
+            mcpServers = mapOf<String, McpServerSpec>(
                 "default" to com.asakii.claude.agent.sdk.types.McpHttpServerConfig(url = serverUrl)
             )
         )
@@ -60,4 +61,3 @@ fun main() = runBlocking {
     }
     println("--- Test Finished ---")
 }
-

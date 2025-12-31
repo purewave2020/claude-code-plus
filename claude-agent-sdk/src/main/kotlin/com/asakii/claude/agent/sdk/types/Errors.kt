@@ -1,5 +1,7 @@
 package com.asakii.claude.agent.sdk.types
 
+import kotlinx.serialization.json.JsonObject
+
 /**
  * Base exception for all Claude SDK errors.
  */
@@ -58,7 +60,7 @@ class MCPServerError(
 class ToolExecutionError(
     message: String,
     val toolName: String? = null,
-    val toolInput: Map<String, Any>? = null,
+    val toolInput: JsonObject? = null,
     cause: Throwable? = null
 ) : ClaudeSDKError(message, cause)
 

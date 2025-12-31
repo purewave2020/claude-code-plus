@@ -6,6 +6,8 @@ import com.asakii.codex.agent.sdk.ThreadEvent
 import com.asakii.codex.agent.sdk.ThreadItem
 import com.asakii.codex.agent.sdk.Usage
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.util.UUID
 
 /**
@@ -16,12 +18,16 @@ class CodexStreamAdapter(
 ) {
     private val itemsBuffer = mutableMapOf<Int, ThreadItem>()
     private var indexCounter = 0
+    private var currentSessionId: String? = null
+    private var turnStartTimeMs: Long? = null
 
     fun convert(event: ThreadEvent): List<NormalizedStreamEvent> {
         val result = mutableListOf<NormalizedStreamEvent>()
         when (event.type) {
             "thread.started" -> {
                 val id = event.threadId?.takeIf { it.isNotBlank() } ?: idGenerator()
+                currentSessionId = id
+                turnStartTimeMs = null
                 result += MessageStartedEvent(
                     provider = AiAgentProvider.CODEX,
                     sessionId = id,
@@ -30,11 +36,15 @@ class CodexStreamAdapter(
             }
 
             "turn.started" -> {
+                turnStartTimeMs = System.currentTimeMillis()
                 result += TurnStartedEvent(AiAgentProvider.CODEX)
             }
 
             "item.started" -> {
                 val item = event.item ?: return result
+                if (turnStartTimeMs == null) {
+                    turnStartTimeMs = System.currentTimeMillis()
+                }
                 val index = indexCounter++
                 itemsBuffer[index] = item
                 result += ContentStartedEvent(
@@ -72,14 +82,38 @@ class CodexStreamAdapter(
             }
 
             "turn.completed" -> {
+                val durationMs = resolveDurationMs()
                 result += TurnCompletedEvent(
                     provider = AiAgentProvider.CODEX,
                     usage = event.usage?.toUnifiedUsage()
+                )
+                result += ResultSummaryEvent(
+                    provider = AiAgentProvider.CODEX,
+                    subtype = "completed",
+                    durationMs = durationMs,
+                    durationApiMs = durationMs,
+                    isError = false,
+                    numTurns = 1,
+                    sessionId = resolveSessionId(event),
+                    usage = event.usage?.toUsageJson(),
+                    result = null
                 )
             }
 
             "turn.failed" -> {
                 val errorMsg = event.error?.message ?: "Codex turn failed"
+                val durationMs = resolveDurationMs()
+                result += ResultSummaryEvent(
+                    provider = AiAgentProvider.CODEX,
+                    subtype = "error_during_execution",
+                    durationMs = durationMs,
+                    durationApiMs = durationMs,
+                    isError = true,
+                    numTurns = 1,
+                    sessionId = resolveSessionId(event),
+                    usage = event.usage?.toUsageJson(),
+                    result = errorMsg
+                )
                 result += TurnFailedEvent(
                     provider = AiAgentProvider.CODEX,
                     error = errorMsg
@@ -132,11 +166,33 @@ class CodexStreamAdapter(
             provider = AiAgentProvider.CODEX
         )
 
+    private fun Usage.toUsageJson(): JsonElement =
+        buildJsonObject {
+            put("input_tokens", inputTokens)
+            put("output_tokens", outputTokens)
+            put("cached_input_tokens", cachedInputTokens)
+        }
+
     private fun String?.toContentStatus(): ContentStatus =
         when (this?.lowercase()) {
             "in_progress" -> ContentStatus.IN_PROGRESS
             "failed" -> ContentStatus.FAILED
             else -> ContentStatus.COMPLETED
         }
-}
 
+    private fun resolveSessionId(event: ThreadEvent): String {
+        val incoming = event.threadId?.takeIf { it.isNotBlank() }
+        if (incoming != null) {
+            currentSessionId = incoming
+            return incoming
+        }
+        return currentSessionId ?: idGenerator().also { currentSessionId = it }
+    }
+
+    private fun resolveDurationMs(): Long {
+        val now = System.currentTimeMillis()
+        val start = turnStartTimeMs ?: now
+        turnStartTimeMs = null
+        return (now - start).coerceAtLeast(0)
+    }
+}

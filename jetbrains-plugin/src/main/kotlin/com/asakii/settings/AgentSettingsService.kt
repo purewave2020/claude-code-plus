@@ -125,6 +125,8 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
 
         // Node.js 可执行文件路径，空字符串表示使用系统 PATH
         var nodePath: String = "",
+        var codexPath: String = "",
+        var codexWebSearchEnabled: Boolean = false,
 
         // 默认模型（使用枚举名称存储，如 "OPUS_45"）
         var defaultModel: String = DefaultModel.OPUS_45.name,
@@ -465,6 +467,14 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         get() = state.nodePath
         set(value) { state.nodePath = value }
 
+    var codexPath: String
+        get() = state.codexPath
+        set(value) { state.codexPath = value }
+
+    var codexWebSearchEnabled: Boolean
+        get() = state.codexWebSearchEnabled
+        set(value) { state.codexWebSearchEnabled = value }
+
     var defaultModel: String
         get() = state.defaultModel
         set(value) { state.defaultModel = value }
@@ -701,6 +711,11 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
             val version: String? = null
         )
 
+        data class CodexInfo(
+            val path: String,
+            val version: String? = null
+        )
+
         /**
          * 检测 Node.js 路径和版本
          * @return NodeInfo 包含路径和版本，未找到返回 null
@@ -711,6 +726,14 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
 
             val version = detectNodeVersion(path)
             return NodeInfo(path, version)
+        }
+
+        fun detectCodexInfo(): CodexInfo? {
+            val path = detectCodexPath()
+            if (path.isEmpty()) return null
+
+            val version = detectCodexVersion(path)
+            return CodexInfo(path, version)
         }
 
         /**
@@ -774,6 +797,68 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
             return ""
         }
 
+        fun detectCodexPath(): String {
+            val os = System.getProperty("os.name").lowercase()
+            val isWindows = os.contains("win")
+
+            // Search PATH directly
+            val pathEnv = System.getenv("PATH") ?: ""
+            val pathEntries = pathEnv.split(java.io.File.pathSeparatorChar)
+            val fileNames = if (isWindows) {
+                listOf("codex.exe", "codex.cmd", "codex.bat")
+            } else {
+                listOf("codex")
+            }
+            for (dir in pathEntries) {
+                if (dir.isBlank()) continue
+                for (name in fileNames) {
+                    val candidate = java.io.File(dir, name)
+                    if (candidate.exists() && candidate.canExecute()) {
+                        return candidate.absolutePath
+                    }
+                }
+            }
+
+            // Common install paths
+            val commonPaths = when {
+                isWindows -> listOf(
+                    "C:\\Program Files\\Codex\\codex.exe",
+                    "C:\\Program Files (x86)\\Codex\\codex.exe",
+                    System.getenv("LOCALAPPDATA")?.let { "$it\\Codex\\codex.exe" },
+                    System.getenv("USERPROFILE")?.let { "$it\\.codex\\codex.exe" }
+                )
+                os.contains("mac") -> listOf(
+                    "/usr/local/bin/codex",
+                    "/opt/homebrew/bin/codex",
+                    System.getProperty("user.home")?.let { "$it/.codex/codex" },
+                    "/Applications/Codex.app/Contents/MacOS/codex"
+                )
+                else -> listOf(
+                    "/usr/local/bin/codex",
+                    "/usr/bin/codex",
+                    System.getProperty("user.home")?.let { "$it/.local/bin/codex" },
+                    System.getProperty("user.home")?.let { "$it/.codex/codex" }
+                )
+            }
+
+            for (path in commonPaths) {
+                if (path != null) {
+                    val file = java.io.File(path)
+                    if (file.exists() && file.canExecute()) {
+                        return file.absolutePath
+                    }
+                }
+            }
+
+            // Vendor fallback (dev environment)
+            val vendorPath = detectCodexVendorBinary()
+            if (vendorPath != null) {
+                return vendorPath
+            }
+
+            return ""
+        }
+
         /**
          * 检测 Node.js 版本
          * @param nodePath Node.js 可执行文件路径
@@ -805,6 +890,65 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
             }
 
             return null
+        }
+
+        private fun detectCodexVersion(codexPath: String): String? {
+            val isWindows = System.getProperty("os.name").lowercase().contains("win")
+
+            try {
+                val command = if (isWindows) {
+                    arrayOf("cmd", "/c", codexPath, "--version")
+                } else {
+                    arrayOf(codexPath, "--version")
+                }
+
+                val process = ProcessBuilder(*command)
+                    .redirectErrorStream(true)
+                    .start()
+
+                val result = process.inputStream.bufferedReader().readLine()?.trim()
+                val exitCode = process.waitFor()
+
+                if (exitCode == 0 && !result.isNullOrBlank()) {
+                    return result
+                }
+            } catch (_: Exception) {
+                // ignore
+            }
+
+            return null
+        }
+
+        private fun detectCodexVendorBinary(): String? {
+            val os = System.getProperty("os.name").lowercase()
+            val arch = System.getProperty("os.arch").lowercase()
+            val isWindows = os.contains("win")
+
+            val triple = when {
+                isWindows && arch.contains("64") -> "x86_64-pc-windows-msvc"
+                os.contains("mac") && arch.contains("aarch64") -> "aarch64-apple-darwin"
+                os.contains("mac") && arch.contains("x86") -> "x86_64-apple-darwin"
+                os.contains("linux") && arch.contains("aarch64") -> "aarch64-unknown-linux-musl"
+                os.contains("linux") && arch.contains("64") -> "x86_64-unknown-linux-musl"
+                else -> null
+            } ?: return null
+
+            val binaryName = if (isWindows) "codex.exe" else "codex"
+            val candidate = java.nio.file.Paths.get(
+                "external",
+                "openai-codex",
+                "sdk",
+                "vendor",
+                triple,
+                "codex",
+                binaryName
+            ).toFile()
+
+            return if (candidate.exists() && candidate.canExecute()) {
+                candidate.absolutePath
+            } else {
+                null
+            }
         }
     }
 }

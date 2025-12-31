@@ -1,6 +1,8 @@
 package com.asakii.plugin.mcp.tools
 
 import com.asakii.claude.agent.sdk.mcp.ToolResult
+import com.asakii.plugin.mcp.getInt
+import com.asakii.plugin.mcp.getString
 import com.asakii.server.mcp.schema.ToolSchemaLoader
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.DumbService
@@ -16,7 +18,7 @@ import com.intellij.ide.scratch.ScratchUtil
 import com.intellij.psi.codeStyle.NameUtil
 import com.asakii.plugin.services.LanguageAnalysisService
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 enum class SearchIndexType {
@@ -59,15 +61,15 @@ data class FileIndexSearchResult(
  */
 class FileIndexTool(private val project: Project) {
 
-    fun getInputSchema(): Map<String, Any> = ToolSchemaLoader.getSchema("FileIndex")
+    fun getInputSchema(): JsonObject = ToolSchemaLoader.getSchema("FileIndex")
 
-    fun execute(arguments: Map<String, Any>): Any {
-        val query = arguments["query"] as? String
+    fun execute(arguments: JsonObject): Any {
+        val query = arguments.getString("query")
             ?: return ToolResult.error("Missing required parameter: query")
-        val searchTypeStr = arguments["searchType"] as? String ?: "All"
-        val scopeStr = arguments["scope"] as? String ?: "Project"
-        val maxResults = ((arguments["maxResults"] as? Number)?.toInt() ?: 20).coerceAtLeast(1)
-        val offset = ((arguments["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
+        val searchTypeStr = arguments.getString("searchType") ?: "All"
+        val scopeStr = arguments.getString("scope") ?: "Project"
+        val maxResults = (arguments.getInt("maxResults") ?: 20).coerceAtLeast(1)
+        val offset = (arguments.getInt("offset") ?: 0).coerceAtLeast(0)
 
         val searchType = try {
             SearchIndexType.valueOf(searchTypeStr)

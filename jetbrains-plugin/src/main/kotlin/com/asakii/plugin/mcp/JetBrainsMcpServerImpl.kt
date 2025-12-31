@@ -15,7 +15,7 @@ private val logger = KotlinLogging.logger {}
 
 /**
  * JetBrains MCP 服务器实现
- * 
+ *
  * 提供 IDEA 平台相关的工具，如目录树、文件问题检测、文件索引搜索、代码搜索等。
  * 这些工具利用 IDEA 的强大索引和分析能力，提供比纯文件系统操作更丰富的功能。
  */
@@ -25,7 +25,7 @@ private val logger = KotlinLogging.logger {}
     description = "JetBrains IDE integration tool server, providing directory browsing, file problem detection, index search, code search and other features"
 )
 class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
-    
+
     // 工具实例
     private lateinit var directoryTreeTool: DirectoryTreeTool
     private lateinit var fileProblemsTool: FileProblemsTool
@@ -57,20 +57,19 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
         /**
          * 预加载的工具 Schema（使用 McpDefaults 中的静态定义）
          */
-        val TOOL_SCHEMAS: Map<String, Map<String, Any>> = loadAllSchemas()
+        val TOOL_SCHEMAS: Map<String, JsonObject> = loadAllSchemas()
 
         /**
          * 从 McpDefaults 加载所有工具 Schema
          */
-        private fun loadAllSchemas(): Map<String, Map<String, Any>> {
+        private fun loadAllSchemas(): Map<String, JsonObject> {
             logger.info { "📂 [JetBrainsMcpServer] Loading schemas from McpDefaults" }
 
             return try {
                 val json = Json { ignoreUnknownKeys = true }
                 val toolsMap = json.decodeFromString<Map<String, JsonObject>>(McpDefaults.JETBRAINS_TOOLS_SCHEMA)
-                val result = toolsMap.mapValues { (_, jsonObj) -> jsonObjectToMap(jsonObj) }
-                logger.info { "✅ [JetBrainsMcpServer] Loaded ${result.size} tool schemas: ${result.keys}" }
-                result
+                logger.info { "✅ [JetBrainsMcpServer] Loaded ${toolsMap.size} tool schemas: ${toolsMap.keys}" }
+                toolsMap
             } catch (e: Exception) {
                 logger.error(e) { "❌ [JetBrainsMcpServer] Failed to parse schemas: ${e.message}" }
                 emptyMap()
@@ -78,38 +77,12 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
         }
 
         /**
-         * 将 JsonObject 递归转换为 Map<String, Any>
-         */
-        private fun jsonObjectToMap(jsonObject: JsonObject): Map<String, Any> {
-            return jsonObject.mapValues { (_, value) -> jsonElementToAny(value) }
-        }
-
-        /**
-         * 将 JsonElement 递归转换为 Any
-         */
-        private fun jsonElementToAny(element: JsonElement): Any {
-            return when (element) {
-                is JsonPrimitive -> when {
-                    element.isString -> element.content
-                    element.booleanOrNull != null -> element.boolean
-                    element.intOrNull != null -> element.int
-                    element.longOrNull != null -> element.long
-                    element.doubleOrNull != null -> element.double
-                    else -> element.content
-                }
-                is JsonArray -> element.map { jsonElementToAny(it) }
-                is JsonObject -> jsonObjectToMap(element)
-                is JsonNull -> ""
-            }
-        }
-
-        /**
          * 获取指定工具的 Schema
          */
-        fun getToolSchema(toolName: String): Map<String, Any> {
+        fun getToolSchema(toolName: String): JsonObject {
             return TOOL_SCHEMAS[toolName] ?: run {
                 logger.warn { "⚠️ [JetBrainsMcpServer] Tool schema not found: $toolName" }
-                emptyMap()
+                buildJsonObject { }
             }
         }
     }
@@ -140,49 +113,49 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
             val directoryTreeSchema = getToolSchema("DirectoryTree")
             logger.info { "📝 DirectoryTree schema: ${directoryTreeSchema.keys}" }
             registerToolFromSchema("DirectoryTree", directoryTreeSchema) { arguments ->
-                directoryTreeTool.execute(arguments)
+                wrapToolResult(directoryTreeTool.execute(arguments))
             }
 
             // 注册文件问题检测工具
             val fileProblemsSchema = getToolSchema("FileProblems")
             logger.info { "📝 FileProblems schema: ${fileProblemsSchema.keys}" }
             registerToolFromSchema("FileProblems", fileProblemsSchema) { arguments ->
-                fileProblemsTool.execute(arguments)
+                wrapToolResult(fileProblemsTool.execute(arguments))
             }
 
             // 注册文件索引搜索工具
             val fileIndexSchema = getToolSchema("FileIndex")
             logger.info { "📝 FileIndex schema: ${fileIndexSchema.keys}" }
             registerToolFromSchema("FileIndex", fileIndexSchema) { arguments ->
-                fileIndexTool.execute(arguments)
+                wrapToolResult(fileIndexTool.execute(arguments))
             }
 
             // 注册代码搜索工具
             val codeSearchSchema = getToolSchema("CodeSearch")
             logger.info { "📝 CodeSearch schema: ${codeSearchSchema.keys}" }
             registerToolFromSchema("CodeSearch", codeSearchSchema) { arguments ->
-                codeSearchTool.execute(arguments)
+                wrapToolResult(codeSearchTool.execute(arguments))
             }
 
             // 注册查找引用工具
             val findUsagesSchema = getToolSchema("FindUsages")
             logger.info { "📝 FindUsages schema: ${findUsagesSchema.keys}" }
             registerToolFromSchema("FindUsages", findUsagesSchema) { arguments ->
-                findUsagesTool.execute(arguments)
+                wrapToolResult(findUsagesTool.execute(arguments))
             }
 
             // 注册重命名工具
             val renameSchema = getToolSchema("Rename")
             logger.info { "📝 Rename schema: ${renameSchema.keys}" }
             registerToolFromSchema("Rename", renameSchema) { arguments ->
-                renameTool.execute(arguments)
+                wrapToolResult(renameTool.execute(arguments))
             }
 
             // 注册文件读取工具
             val readFileSchema = getToolSchema("ReadFile")
             logger.info { "📝 ReadFile schema: ${readFileSchema.keys}" }
             registerToolFromSchema("ReadFile", readFileSchema) { arguments ->
-                readFileTool.execute(arguments)
+                wrapToolResult(readFileTool.execute(arguments))
             }
 
             logger.info { "✅ JetBrains MCP Server initialized, registered 7 tools" }
@@ -228,4 +201,3 @@ class JetBrainsMcpServerProviderImpl(private val project: Project) : JetBrainsMc
         }
     }
 }
-

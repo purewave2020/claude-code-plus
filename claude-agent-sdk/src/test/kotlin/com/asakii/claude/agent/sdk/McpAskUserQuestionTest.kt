@@ -3,6 +3,7 @@ package com.asakii.claude.agent.sdk
 import com.asakii.claude.agent.sdk.mcp.McpServerBase
 import com.asakii.claude.agent.sdk.mcp.ParameterInfo
 import com.asakii.claude.agent.sdk.mcp.ParameterType
+import com.asakii.claude.agent.sdk.mcp.ToolResult
 import com.asakii.claude.agent.sdk.mcp.annotations.McpServerConfig
 import com.asakii.claude.agent.sdk.types.*
 import kotlinx.coroutines.runBlocking
@@ -37,7 +38,7 @@ class TestPermissionMcpServer : McpServerBase() {
             println("\n🔐 [RequestPermission] 工具被调用!")
             println("参数: $arguments")
             // 模拟自动授权
-            mapOf("approved" to true).toString()
+            ToolResult.success(buildJsonObject { put("approved", true) })
         }
 
         println("✅ [TestPermissionMcpServer] 已注册 RequestPermission 工具")

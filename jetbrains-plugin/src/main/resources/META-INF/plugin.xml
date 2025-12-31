@@ -87,6 +87,13 @@
             id="com.asakii.settings.claudecode"
             displayName="Claude Code"/>
 
+        <!-- Codex Settings (child of Claude Code Plus) -->
+        <applicationConfigurable
+            parentId="com.asakii.settings"
+            instance="com.asakii.settings.CodexConfigurable"
+            id="com.asakii.settings.codex"
+            displayName="Codex"/>
+
         <!-- Git Generate Settings (child of Claude Code Plus) -->
         <applicationConfigurable
             parentId="com.asakii.settings"

@@ -5,6 +5,7 @@ import com.asakii.claude.agent.sdk.plugin.types.SessionState
 import com.asakii.claude.agent.sdk.plugin.types.SessionUpdate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.serialization.json.JsonObject
 
 /**
  * SessionStateSync 接口的简化实现
@@ -49,9 +50,9 @@ class SessionStateSyncImpl : SessionStateSync {
         return false
     }
 
-    override suspend fun getBackgroundServiceStats(): Map<String, Any> {
+    override suspend fun getBackgroundServiceStats(): JsonObject {
         // 简化实现 - 返回空统计
-        return emptyMap()
+        return JsonObject(emptyMap())
     }
 
     override suspend fun recoverSessionHistory(sessionId: String, projectPath: String): Boolean {
@@ -64,7 +65,7 @@ class SessionStateSyncImpl : SessionStateSync {
         return observeProjectUpdates(projectPath)
     }
 
-    fun getServiceStats(): Map<String, Any> {
-        return emptyMap()
+    fun getServiceStats(): JsonObject {
+        return JsonObject(emptyMap())
     }
 }

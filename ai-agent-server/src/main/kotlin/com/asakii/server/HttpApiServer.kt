@@ -35,6 +35,9 @@ import com.asakii.rpc.proto.GetHistoryMetadataRequest
 import com.asakii.rpc.proto.LoadHistoryRequest
 import com.asakii.server.history.HistoryJsonlLoader
 import com.asakii.server.rpc.AiAgentRpcServiceImpl
+import com.asakii.codex.agent.sdk.appserver.CodexAppServerClient
+import com.asakii.rpc.api.RpcHistorySession
+import com.asakii.rpc.api.RpcHistorySessionsResult
 import com.asakii.server.mcp.JetBrainsMcpServerProvider
 import com.asakii.server.mcp.DefaultJetBrainsMcpServerProvider
 import com.asakii.server.mcp.TerminalMcpServerProvider
@@ -340,10 +343,12 @@ class HttpApiServer(
                                                     put("requestId", JsonPrimitive(event.requestId))
                                                     put("threadId", JsonPrimitive(event.threadId))
                                                     put("turnId", JsonPrimitive(event.turnId))
-                                                    put("command", JsonPrimitive(event.command))
+                                                    event.command?.let { put("command", JsonPrimitive(it)) }
                                                     event.cwd?.let { put("cwd", JsonPrimitive(it)) }
                                                     event.reason?.let { put("reason", JsonPrimitive(it)) }
-                                                    event.risk?.let { put("risk", JsonPrimitive(it)) }
+                                                    event.proposedExecpolicyAmendment?.let { amendment ->
+                                                        put("proposedExecpolicyAmendment", json.encodeToJsonElement(amendment))
+                                                    }
                                                 }
                                             }
                                             is CodexBackendProvider.CodexEvent.FileChangeApprovalRequired -> {
@@ -354,12 +359,14 @@ class HttpApiServer(
                                                     put("turnId", JsonPrimitive(event.turnId))
                                                     put("changes", json.encodeToJsonElement(event.changes))
                                                     event.reason?.let { put("reason", JsonPrimitive(it)) }
+                                                    event.grantRoot?.let { put("grantRoot", JsonPrimitive(it)) }
                                                 }
                                             }
                                             is CodexBackendProvider.CodexEvent.TokenUsage -> {
                                                 buildJsonObject {
                                                     put("type", JsonPrimitive("token_usage"))
                                                     put("threadId", JsonPrimitive(event.threadId))
+                                                    put("turnId", JsonPrimitive(event.turnId))
                                                     put("usage", json.encodeToJsonElement(event.usage))
                                                 }
                                             }
@@ -712,6 +719,7 @@ class HttpApiServer(
                         try {
                             val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
                             val maxResults = call.request.queryParameters["maxResults"]?.toIntOrNull() ?: 30
+                            val provider = call.request.queryParameters["provider"]?.lowercase()?.trim()
 
                             logger.info { "📋 [HTTP] 获取历史会话列表 (offset=$offset, maxResults=$maxResults)" }
 
@@ -723,7 +731,11 @@ class HttpApiServer(
                                 terminalMcpServerProvider = terminalMcpServerProvider,
                                 gitMcpServerProvider = gitMcpServerProvider
                             )
-                            val result = rpcService.getHistorySessions(maxResults, offset)
+                            val result = if (provider == "codex") {
+                                listCodexHistorySessions(maxResults, offset)
+                            } else {
+                                rpcService.getHistorySessions(maxResults, offset)
+                            }
 
                             call.respond(HttpStatusCode.OK, result)
                         } catch (e: Exception) {
@@ -743,11 +755,16 @@ class HttpApiServer(
                                     HttpStatusCode.BadRequest,
                                     mapOf("success" to false, "error" to "Missing sessionId")
                                 )
+                            val provider = call.request.queryParameters["provider"]?.lowercase()?.trim()
 
                             logger.info { "🗑️ [HTTP] 删除历史会话: $sessionId" }
 
-                            val projectPath = ideTools.getProjectPath()
-                            val deleted = com.asakii.claude.agent.sdk.utils.ClaudeSessionScanner.deleteSession(projectPath, sessionId)
+                            val deleted = if (provider == "codex") {
+                                archiveCodexHistorySession(sessionId)
+                            } else {
+                                val projectPath = ideTools.getProjectPath()
+                                com.asakii.claude.agent.sdk.utils.ClaudeSessionScanner.deleteSession(projectPath, sessionId)
+                            }
 
                             if (deleted) {
                                 call.respond(HttpStatusCode.OK, mapOf("success" to true))
@@ -1377,9 +1394,115 @@ class HttpApiServer(
         return url
     }
 
-    /**
-     * 停止服务器
-     */
+    // Codex history sessions (app-server list).
+    private suspend fun listCodexHistorySessions(maxResults: Int, offset: Int): RpcHistorySessionsResult {
+        val config = serviceConfigProvider()
+        val codexPath = config.codex.binaryPath?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
+        val workingDirectory = ideTools.getProjectPath().takeIf { it.isNotBlank() }?.let { Path.of(it) }
+        val configOverrides = buildCodexConfigOverrides(config.codex)
+
+        val client = CodexAppServerClient.create(
+            codexPath = codexPath,
+            workingDirectory = workingDirectory,
+            configOverrides = configOverrides,
+            scope = scope
+        )
+
+        return try {
+            client.initialize(
+                clientName = "claude-code-plus",
+                clientTitle = "Claude Code Plus",
+                clientVersion = "1.0.0"
+            )
+
+            val threads = fetchCodexThreads(client, maxResults, offset)
+            val fallbackProjectPath = ideTools.getProjectPath()
+            RpcHistorySessionsResult(
+                sessions = threads.map { thread ->
+                    val cwd = thread.cwd.takeIf { it.isNotBlank() } ?: fallbackProjectPath
+                    RpcHistorySession(
+                        sessionId = thread.id,
+                        firstUserMessage = thread.preview,
+                        timestamp = thread.createdAt,
+                        messageCount = 0,
+                        projectPath = cwd,
+                        customTitle = null
+                    )
+                }
+            )
+        } finally {
+            client.close()
+        }
+    }
+
+
+    private suspend fun archiveCodexHistorySession(threadId: String): Boolean {
+        val config = serviceConfigProvider()
+        val codexPath = config.codex.binaryPath?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
+        val workingDirectory = ideTools.getProjectPath().takeIf { it.isNotBlank() }?.let { Path.of(it) }
+        val configOverrides = buildCodexConfigOverrides(config.codex)
+
+        val client = CodexAppServerClient.create(
+            codexPath = codexPath,
+            workingDirectory = workingDirectory,
+            configOverrides = configOverrides,
+            scope = scope
+        )
+
+        return try {
+            client.initialize(
+                clientName = "claude-code-plus",
+                clientTitle = "Claude Code Plus",
+                clientVersion = "1.0.0"
+            )
+            client.archiveThread(threadId)
+            true
+        } catch (e: Exception) {
+            logger.error(e) { "? [HTTP] Failed to archive Codex thread: $threadId" }
+            false
+        } finally {
+            client.close()
+        }
+    }
+
+    private suspend fun fetchCodexThreads(
+        client: CodexAppServerClient,
+        maxResults: Int,
+        offset: Int
+    ): List<com.asakii.codex.agent.sdk.appserver.ThreadInfo> {
+        val result = mutableListOf<com.asakii.codex.agent.sdk.appserver.ThreadInfo>()
+        var cursor: String? = null
+        var skipped = 0
+
+        while (result.size < maxResults) {
+            val limit = (maxResults + offset - skipped).coerceAtLeast(1)
+            val page = client.listThreads(cursor = cursor, limit = limit)
+            if (page.data.isEmpty()) break
+
+            for (thread in page.data) {
+                if (skipped < offset) {
+                    skipped += 1
+                    continue
+                }
+                result.add(thread)
+                if (result.size >= maxResults) break
+            }
+
+            cursor = page.nextCursor?.takeIf { it.isNotBlank() }
+            if (cursor == null) break
+        }
+
+        return result
+    }
+
+    private fun buildCodexConfigOverrides(codexDefaults: com.asakii.server.config.CodexDefaults): Map<String, String> {
+        val overrides = mutableMapOf<String, String>()
+        codexDefaults.webSearchEnabled?.let { enabled ->
+            overrides["features.web_search_request"] = enabled.toString()
+        }
+        return overrides
+    }
+    // Stop server.
     fun stop() {
         try {
             server?.stop(1000, 2000)

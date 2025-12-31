@@ -17,18 +17,20 @@ object ProjectSessionStateService {
     /**
      * 获取统计信息
      */
-    fun getStats(): Map<String, Any> {
-        return mapOf(
-            "activeSessionsCount" to 0,
-            "totalMessages" to 0,
-            "status" to "ready"
+    fun getStats(): kotlinx.serialization.json.JsonObject {
+        return kotlinx.serialization.json.JsonObject(
+            mapOf(
+                "activeSessionsCount" to kotlinx.serialization.json.JsonPrimitive(0),
+                "totalMessages" to kotlinx.serialization.json.JsonPrimitive(0),
+                "status" to kotlinx.serialization.json.JsonPrimitive("ready")
+            )
         )
     }
 
     /**
      * 获取服务统计信息
      */
-    fun getServiceStats(): Map<String, Any> {
+    fun getServiceStats(): kotlinx.serialization.json.JsonObject {
         return getStats()
     }
 }

@@ -35,9 +35,6 @@ class ControlProtocol(
     private val hookCallbacks = ConcurrentHashMap<String, HookCallback>()
     private val hookIdCounter = AtomicLong(0)
     
-    // SDK MCP servers - 新增支持
-    private val sdkMcpServers = ConcurrentHashMap<String, Any>()
-    
     // New McpServer interface instances
     private val newMcpServers = ConcurrentHashMap<String, McpServer>()
     
@@ -49,7 +46,7 @@ class ControlProtocol(
     
     // 初始化状态追踪
     private var initialized = false
-    private val _initializationResult = CompletableDeferred<Map<String, Any>>()
+    private val _initializationResult = CompletableDeferred<JsonObject>()
     
     // Logger
     private val logger = KotlinLogging.logger {}
@@ -109,36 +106,27 @@ class ControlProtocol(
         logger.debug { "📋 MCP 服务器数量: ${options.mcpServers.size}" }
 
         options.mcpServers.forEach { (name, config) ->
-            when {
-                config is Map<*, *> && config["type"] == "sdk" -> {
-                    val instance = config["instance"]
-                    if (instance != null) {
-                        when (instance) {
-                            is McpServer -> {
-                                newMcpServers[name] = instance
-                                logger.info { "📦 注册新接口 MCP 服务器: $name (${instance::class.simpleName})" }
-                            }
-                            else -> {
-                                sdkMcpServers[name] = instance
-                                logger.info { "📦 注册旧版 SDK MCP 服务器: $name" }
-                            }
-                        }
-                    }
-                }
-                config is McpServer -> {
+            when (config) {
+                is McpServer -> {
                     newMcpServers[name] = config
-                    logger.info { "📦 注册直接提供的 MCP 服务器: $name (${config::class.simpleName})" }
+                    logger.info { "📦 注册 MCP 服务器: $name (${config::class.simpleName})" }
+                }
+                is McpServerConfig -> {
+                    logger.debug { "📦 MCP 配置已记录: $name (type=${config.type})" }
+                }
+                else -> {
+                    logger.warn { "⚠️ 未知 MCP 配置类型: $name -> ${config::class.simpleName}" }
                 }
             }
         }
-        logger.info { "✅ MCP 服务器注册完成: ${newMcpServers.keys + sdkMcpServers.keys}" }
+        logger.info { "✅ MCP 服务器注册完成: ${newMcpServers.keys}" }
     }
 
     /**
      * Initialize control protocol - 仿照Python SDK实现
      * This must be called after startMessageProcessing() and before using hooks
      */
-    suspend fun initialize(): Map<String, Any> {
+    suspend fun initialize(): JsonObject {
         if (initialized) {
             return _initializationResult.await()
         }
@@ -199,7 +187,7 @@ class ControlProtocol(
         val response = sendControlRequestInternal(initRequest, initializeTimeout)
         initialized = true
 
-        val result = response.response?.jsonObject?.toMap() ?: mapOf("status" to "initialized")
+        val result = response.response?.jsonObject ?: buildJsonObject { put("status", "initialized") }
         _initializationResult.complete(result)
 
         logger.info { "✅ 控制协议初始化完成" }
@@ -336,7 +324,7 @@ class ControlProtocol(
     }
     
     // System init handling
-    private val _systemInitReceived = Channel<Map<String, Any>>(1)
+    private val _systemInitReceived = Channel<JsonObject>(1)
     
     /**
      * Handle system initialization message from Claude CLI.
@@ -344,23 +332,16 @@ class ControlProtocol(
     private suspend fun handleSystemInit(jsonElement: JsonElement) {
         try {
             val jsonObject = jsonElement.jsonObject
-            val serverInfo = mutableMapOf<String, Any>()
 
             // Extract server information from init message
             val sessionId = jsonObject["session_id"]?.jsonPrimitive?.content ?: "default"
-            serverInfo["session_id"] = sessionId
             val cwd = jsonObject["cwd"]?.jsonPrimitive?.content
-            cwd?.let { serverInfo["cwd"] = it }
             val modelId = jsonObject["model"]?.jsonPrimitive?.content
-            modelId?.let { serverInfo["model"] = it }
             val permissionMode = jsonObject["permissionMode"]?.jsonPrimitive?.content
-            permissionMode?.let { serverInfo["permissionMode"] = it }
             val apiKeySource = jsonObject["apiKeySource"]?.jsonPrimitive?.content
-            apiKeySource?.let { serverInfo["apiKeySource"] = it }
 
             // Extract tools array
             val tools = jsonObject["tools"]?.jsonArray?.map { it.jsonPrimitive.content }
-            tools?.let { serverInfo["tools"] = it }
 
             // Extract MCP servers
             val mcpServers = jsonObject["mcp_servers"]?.jsonArray?.map { mcpServer ->
@@ -370,7 +351,6 @@ class ControlProtocol(
                     status = mcpObj["status"]?.jsonPrimitive?.content ?: ""
                 )
             }
-            mcpServers?.let { serverInfo["mcp_servers"] = it }
 
             // 注册hooks（如果提供了的话）
             val hooksConfig = options.hooks?.let { hooks ->
@@ -381,7 +361,18 @@ class ControlProtocol(
                 // serverInfo["hooks_registered"] = true
             }
 
-            serverInfo["status"] = "connected"
+            val serverInfo = buildJsonObject {
+                put("session_id", sessionId)
+                cwd?.let { put("cwd", it) }
+                modelId?.let { put("model", it) }
+                permissionMode?.let { put("permissionMode", it) }
+                apiKeySource?.let { put("apiKeySource", it) }
+                tools?.let {
+                    putJsonArray("tools") { it.forEach { tool -> add(tool) } }
+                }
+                mcpServers?.let { put("mcp_servers", Json.encodeToJsonElement(it)) }
+                put("status", "connected")
+            }
 
             // Send to waiting initialize function
             _systemInitReceived.trySend(serverInfo)
@@ -403,7 +394,12 @@ class ControlProtocol(
             systemInitCallback?.invoke(modelId)
         } catch (e: Exception) {
             logger.warn(e) { "Failed to handle system init: ${e.message}" }
-            _systemInitReceived.trySend(mapOf("status" to "error", "error" to (e.message ?: "Unknown error")))
+            _systemInitReceived.trySend(
+                buildJsonObject {
+                    put("status", "error")
+                    put("error", e.message ?: "Unknown error")
+                }
+            )
         }
     }
     
@@ -439,19 +435,11 @@ class ControlProtocol(
         val callback = hookCallbacks[request.callbackId]
             ?: throw ControlProtocolException("Unknown hook callback ID: ${request.callbackId}")
         
-        // Convert input JsonElement to Map
-        val inputMap = when (val input = request.input) {
-            is JsonObject -> input.toMap().mapValues { (_, value) ->
-                when (value) {
-                    is JsonPrimitive -> value.contentOrNull ?: value.toString()
-                    else -> value.toString()
-                }
-            }
-            else -> throw ControlProtocolException("Hook input must be an object")
-        }
-        
+        val inputObject = request.input as? JsonObject
+            ?: throw ControlProtocolException("Hook input must be an object")
+
         val context = HookContext()
-        val result = callback(inputMap, request.toolUseId, context)
+        val result = callback(inputObject, request.toolUseId, context)
         
         return Json.encodeToJsonElement(result)
     }
@@ -471,7 +459,7 @@ class ControlProtocol(
 
         // 直接使用 JsonObject 的 Map<String, JsonElement>
         val inputMap: Map<String, JsonElement> = when (val input = request.input) {
-            is JsonObject -> input.toMap()
+            is JsonObject -> input
             else -> throw ControlProtocolException("Permission input must be an object")
         }
 
@@ -526,10 +514,9 @@ class ControlProtocol(
         logger.debug { "📨 处理MCP消息: server=$serverName, method=${message.jsonObject["method"]?.jsonPrimitive?.content}" }
         
         // 检查新接口服务器是否存在
-        val newServer = newMcpServers[serverName]
-        val oldServer = sdkMcpServers[serverName]
+        val server = newMcpServers[serverName]
         
-        if (newServer == null && oldServer == null) {
+        if (server == null) {
             return buildJsonObject {
                 put("jsonrpc", "2.0")
                 message.jsonObject["id"]?.let { put("id", it) }
@@ -545,23 +532,7 @@ class ControlProtocol(
         val id = message.jsonObject["id"]
         
         try {
-            // 优先使用新接口服务器
-            if (newServer != null) {
-                return handleNewMcpServerMethod(newServer, method, params, id)
-            } else if (oldServer != null) {
-                // 兼容旧的实现方式
-                return handleLegacyMcpServerMethod(serverName, oldServer, method, params, id)
-            } else {
-                // 不应该到达这里，但作为后备
-                return buildJsonObject {
-                    put("jsonrpc", "2.0")
-                    id?.let { put("id", it) }
-                    putJsonObject("error") {
-                        put("code", -32601)
-                        put("message", "Server '$serverName' not found")
-                    }
-                }
-            }
+            return handleNewMcpServerMethod(server, method, params, id)
         } catch (e: Exception) {
             logger.warn(e) { "❌ MCP消息处理失败: ${e.message}" }
             return buildJsonObject {
@@ -639,7 +610,7 @@ class ControlProtocol(
      * Wait for system initialization message from Claude CLI.
      * Claude CLI automatically sends this message after connecting.
      */
-    suspend fun waitForSystemInit(): Map<String, Any> {
+    suspend fun waitForSystemInit(): JsonObject {
         return withTimeout(30000) { // 30 seconds timeout
             _systemInitReceived.receive()
         }
@@ -1099,8 +1070,8 @@ class ControlProtocol(
                                 addJsonObject {
                                     put("name", tool.name)
                                     put("description", tool.description)
-                                    // 手动将 Map<String, Any> 转换为 JsonElement
-                                    put("inputSchema", mapToJsonElement(tool.inputSchema))
+                                    // 直接使用 JsonObject 作为 inputSchema
+                                    put("inputSchema", tool.inputSchema)
                                 }
                             }
                         }
@@ -1193,118 +1164,6 @@ class ControlProtocol(
         }
     }
 
-    /**
-     * 将 Map<String, Any> 递归转换为 JsonElement
-     */
-    private fun mapToJsonElement(map: Map<String, Any?>): JsonElement {
-        return buildJsonObject {
-            map.forEach { (key, value) ->
-                put(key, anyToJsonElement(value))
-            }
-        }
-    }
-
-    /**
-     * 将任意值转换为 JsonElement
-     */
-    @Suppress("UNCHECKED_CAST")
-    private fun anyToJsonElement(value: Any?): JsonElement {
-        return when (value) {
-            null -> JsonNull
-            is String -> JsonPrimitive(value)
-            is Number -> JsonPrimitive(value)
-            is Boolean -> JsonPrimitive(value)
-            is Map<*, *> -> mapToJsonElement(value as Map<String, Any?>)
-            is List<*> -> JsonArray(value.map { anyToJsonElement(it) })
-            is JsonElement -> value
-            else -> JsonPrimitive(value.toString())
-        }
-    }
-
-    /**
-     * Handle legacy MCP server methods (for backward compatibility)
-     */
-    private suspend fun handleLegacyMcpServerMethod(
-        serverName: String,
-        server: Any,
-        method: String?,
-        params: JsonObject,
-        id: JsonElement?
-    ): JsonElement {
-        // 保持原来的旧实现方式，用于兼容性
-        return when (method) {
-            "initialize" -> {
-                buildJsonObject {
-                    put("jsonrpc", "2.0")
-                    id?.let { put("id", it) }
-                    putJsonObject("result") {
-                        put("protocolVersion", "2024-11-05")
-                        putJsonObject("capabilities") {
-                            putJsonObject("tools") {}
-                        }
-                        putJsonObject("serverInfo") {
-                            put("name", serverName)
-                            put("version", "1.0.0")
-                        }
-                    }
-                }
-            }
-            
-            "tools/list" -> {
-                buildJsonObject {
-                    put("jsonrpc", "2.0")
-                    id?.let { put("id", it) }
-                    putJsonObject("result") {
-                        put("tools", JsonArray(emptyList())) // 旧版本暂不支持工具列表
-                    }
-                }
-            }
-            
-            "tools/call" -> {
-                val toolName = params["name"]?.jsonPrimitive?.content
-                val arguments = params["arguments"]?.jsonObject ?: buildJsonObject {}
-                
-                println("🛠️ 调用旧版工具: $toolName, args: $arguments")
-                
-                buildJsonObject {
-                    put("jsonrpc", "2.0")
-                    id?.let { put("id", it) }
-                    putJsonObject("result") {
-                        putJsonArray("content") {
-                            addJsonObject {
-                                put("type", "text")
-                                put("text", "工具 $toolName 执行成功（旧版兼容模式）")
-                            }
-                        }
-                    }
-                }
-            }
-            
-            "notifications/initialized" -> {
-                buildJsonObject {
-                    put("jsonrpc", "2.0")
-                    putJsonObject("result") {}
-                }
-            }
-            
-            else -> {
-                buildJsonObject {
-                    put("jsonrpc", "2.0")
-                    id?.let { put("id", it) }
-                    putJsonObject("error") {
-                        put("code", -32601)
-                        put("message", "Method '$method' not found")
-                    }
-                }
-            }
-        }
-    }
-    
-    /**
-     * Convert JsonObject to Map for easier handling.
-     */
-    private fun JsonObject.toMap(): Map<String, JsonElement> =
-        this.entries.associate { it.key to it.value }
 }
 
 

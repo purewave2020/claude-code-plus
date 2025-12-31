@@ -15,6 +15,8 @@ import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.rename.RenameProcessor
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 
@@ -65,9 +67,9 @@ enum class SymbolType {
  */
 class RenameTool(private val project: Project) {
 
-    fun getInputSchema(): Map<String, Any> = ToolSchemaLoader.getSchema("Rename")
+    fun getInputSchema(): JsonObject = ToolSchemaLoader.getSchema("Rename")
 
-    fun execute(arguments: Map<String, Any>): Any {
+    fun execute(arguments: JsonObject): Any {
         // ===== 使用 SchemaValidator 进行参数校验 =====
         val validationResult = SchemaValidator.validate(
             toolName = "Rename",
@@ -85,13 +87,16 @@ class RenameTool(private val project: Project) {
         }
 
         // ===== 提取参数 =====
-        val filePath = arguments["filePath"] as String
-        val newName = arguments["newName"] as String
-        val line = (arguments["line"] as Number).toInt()
-        val column = (arguments["column"] as? Number)?.toInt()
-        val symbolTypeStr = arguments["symbolType"] as? String ?: "Auto"
-        val searchInComments = arguments["searchInComments"] as? Boolean ?: true
-        val searchInStrings = arguments["searchInStrings"] as? Boolean ?: false
+        val filePath = arguments.getString("filePath")
+            ?: return ToolResult.error("Missing required parameter: filePath")
+        val newName = arguments.getString("newName")
+            ?: return ToolResult.error("Missing required parameter: newName")
+        val line = arguments.getInt("line")
+            ?: return ToolResult.error("Missing required parameter: line")
+        val column = arguments.getInt("column")
+        val symbolTypeStr = arguments.getString("symbolType") ?: "Auto"
+        val searchInComments = arguments.getBoolean("searchInComments") ?: true
+        val searchInStrings = arguments.getBoolean("searchInStrings") ?: false
 
         // 解析枚举值
         val symbolType = SymbolType.valueOf(symbolTypeStr)
@@ -290,8 +295,8 @@ class RenameTool(private val project: Project) {
     /**
      * 校验文件路径有效性
      */
-    private fun validateFilePath(arguments: Map<String, Any>): ValidationError? {
-        val filePath = arguments["filePath"] as? String ?: return null
+    private fun validateFilePath(arguments: JsonObject): ValidationError? {
+        val filePath = arguments.getString("filePath") ?: return null
 
         val absolutePath = if (File(filePath).isAbsolute) {
             filePath
@@ -327,8 +332,8 @@ Please check:
     /**
      * 校验新名称有效性
      */
-    private fun validateNewName(arguments: Map<String, Any>): ValidationError? {
-        val newName = arguments["newName"] as? String
+    private fun validateNewName(arguments: JsonObject): ValidationError? {
+        val newName = arguments.getString("newName")
 
         if (newName.isNullOrBlank()) {
             return ValidationError(
@@ -348,5 +353,24 @@ Please check:
         }
 
         return null
+    }
+
+    private fun JsonObject.getString(key: String): String? {
+        val primitive = this[key] as? JsonPrimitive ?: return null
+        return if (primitive.isString) primitive.content else primitive.content
+    }
+
+    private fun JsonObject.getInt(key: String): Int? {
+        val primitive = this[key] as? JsonPrimitive ?: return null
+        return primitive.content.toIntOrNull() ?: primitive.content.toDoubleOrNull()?.toInt()
+    }
+
+    private fun JsonObject.getBoolean(key: String): Boolean? {
+        val primitive = this[key] as? JsonPrimitive ?: return null
+        return when (primitive.content.lowercase()) {
+            "true" -> true
+            "false" -> false
+            else -> null
+        }
     }
 }

@@ -15,7 +15,7 @@ class PreToolUseHookTest {
     @Test
     fun `test hook receives toolUseId`() = runBlocking {
         val workDir = Path.of(System.getProperty("user.dir"))
-        val hookCalls = mutableListOf<Pair<String?, Map<String, Any>>>()
+        val hookCalls = mutableListOf<Pair<String?, JsonObject>>()
 
         val preToolUseHook: HookCallback = { input, toolUseId, _ ->
             println("🎣 Hook called: toolUseId=$toolUseId, input=$input")

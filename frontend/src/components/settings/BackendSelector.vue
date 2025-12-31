@@ -17,12 +17,6 @@
       </select>
     </div>
 
-    <!-- 会话活跃时显示提示 -->
-    <div v-if="isSessionActive" class="info-message">
-      <span class="info-icon">ℹ️</span>
-      <span>切换后端将重置当前会话</span>
-    </div>
-
     <div v-if="modelValue" class="backend-info">
       <BackendIcon :type="modelValue" :size="24" class="backend-icon-svg" />
       <div class="backend-details">
@@ -49,13 +43,9 @@ import BackendIcon from '@/components/icons/BackendIcon.vue'
 // Props
 interface Props {
   modelValue: BackendType
-  /** 当前会话是否活跃（用于显示提示信息） */
-  isSessionActive?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  isSessionActive: false,
-})
+defineProps<Props>()
 
 // Emits
 interface Emits {
@@ -137,23 +127,6 @@ function getBackendDescription(type: BackendType): string {
   padding: 8px;
   background-color: var(--vscode-dropdown-background);
   color: var(--vscode-dropdown-foreground);
-}
-
-.info-message {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 4px;
-  font-size: 12px;
-  color: var(--vscode-foreground);
-}
-
-.info-icon {
-  font-size: 14px;
-  flex-shrink: 0;
 }
 
 .backend-info {

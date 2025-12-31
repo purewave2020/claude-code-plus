@@ -1,6 +1,7 @@
 package com.asakii.plugin.mcp.git
 
 import com.intellij.openapi.project.Project
+import kotlinx.serialization.json.JsonObject
 
 /**
  * 获取 Commit Message 工具
@@ -10,7 +11,7 @@ import com.intellij.openapi.project.Project
  */
 class GetCommitMessageTool(private val project: Project) {
 
-    suspend fun execute(arguments: Map<String, Any?>): String {
+    suspend fun execute(arguments: JsonObject): String {
         val accessor = CommitPanelAccessor.getInstance(project)
         val isOpen = accessor.isCommitPanelOpen()
         val message = accessor.getCommitMessage() ?: ""

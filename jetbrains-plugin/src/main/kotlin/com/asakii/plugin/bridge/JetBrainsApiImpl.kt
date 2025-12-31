@@ -244,10 +244,10 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                     val currentContent = file?.let { String(it.contentsToByteArray(), Charsets.UTF_8) } ?: ""
 
                     // 优先使用缓存的原始内容，否则通过反向替换计算
-                    val beforeContent = if (!request.originalContent.isNullOrEmpty()) {
+                    val beforeContent: String = if (!request.originalContent.isNullOrEmpty()) {
                         // 使用缓存的原始内容
                         logger.info("✅ [JetBrainsApi.file] Using cached original content for diff")
-                        request.originalContent
+                        request.originalContent!!
                     } else {
                         // 回退：通过反向替换计算修改前的内容
                         logger.info("⚠️ [JetBrainsApi.file] No cached content, using reverse replacement")

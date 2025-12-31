@@ -2,8 +2,7 @@ package com.asakii.claude.agent.sdk.types
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.Contextual
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.*
 
 /**
  * 工具类型枚举
@@ -94,7 +93,7 @@ sealed interface SpecificToolUse : ContentBlock {
      * 子类应该实现这个方法来提供特定工具的参数访问
      * 注意：返回类型为Any，但实际运行时类型是已知的
      */
-    fun getTypedParameters(): Map<String, @Contextual Any>
+    fun getTypedParameters(): JsonObject
 }
 
 /**
@@ -115,12 +114,7 @@ data class BashToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.BASH
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = buildMap {
-        put("command", command)
-        description?.let { put("description", it) }
-        timeout?.let { put("timeout", it) }
-        put("run_in_background", runInBackground)
-    }
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -141,12 +135,7 @@ data class EditToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.EDIT
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = mapOf(
-        "file_path" to filePath,
-        "old_string" to oldString,
-        "new_string" to newString,
-        "replace_all" to replaceAll
-    )
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -165,16 +154,7 @@ data class MultiEditToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.MULTI_EDIT
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = mapOf(
-        "file_path" to filePath,
-        "edits" to edits.map { edit ->
-            mapOf(
-                "old_string" to edit.oldString,
-                "new_string" to edit.newString,
-                "replace_all" to edit.replaceAll
-            )
-        }
-    )
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 
     @Serializable
     data class EditOperation(
@@ -201,11 +181,7 @@ data class ReadToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.READ
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = buildMap {
-        put("file_path", filePath)
-        offset?.let { put("offset", it) }
-        limit?.let { put("limit", it) }
-    }
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -224,10 +200,7 @@ data class WriteToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.WRITE
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = mapOf(
-        "file_path" to filePath,
-        "content" to content
-    )
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -246,10 +219,7 @@ data class GlobToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.GLOB
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = buildMap {
-        put("pattern", pattern)
-        path?.let { put("path", it) }
-    }
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -276,18 +246,7 @@ data class GrepToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.GREP
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = buildMap {
-        put("pattern", pattern)
-        path?.let { put("path", it) }
-        outputMode?.let { put("output_mode", it) }
-        glob?.let { put("glob", it) }
-        type?.let { put("type", it) }
-        put("-i", caseInsensitive)
-        put("-n", showLineNumbers)
-        contextBefore?.let { put("-B", it) }
-        contextAfter?.let { put("-A", it) }
-        headLimit?.let { put("head_limit", it) }
-    }
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -306,10 +265,7 @@ data class WebFetchToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.WEB_FETCH
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = mapOf(
-        "url" to url,
-        "prompt" to prompt
-    )
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -329,11 +285,7 @@ data class WebSearchToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.WEB_SEARCH
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = buildMap {
-        put("query", query)
-        allowedDomains?.let { put("allowed_domains", it) }
-        blockedDomains?.let { put("blocked_domains", it) }
-    }
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -351,15 +303,7 @@ data class TodoWriteToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.TODO_WRITE
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = mapOf(
-        "todos" to todos.map { todo ->
-            mapOf(
-                "content" to todo.content,
-                "status" to todo.status,
-                "activeForm" to todo.activeForm
-            )
-        }
-    )
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 
     @Serializable
     data class TodoItem(
@@ -386,11 +330,7 @@ data class TaskToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.TASK
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = mapOf(
-        "description" to description,
-        "prompt" to prompt,
-        "subagent_type" to subagentType
-    )
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -412,13 +352,7 @@ data class NotebookEditToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.NOTEBOOK_EDIT
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = buildMap {
-        put("notebook_path", notebookPath)
-        put("new_source", newSource)
-        cellId?.let { put("cell_id", it) }
-        cellType?.let { put("cell_type", it) }
-        editMode?.let { put("edit_mode", it) }
-    }
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -434,12 +368,12 @@ data class McpToolUse(
     val fullToolName: String,  // 完整的工具名称，如 "mcp__server_name__function_name"
     val serverName: String,
     val functionName: String,
-    val parameters: Map<String, @Contextual Any>
+    val parameters: JsonObject
 ) : SpecificToolUse {
     @kotlinx.serialization.Transient
     override val toolType = ToolType.MCP_TOOL
 
-    override fun getTypedParameters(): Map<String, Any> = parameters
+    override fun getTypedParameters(): JsonObject = parameters
 }
 
 /**
@@ -458,10 +392,7 @@ data class BashOutputToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.BASH_OUTPUT
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = buildMap {
-        put("bash_id", bashId)
-        filter?.let { put("filter", it) }
-    }
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -479,9 +410,7 @@ data class KillShellToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.KILL_SHELL
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = mapOf(
-        "shell_id" to shellId
-    )
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -499,9 +428,7 @@ data class ExitPlanModeToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.EXIT_PLAN_MODE
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = mapOf(
-        "plan" to plan
-    )
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -519,9 +446,7 @@ data class ListMcpResourcesToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.LIST_MCP_RESOURCES
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = buildMap {
-        server?.let { put("server", it) }
-    }
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -540,10 +465,7 @@ data class ReadMcpResourceToolUse(
     @kotlinx.serialization.Transient
     override val toolType = ToolType.READ_MCP_RESOURCE
 
-    override fun getTypedParameters(): Map<String, @Contextual Any> = mapOf(
-        "server" to server,
-        "uri" to uri
-    )
+    override fun getTypedParameters(): JsonObject = input.jsonObject
 }
 
 /**
@@ -557,10 +479,10 @@ data class UnknownToolUse(
     override val name: String,
     override val input: JsonElement,
     val toolName: String,
-    val parameters: Map<String, @Contextual Any>
+    val parameters: JsonObject
 ) : SpecificToolUse {
     @kotlinx.serialization.Transient
     override val toolType = ToolType.UNKNOWN
 
-    override fun getTypedParameters(): Map<String, Any> = parameters
+    override fun getTypedParameters(): JsonObject = parameters
 }

@@ -4,6 +4,8 @@ import com.asakii.plugin.types.SessionState
 import com.asakii.plugin.types.SessionUpdate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Claude Code Plus 后台服务
@@ -32,11 +34,13 @@ object ClaudeCodePlusBackgroundService {
     /**
      * 获取服务统计信息
      */
-    fun getServiceStats(): Map<String, Any> {
-        return mapOf(
-            "activeSessionsCount" to 0,
-            "totalMessages" to 0,
-            "status" to "ready"
+    fun getServiceStats(): JsonObject {
+        return JsonObject(
+            mapOf(
+                "activeSessionsCount" to JsonPrimitive(0),
+                "totalMessages" to JsonPrimitive(0),
+                "status" to JsonPrimitive("ready")
+            )
         )
     }
 

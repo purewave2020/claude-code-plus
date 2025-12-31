@@ -1,5 +1,6 @@
 package com.asakii.claude.agent.sdk.types
 
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -29,9 +30,9 @@ data class MessageData(
     val toolName: String? = null,
     val toolId: String? = null,
     val toolCallId: String? = null,
-    val toolInput: Any? = null,
+    val toolInput: JsonElement? = null,
     val toolResult: String? = null,
-    val parameters: Map<String, Any>? = null,
+    val parameters: JsonObject? = null,
     val result: String? = null
 )
 

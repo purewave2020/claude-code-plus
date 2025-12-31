@@ -1,5 +1,9 @@
 package com.asakii.plugin.mcp.tools.terminal
 
+import com.asakii.plugin.mcp.getString
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -18,18 +22,18 @@ class TerminalRenameTool(private val sessionManager: TerminalSessionManager) {
      *   - session_id: String - 会话 ID（必需）
      *   - new_name: String - 新名称（必需）
      */
-    fun execute(arguments: Map<String, Any>): Map<String, Any> {
-        val sessionId = arguments["session_id"] as? String
-            ?: return mapOf(
-                "success" to false,
-                "error" to "Missing required parameter: session_id"
-            )
+    fun execute(arguments: JsonObject): JsonObject {
+        val sessionId = arguments.getString("session_id")
+            ?: return buildJsonObject {
+                put("success", false)
+                put("error", "Missing required parameter: session_id")
+            }
 
-        val newName = arguments["new_name"] as? String
-            ?: return mapOf(
-                "success" to false,
-                "error" to "Missing required parameter: new_name"
-            )
+        val newName = arguments.getString("new_name")
+            ?: return buildJsonObject {
+                put("success", false)
+                put("error", "Missing required parameter: new_name")
+            }
 
         // 验证会话所有权
         sessionManager.validateSessionOwnership(sessionId)?.let { return it }
@@ -39,18 +43,18 @@ class TerminalRenameTool(private val sessionManager: TerminalSessionManager) {
         val success = sessionManager.renameSession(sessionId, newName)
 
         return if (success) {
-            mapOf(
-                "success" to true,
-                "session_id" to sessionId,
-                "new_name" to newName,
-                "message" to "Session renamed successfully"
-            )
+            buildJsonObject {
+                put("success", true)
+                put("session_id", sessionId)
+                put("new_name", newName)
+                put("message", "Session renamed successfully")
+            }
         } else {
-            mapOf(
-                "success" to false,
-                "session_id" to sessionId,
-                "error" to "Failed to rename session or session not found"
-            )
+            buildJsonObject {
+                put("success", false)
+                put("session_id", sessionId)
+                put("error", "Failed to rename session or session not found")
+            }
         }
     }
 }

@@ -13,6 +13,7 @@ import com.asakii.ai.agent.sdk.model.UiAssistantMessage
 import com.asakii.ai.agent.sdk.model.TextContent
 import com.asakii.ai.agent.sdk.model.ThinkingContent
 import com.asakii.claude.agent.sdk.types.ClaudeAgentOptions
+import com.asakii.claude.agent.sdk.types.McpServerSpec
 import com.asakii.plugin.mcp.GitMcpServerImpl
 import com.asakii.settings.AgentSettingsService
 import com.asakii.settings.GitGenerateDefaults
@@ -85,7 +86,7 @@ class GenerateCommitMessageService(private val project: Project) {
                 // 使用配置的工具列表
                 allowedTools = configuredTools,
                 // 注册 Git MCP 服务器
-                mcpServers = mapOf("jetbrains_git" to gitMcpServer),
+                mcpServers = mapOf<String, McpServerSpec>("jetbrains_git" to gitMcpServer),
                 extraArgs = mapOf("output-format" to "stream-json"),
                 // 会话持久化控制：saveSession=false 时不保存会话
                 noSessionPersistence = !settings.gitGenerateSaveSession

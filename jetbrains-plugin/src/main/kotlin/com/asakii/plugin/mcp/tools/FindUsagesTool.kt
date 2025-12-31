@@ -16,6 +16,11 @@ import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.asakii.plugin.services.LanguageAnalysisService
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 
 /**
@@ -77,9 +82,9 @@ data class FindUsagesResult(
  */
 class FindUsagesTool(private val project: Project) {
 
-    fun getInputSchema(): Map<String, Any> = ToolSchemaLoader.getSchema("FindUsages")
+    fun getInputSchema(): JsonObject = ToolSchemaLoader.getSchema("FindUsages")
 
-    fun execute(arguments: Map<String, Any>): Any {
+    fun execute(arguments: JsonObject): Any {
         // ===== 使用 SchemaValidator 进行参数校验 =====
         val validationResult = SchemaValidator.validate(
             toolName = "FindUsages",
@@ -93,7 +98,7 @@ class FindUsagesTool(private val project: Project) {
                 // 自定义校验：Module/Directory 需要 scopeArg
                 SchemaValidator.requireIfPresent(
                     trigger = "searchScope",
-                    triggerValues = listOf("Module", "Directory"),
+                    triggerValues = listOf(JsonPrimitive("Module"), JsonPrimitive("Directory")),
                     required = "scopeArg"
                 ),
                 // 自定义校验：文件路径有效性
@@ -106,15 +111,16 @@ class FindUsagesTool(private val project: Project) {
         }
 
         // ===== 提取参数 =====
-        val filePath = arguments["filePath"] as String
-        val symbolName = arguments["symbolName"] as? String
-        val line = (arguments["line"] as? Number)?.toInt()
-        val column = (arguments["column"] as? Number)?.toInt()
-        val symbolTypeStr = arguments["symbolType"] as? String ?: "Auto"
-        val searchScopeStr = arguments["searchScope"] as? String ?: "Project"
-        val scopeArg = arguments["scopeArg"] as? String
-        val maxResults = ((arguments["maxResults"] as? Number)?.toInt() ?: 20).coerceAtLeast(1)
-        val offset = ((arguments["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
+        val filePath = arguments.getString("filePath")
+            ?: return ToolResult.error("Missing required parameter: filePath")
+        val symbolName = arguments.getString("symbolName")
+        val line = arguments.getInt("line")
+        val column = arguments.getInt("column")
+        val symbolTypeStr = arguments.getString("symbolType") ?: "Auto"
+        val searchScopeStr = arguments.getString("searchScope") ?: "Project"
+        val scopeArg = arguments.getString("scopeArg")
+        val maxResults = (arguments.getInt("maxResults") ?: 20).coerceAtLeast(1)
+        val offset = (arguments.getInt("offset") ?: 0).coerceAtLeast(0)
 
         // 解析枚举值 (已通过 Schema 校验，直接转换)
         val symbolType = SymbolType.valueOf(symbolTypeStr)
@@ -584,8 +590,8 @@ class FindUsagesTool(private val project: Project) {
     /**
      * 校验文件路径有效性
      */
-    private fun validateFilePath(arguments: Map<String, Any>): ValidationError? {
-        val filePath = arguments["filePath"] as? String ?: return null
+    private fun validateFilePath(arguments: JsonObject): ValidationError? {
+        val filePath = arguments.getString("filePath") ?: return null
 
         val absolutePath = if (File(filePath).isAbsolute) {
             filePath
@@ -618,16 +624,27 @@ Please check:
         return null
     }
 
+    private fun JsonObject.getString(key: String): String? {
+        val primitive = this[key] as? JsonPrimitive ?: return null
+        return if (primitive.isString) primitive.content else primitive.content
+    }
+
+    private fun JsonObject.getInt(key: String): Int? {
+        val primitive = this[key] as? JsonPrimitive ?: return null
+        return primitive.content.toIntOrNull() ?: primitive.content.toDoubleOrNull()?.toInt()
+    }
+
     /**
      * 解析 usageTypes 参数
      */
-    private fun parseUsageTypes(raw: Any?): Set<UsageType> {
+    private fun parseUsageTypes(raw: JsonElement?): Set<UsageType> {
         return when (raw) {
-            is List<*> -> raw.mapNotNull { item ->
-                try { UsageType.valueOf(item.toString()) } catch (_: Exception) { null }
+            is JsonArray -> raw.mapNotNull { item ->
+                val value = (item as? JsonPrimitive)?.content ?: item.jsonPrimitive.content
+                try { UsageType.valueOf(value) } catch (_: Exception) { null }
             }.toSet().ifEmpty { setOf(UsageType.All) }
-            is String -> try {
-                setOf(UsageType.valueOf(raw))
+            is JsonPrimitive -> try {
+                setOf(UsageType.valueOf(raw.content))
             } catch (_: Exception) {
                 setOf(UsageType.All)
             }

@@ -134,9 +134,9 @@ const currentBackendType = computed(() => {
 ## 依赖的主项目组件
 
 - `CompactToolCard.vue` - 工具卡片基础组件
-- `BashToolDisplay.vue` - Bash 工具显示
-- `WriteToolDisplay.vue` - Write 工具显示
-- `EditToolDisplay.vue` - Edit 工具显示
+- `base/BashToolDisplay.vue` - Bash 工具显示
+- `base/WriteToolDisplay.vue` - Write 工具显示
+- `base/EditToolDisplay.vue` - Edit 工具显示
 - `GenericMcpToolDisplay.vue` - MCP 工具显示
 - `ToolCallDisplay.vue` - Claude 工具调度器
 

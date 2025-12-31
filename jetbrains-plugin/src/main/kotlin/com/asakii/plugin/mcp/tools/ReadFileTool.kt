@@ -1,6 +1,8 @@
 package com.asakii.plugin.mcp.tools
 
 import com.asakii.claude.agent.sdk.mcp.ToolResult
+import com.asakii.plugin.mcp.getInt
+import com.asakii.plugin.mcp.getString
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
@@ -8,6 +10,7 @@ import com.intellij.openapi.vfs.JarFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiManager
+import kotlinx.serialization.json.JsonObject
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -29,12 +32,12 @@ private val logger = KotlinLogging.logger {}
  */
 class ReadFileTool(private val project: Project) {
 
-    fun execute(arguments: Map<String, Any>): Any {
-        val filePath = arguments["filePath"] as? String
+    fun execute(arguments: JsonObject): Any {
+        val filePath = arguments.getString("filePath")
             ?: return ToolResult.error("Missing required parameter: filePath")
 
-        val maxLines = ((arguments["maxLines"] as? Number)?.toInt() ?: 500).coerceIn(1, 5000)
-        val offset = ((arguments["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
+        val maxLines = (arguments.getInt("maxLines") ?: 500).coerceIn(1, 5000)
+        val offset = (arguments.getInt("offset") ?: 0).coerceAtLeast(0)
 
         logger.info { "ReadFile: path=$filePath, maxLines=$maxLines, offset=$offset" }
 

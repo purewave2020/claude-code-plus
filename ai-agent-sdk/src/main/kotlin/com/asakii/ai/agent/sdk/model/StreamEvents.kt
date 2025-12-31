@@ -189,6 +189,7 @@ data class UiToolStart(
     val toolName: String,      // 显示名称: "Read", "Write", "mcp__xxx"
     val toolType: String,      // 类型标识: "CLAUDE_READ", "CLAUDE_WRITE", "MCP"
     val inputPreview: String? = null,
+    val input: JsonElement? = null,
     /** 父工具调用 ID（用于标识子代理消息所属的父 Task） */
     val parentToolUseId: String? = null
 ) : UiStreamEvent
@@ -312,4 +313,3 @@ data class CommandDeltaPayload(
 ) : ContentDeltaPayload {
     override val type: String = "command"
 }
-

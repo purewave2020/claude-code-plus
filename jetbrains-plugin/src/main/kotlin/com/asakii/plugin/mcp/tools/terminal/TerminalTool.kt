@@ -1,5 +1,9 @@
 package com.asakii.plugin.mcp.tools.terminal
 
+import com.asakii.plugin.mcp.getString
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -21,17 +25,16 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
      *   - session_name: String? - 新会话名称
      *   - shell_type: String? - Shell 类型（如 git-bash, powershell），不传则使用配置的默认终端
      */
-    fun execute(arguments: Map<String, Any>): Map<String, Any> {
-        val command = arguments["command"] as? String
-            ?: return mapOf(
-                "success" to false,
-                "error" to "Missing required parameter: command"
-            )
+    fun execute(arguments: JsonObject): JsonObject {
+        val command = arguments.getString("command")
+            ?: return buildJsonObject {
+                put("success", false)
+                put("error", "Missing required parameter: command")
+            }
 
-        val sessionId = arguments["session_id"] as? String
-        val sessionName = arguments["session_name"] as? String
-        // shell_type 为 null 时，createSession 会使用配置的默认终端
-        val shellName = arguments["shell_type"] as? String
+        val sessionId = arguments.getString("session_id")
+        val sessionName = arguments.getString("session_name")
+        val shellName = arguments.getString("shell_type")
 
         logger.info { "Executing command: $command (session: $sessionId, shellName: $shellName)" }
 
@@ -48,28 +51,28 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
             } else {
                 // 使用默认终端
                 sessionManager.getOrCreateDefaultTerminal(shellName)
-            } ?: return mapOf(
-                "success" to false,
-                "error" to "Failed to create terminal session"
-            )
+            } ?: return buildJsonObject {
+                put("success", false)
+                put("error", "Failed to create terminal session")
+            }
         }
 
         // 执行命令（始终立即返回，不等待）
         val result = sessionManager.executeCommandAsync(session.id, command)
 
         return if (result.success) {
-            mapOf(
-                "success" to true,
-                "session_id" to result.sessionId,
-                "session_name" to (result.sessionName ?: session.name),
-                "message" to "Command sent. Use TerminalRead to check output."
-            )
+            buildJsonObject {
+                put("success", true)
+                put("session_id", result.sessionId)
+                put("session_name", result.sessionName ?: session.name)
+                put("message", "Command sent. Use TerminalRead to check output.")
+            }
         } else {
-            mapOf(
-                "success" to false,
-                "session_id" to result.sessionId,
-                "error" to (result.error ?: "Unknown error")
-            )
+            buildJsonObject {
+                put("success", false)
+                put("session_id", result.sessionId)
+                put("error", result.error ?: "Unknown error")
+            }
         }
     }
 }

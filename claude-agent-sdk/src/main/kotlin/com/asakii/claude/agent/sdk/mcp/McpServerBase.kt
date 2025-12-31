@@ -106,7 +106,7 @@ abstract class McpServerBase : McpServer {
             description = description,
             parameterSchema = parameterSchema,
             handler = { arguments ->
-                invokeAnnotatedFunction(function, arguments)
+                wrapToolResult(invokeAnnotatedFunction(function, arguments))
             }
         )
         
@@ -142,7 +142,8 @@ abstract class McpServerBase : McpServer {
             Int::class, Long::class, Float::class, Double::class -> ParameterType.NUMBER
             Boolean::class -> ParameterType.BOOLEAN
             List::class, Array::class -> ParameterType.ARRAY
-            Map::class -> ParameterType.OBJECT
+            Map::class, JsonObject::class, JsonElement::class -> ParameterType.OBJECT
+            JsonArray::class -> ParameterType.ARRAY
             else -> ParameterType.STRING // 默认为字符串
         }
     }
@@ -150,7 +151,7 @@ abstract class McpServerBase : McpServer {
     /**
      * 调用带注解的函数
      */
-    private suspend fun invokeAnnotatedFunction(function: KFunction<*>, arguments: Map<String, Any>): Any {
+    private suspend fun invokeAnnotatedFunction(function: KFunction<*>, arguments: JsonObject): Any {
         val parameters = function.parameters
         val args = mutableListOf<Any?>()
         
@@ -182,45 +183,133 @@ abstract class McpServerBase : McpServer {
     /**
      * 参数值类型转换（简化版本）
      */
-    private fun convertParameterValue(value: Any?, targetType: KType): Any? {
-        if (value == null) return null
-        
+    private fun convertParameterValue(value: JsonElement?, targetType: KType): Any? {
+        if (value == null || value is JsonNull) return null
+
         return try {
             when (targetType.classifier) {
-                String::class -> value.toString()
-                Int::class -> when (value) {
-                    is Number -> value.toInt()
-                    is String -> value.toInt()
-                    else -> throw IllegalArgumentException("无法将 ${value::class.simpleName} 转换为 Int")
-                }
-                Long::class -> when (value) {
-                    is Number -> value.toLong()
-                    is String -> value.toLong()
-                    else -> throw IllegalArgumentException("无法将 ${value::class.simpleName} 转换为 Long")
-                }
-                Float::class -> when (value) {
-                    is Number -> value.toFloat()
-                    is String -> value.toFloat()
-                    else -> throw IllegalArgumentException("无法将 ${value::class.simpleName} 转换为 Float")
-                }
-                Double::class -> when (value) {
-                    is Number -> value.toDouble()
-                    is String -> value.toDouble()
-                    else -> throw IllegalArgumentException("无法将 ${value::class.simpleName} 转换为 Double")
-                }
-                Boolean::class -> when (value) {
-                    is Boolean -> value
-                    is String -> value.toBoolean()
-                    is Number -> value.toDouble() != 0.0
-                    else -> throw IllegalArgumentException("无法将 ${value::class.simpleName} 转换为 Boolean")
-                }
+                String::class -> value.toTextValue()
+                Int::class -> value.toIntValue()
+                Long::class -> value.toLongValue()
+                Float::class -> value.toFloatValue()
+                Double::class -> value.toDoubleValue()
+                Boolean::class -> value.toBooleanValue()
+                JsonElement::class -> value
+                JsonObject::class -> value as? JsonObject
+                    ?: throw IllegalArgumentException("Expected object for ${targetType.classifier}")
+                JsonArray::class -> value as? JsonArray
+                    ?: throw IllegalArgumentException("Expected array for ${targetType.classifier}")
+                List::class -> convertToList(value, targetType)
+                Array::class -> convertToArray(value, targetType)
                 else -> value
             }
         } catch (e: NumberFormatException) {
-            throw IllegalArgumentException("参数值 '$value' 无法转换为目标类型 ${targetType.classifier}", e)
+            throw IllegalArgumentException("Parameter value '$value' cannot be converted to ${targetType.classifier}", e)
         }
     }
-    
+
+    private fun convertToList(value: JsonElement, targetType: KType): List<Any?> {
+        val array = value as? JsonArray
+            ?: throw IllegalArgumentException("Expected array for $targetType")
+        val elementType = targetType.arguments.firstOrNull()?.type
+        return if (elementType == null) {
+            array.map { it }
+        } else {
+            array.map { convertParameterValue(it, elementType) }
+        }
+    }
+
+    private fun convertToArray(value: JsonElement, targetType: KType): Array<Any?> {
+        return convertToList(value, targetType).toTypedArray()
+    }
+
+    private fun requirePrimitive(value: JsonElement): JsonPrimitive {
+        return value as? JsonPrimitive
+            ?: throw IllegalArgumentException("Expected primitive but got ${value::class.simpleName}")
+    }
+
+    private fun JsonElement.toTextValue(): String {
+        return when (this) {
+            is JsonPrimitive -> content
+            else -> toString()
+        }
+    }
+
+    private fun JsonElement.toIntValue(): Int {
+        val primitive = requirePrimitive(this)
+        return primitive.intOrNull
+            ?: primitive.longOrNull?.toInt()
+            ?: primitive.doubleOrNull?.toInt()
+            ?: primitive.content.toInt()
+    }
+
+    private fun JsonElement.toLongValue(): Long {
+        val primitive = requirePrimitive(this)
+        return primitive.longOrNull
+            ?: primitive.intOrNull?.toLong()
+            ?: primitive.doubleOrNull?.toLong()
+            ?: primitive.content.toLong()
+    }
+
+    private fun JsonElement.toFloatValue(): Float {
+        val primitive = requirePrimitive(this)
+        return primitive.floatOrNull
+            ?: primitive.doubleOrNull?.toFloat()
+            ?: primitive.intOrNull?.toFloat()
+            ?: primitive.longOrNull?.toFloat()
+            ?: primitive.content.toFloat()
+    }
+
+    private fun JsonElement.toDoubleValue(): Double {
+        val primitive = requirePrimitive(this)
+        return primitive.doubleOrNull
+            ?: primitive.intOrNull?.toDouble()
+            ?: primitive.longOrNull?.toDouble()
+            ?: primitive.content.toDouble()
+    }
+
+    private fun JsonElement.toBooleanValue(): Boolean {
+        val primitive = requirePrimitive(this)
+        return primitive.booleanOrNull
+            ?: primitive.intOrNull?.let { it != 0 }
+            ?: primitive.longOrNull?.let { it != 0L }
+            ?: primitive.doubleOrNull?.let { it != 0.0 }
+            ?: primitive.content.toBoolean()
+    }
+
+    protected fun wrapToolResult(result: Any?): ToolResult {
+        return when (result) {
+            is ToolResult -> result
+            null, Unit -> ToolResult.success("Operation completed")
+            is String -> ToolResult.success(result)
+            is JsonElement -> ToolResult.success(result)
+            else -> ToolResult.success(toJsonElement(result))
+        }
+    }
+
+    private fun toJsonElement(value: Any?): JsonElement {
+        return when (value) {
+            null -> JsonNull
+            is JsonElement -> value
+            is String -> JsonPrimitive(value)
+            is Number -> JsonPrimitive(value)
+            is Boolean -> JsonPrimitive(value)
+            is Map<*, *> -> buildJsonObject {
+                value.forEach { (k, v) ->
+                    put(k?.toString().orEmpty(), toJsonElement(v))
+                }
+            }
+            is Iterable<*> -> buildJsonArray {
+                value.forEach { add(toJsonElement(it)) }
+            }
+            is Array<*> -> buildJsonArray {
+                value.forEach { add(toJsonElement(it)) }
+            }
+            else -> JsonPrimitive(value.toString())
+        }
+    }
+
+
     /**
      * 手动注册工具（用于不使用注解的场景）
      */
@@ -228,7 +317,7 @@ abstract class McpServerBase : McpServer {
         name: String,
         description: String,
         parameterSchema: Map<String, ParameterInfo>? = null,
-        handler: suspend (Map<String, Any>) -> Any
+        handler: suspend (JsonObject) -> ToolResult
     ) {
         val toolHandler = ToolHandler(
             name = name,
@@ -248,7 +337,7 @@ abstract class McpServerBase : McpServer {
         name: String,
         description: String,
         parameterTypes: Map<String, ParameterType>? = null,
-        handler: suspend (Map<String, Any>) -> Any
+        handler: suspend (JsonObject) -> ToolResult
     ) {
         val parameterSchema = parameterTypes?.mapValues { (_, type) ->
             ParameterInfo(type = type)
@@ -290,8 +379,8 @@ abstract class McpServerBase : McpServer {
     protected fun registerToolWithSchema(
         name: String,
         description: String,
-        inputSchema: Map<String, Any>,
-        handler: suspend (Map<String, Any>) -> Any
+        inputSchema: JsonObject,
+        handler: suspend (JsonObject) -> ToolResult
     ) {
         val toolHandler = ToolHandlerWithSchema(
             name = name,
@@ -319,11 +408,11 @@ abstract class McpServerBase : McpServer {
      */
     protected fun registerToolFromSchema(
         name: String,
-        inputSchema: Map<String, Any>,
-        handler: suspend (Map<String, Any>) -> Any
+        inputSchema: JsonObject,
+        handler: suspend (JsonObject) -> ToolResult
     ) {
         // 从 schema 中提取 description
-        val description = inputSchema["description"] as? String ?: ""
+        val description = inputSchema["description"]?.jsonPrimitive?.contentOrNull ?: ""
 
         val toolHandler = ToolHandlerWithSchema(
             name = name,
@@ -350,7 +439,7 @@ abstract class McpServerBase : McpServer {
     /**
      * 实现 McpServer.callTool()
      */
-    override suspend fun callTool(toolName: String, arguments: Map<String, Any>): ToolResult {
+    override suspend fun callTool(toolName: String, arguments: JsonObject): ToolResult {
         ensureInitialized()
         
         val handler = registeredTools[toolName]
@@ -358,14 +447,7 @@ abstract class McpServerBase : McpServer {
         
         return try {
             logger.info("🎯 调用工具: $toolName, 参数: $arguments")
-            val result = handler.handler(arguments)
-            
-            when (result) {
-                is ToolResult -> result
-                Unit -> ToolResult.success("操作完成")
-                is String -> ToolResult.success(result)  // 显式匹配 String 以调用正确的重载
-                else -> ToolResult.success(result)
-            }
+            handler.handler(arguments)
         } catch (e: Exception) {
             logger.error("❌ 工具 '$toolName' 执行失败: ${e.message}")
             ToolResult.error("工具执行失败: ${e.message}")
@@ -375,14 +457,16 @@ abstract class McpServerBase : McpServer {
     /**
      * 获取工具统计信息
      */
-    fun getToolsInfo(): Map<String, Any> {
-        return mapOf(
-            "server_name" to name,
-            "server_version" to version,
-            "description" to description,
-            "tools_count" to registeredTools.size,
-            "tools" to registeredTools.keys.toList(),
-            "initialized" to initialized
-        )
+    fun getToolsInfo(): JsonObject {
+        return buildJsonObject {
+            put("server_name", name)
+            put("server_version", version)
+            put("description", description)
+            put("tools_count", registeredTools.size)
+            putJsonArray("tools") {
+                registeredTools.keys.forEach { add(it) }
+            }
+            put("initialized", initialized)
+        }
     }
 }

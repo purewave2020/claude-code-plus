@@ -271,8 +271,13 @@ const isCompacting = computed(() => sessionStore.currentTab?.isCompacting.value 
 const _toolStats = computed(() => calculateToolStats(displayItems.value))
 
 const historySessions = computed(() => {
+  const currentBackendType = sessionStore.currentTab?.backendType.value
+  const filteredTabs = sessionStore.activeTabs.filter(tab =>
+    !currentBackendType || tab.backendType.value === currentBackendType
+  )
+
   // 活跃 Tab 列表
-  const activeTabs = sessionStore.activeTabs.map(tab => ({
+  const activeTabs = filteredTabs.map(tab => ({
     id: tab.tabId,
     name: tab.name.value,
     timestamp: tab.lastActiveAt.value,
@@ -285,12 +290,12 @@ const historySessions = computed(() => {
   // 历史会话列表（排除已激活的）
   const activeTabIds = new Set(activeTabs.map(t => t.id))
   const activeSessionIds = new Set(
-    sessionStore.activeTabs
+    filteredTabs
       .map(t => t.sessionId.value)
       .filter((id): id is string => id !== null)
   )
   const activeResumeIds = new Set(
-    sessionStore.activeTabs
+    filteredTabs
       .map((t: any) => t.resumeFromSessionId?.value ?? t.resumeFromSessionId ?? null)
       .filter((id): id is string => !!id)
   )
@@ -649,7 +654,12 @@ async function loadHistorySessions(reset = false) {
   else historyLoadingMore.value = true
 
   try {
-    const sessions = await aiAgentService.getHistorySessions(HISTORY_PAGE_SIZE, historyOffset.value)
+    const provider = sessionStore.currentTab?.backendType.value
+    const sessions = await aiAgentService.getHistorySessions(
+      HISTORY_PAGE_SIZE,
+      historyOffset.value,
+      provider
+    )
     const merged = [...historySessionList.value, ...sessions]
     const dedup = Array.from(new Map(merged.map(s => [s.sessionId, s])).values())
     historySessionList.value = dedup.sort((a, b) => b.timestamp - a.timestamp)
@@ -730,7 +740,8 @@ async function handleDeleteSession(sessionId: string) {
   console.log('🗑️ Deleting session:', sessionId)
 
   try {
-    const result = await aiAgentService.deleteHistorySession(sessionId)
+    const provider = sessionStore.currentTab?.backendType.value
+    const result = await aiAgentService.deleteHistorySession(sessionId, provider)
     if (result.success) {
       // 从历史会话列表中移除
       historySessionList.value = historySessionList.value.filter(h => h.sessionId !== sessionId)

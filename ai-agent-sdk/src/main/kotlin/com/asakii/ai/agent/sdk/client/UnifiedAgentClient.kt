@@ -127,6 +127,12 @@ interface UnifiedAgentClient {
         )
 
     /**
+     * Start OAuth login for a specific MCP server if supported.
+     * @return authorization URL when login is required, otherwise null
+     */
+    suspend fun startMcpOauthLogin(serverName: String): String? = null
+
+    /**
      * 获取指定 MCP 服务器的工具列表（仅 Claude 客户端支持）
      * @param serverName 服务器名称，null 表示获取所有工具
      * @return 工具列表，默认返回空列表

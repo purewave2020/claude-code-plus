@@ -22,6 +22,13 @@ function mapToolUse(block: ToolUseWithName): ContentBlock {
   }
 }
 
+function generateFallbackMessageId(role: 'user' | 'assistant'): string {
+  const randomSuffix = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID().substring(0, 8)
+    : Math.random().toString(16).slice(2, 10)
+  return `${role}-${Date.now()}-${randomSuffix}`
+}
+
 /**
  * 将 RpcContentBlock 转为前端统一的 ContentBlock
  */
@@ -90,13 +97,15 @@ export function mapRpcMessageToMessage(msg: RpcAssistantMessage | RpcUserMessage
   const isReplay = msg.type === 'user' ? msg.isReplay : undefined
 
   // 优先使用后端下发的消息 id，其次回退到历史记录的 uuid
-  const messageId = msg.id ?? msg.uuid ?? ''
+  const fallbackId = generateFallbackMessageId(msg.type)
+  const messageId = msg.id ?? msg.uuid ?? fallbackId
+  const resolvedMessageId = messageId.trim() ? messageId : fallbackId
 
   // 提取 parentToolUseId，用于标识子代理消息所属的父 Task
   const parentToolUseId = msg.parentToolUseId
 
   return {
-    id: messageId,
+    id: resolvedMessageId,
     uuid: msg.uuid,
     role: msg.type,
     timestamp: Date.now(),

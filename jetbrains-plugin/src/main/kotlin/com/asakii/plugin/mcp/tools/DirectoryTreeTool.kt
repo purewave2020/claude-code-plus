@@ -1,9 +1,13 @@
 package com.asakii.plugin.mcp.tools
 
 import com.asakii.claude.agent.sdk.mcp.ToolResult
+import com.asakii.plugin.mcp.getBoolean
+import com.asakii.plugin.mcp.getInt
+import com.asakii.plugin.mcp.getString
 import com.asakii.server.mcp.schema.ToolSchemaLoader
 import com.intellij.openapi.project.Project
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import java.io.File
 import java.nio.file.FileSystems
 import java.nio.file.PathMatcher
@@ -40,16 +44,16 @@ data class DirectoryTreeResult(
  */
 class DirectoryTreeTool(private val project: Project) {
 
-    fun getInputSchema(): Map<String, Any> = ToolSchemaLoader.getSchema("DirectoryTree")
+    fun getInputSchema(): JsonObject = ToolSchemaLoader.getSchema("DirectoryTree")
 
-    suspend fun execute(arguments: Map<String, Any>): Any {
-        val path = (arguments["path"] as? String)?.takeIf { it.isNotBlank() } ?: "."
-        val maxDepthArg = (arguments["maxDepth"] as? Number)?.toInt() ?: 3
+    suspend fun execute(arguments: JsonObject): Any {
+        val path = arguments.getString("path")?.takeIf { it.isNotBlank() } ?: "."
+        val maxDepthArg = arguments.getInt("maxDepth") ?: 3
         val maxDepth = if (maxDepthArg <= 0) Int.MAX_VALUE else maxDepthArg  // -1 or 0 means unlimited
-        val filesOnly = arguments["filesOnly"] as? Boolean ?: false
-        val includeHidden = arguments["includeHidden"] as? Boolean ?: false
-        val pattern = arguments["pattern"] as? String
-        val maxEntries = ((arguments["maxEntries"] as? Number)?.toInt() ?: 100).coerceAtLeast(1)
+        val filesOnly = arguments.getBoolean("filesOnly") ?: false
+        val includeHidden = arguments.getBoolean("includeHidden") ?: false
+        val pattern = arguments.getString("pattern")
+        val maxEntries = (arguments.getInt("maxEntries") ?: 100).coerceAtLeast(1)
 
         val projectPath = project.basePath
             ?: return ToolResult.error("Cannot get project path")

@@ -332,7 +332,7 @@ export function useSessionMessages(
 
     const existingStreaming = findStreamingAssistantMessage()
     const previousId = existingStreaming?.id
-    const messageId = event.message?.id || previousId || `assistant-${Date.now()}`
+    const messageId = event.message?.id || previousId || generateMessageId('assistant')
 
     log.debug('[message_start]', {
       messageId,
@@ -363,8 +363,10 @@ export function useSessionMessages(
       const targetMessage = ensureStreamingAssistantMessage()
       // 将占位消息 id 更新为后端真实 id
       if (targetMessage.id !== messageId) {
+        const previousMessageId = targetMessage.id
         stats.setStreamingMessageId(messageId)
         targetMessage.id = messageId
+        renameDisplayItemsForMessage(previousMessageId, messageId)
       }
       targetMessage.isStreaming = true
 
@@ -1050,7 +1052,7 @@ export function useSessionMessages(
 
     // 创建用户消息（UI 展示用 uiContent）
     const userMessage: Message = {
-      id: `user-${Date.now()}`,
+      id: generateMessageId('user'),
       role: 'user',
       timestamp: Date.now(),
       content: uiContent
@@ -1086,7 +1088,7 @@ export function useSessionMessages(
     // 发送 SDK 用：用户内容在前，contexts 在后（符合 Claude Code CLI 格式）
     const mergedContent = [...message.contents, ...contextBlocks, ...ideContextBlocks]
 
-    const id = `user-${Date.now()}`
+    const id = generateMessageId('user')
     log.info(`[useSessionMessages] 消息加入队列（不添加到 UI）: ${id}`)
 
     messageQueue.value.push({
@@ -1121,7 +1123,7 @@ export function useSessionMessages(
     // 发送 SDK 用：用户内容在前，contexts 在后（符合 Claude Code CLI 格式）
     const mergedContent = [...message.contents, ...contextBlocks, ...ideContextBlocks]
 
-    const id = `user-${Date.now()}`
+    const id = generateMessageId('user')
     log.info(`[useSessionMessages] 消息插入队列最前面: ${id}`)
 
     messageQueue.value.unshift({
@@ -1152,7 +1154,7 @@ export function useSessionMessages(
    * @returns streamingMessageId 用于追踪的 assistant 消息 ID
    */
   function startGenerating(userMessageId: string): string {
-    const streamingMessageId = `assistant-${Date.now()}`
+    const streamingMessageId = generateMessageId('assistant')
     stats.startRequestTracking(userMessageId)
     stats.setStreamingMessageId(streamingMessageId)
 
@@ -1265,7 +1267,7 @@ export function useSessionMessages(
     if (existing) return existing
 
     const tracker = stats.getCurrentTracker()
-    const placeholderId = tracker?.currentStreamingMessageId || `assistant-${Date.now()}`
+    const placeholderId = tracker?.currentStreamingMessageId || generateMessageId('assistant')
     const newMessage: Message = {
       id: placeholderId,
       role: 'assistant',
@@ -1303,6 +1305,31 @@ export function useSessionMessages(
         existing.signature = existing.signature ?? block.signature
       }
     })
+  }
+
+  function renameDisplayItemsForMessage(oldMessageId: string, newMessageId: string): void {
+    if (!oldMessageId || oldMessageId === newMessageId) return
+    const oldPrefix = `${oldMessageId}-`
+    const newPrefix = `${newMessageId}-`
+    let updated = false
+
+    for (const item of displayItems) {
+      if (!item?.id) continue
+      if (item.id === oldMessageId) {
+        item.id = newMessageId
+        updated = true
+        continue
+      }
+      if (item.id.startsWith(oldPrefix)) {
+        item.id = `${newPrefix}${item.id.slice(oldPrefix.length)}`
+        updated = true
+      }
+    }
+
+    if (updated) {
+      displayStore.reindexKeys()
+      triggerDisplayItemsUpdate()
+    }
   }
 
   /**
@@ -1399,7 +1426,10 @@ export function useSessionMessages(
    * 生成消息 ID
    */
   function generateMessageId(role: string): string {
-    return `${role}-${Date.now()}-${crypto.randomUUID().substring(0, 8)}`
+    const randomSuffix = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().substring(0, 8)
+      : Math.random().toString(16).slice(2, 10)
+    return `${role}-${Date.now()}-${randomSuffix}`
   }
 
   /**

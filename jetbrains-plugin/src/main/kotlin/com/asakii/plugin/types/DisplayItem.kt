@@ -1,7 +1,13 @@
 package com.asakii.plugin.types
 
 import com.asakii.claude.agent.sdk.types.ImageBlock
-import kotlinx.serialization.json.JsonElement
+import com.asakii.plugin.mcp.getBoolean
+import com.asakii.plugin.mcp.getInt
+import com.asakii.plugin.mcp.getString
+import com.asakii.plugin.mcp.getStringList
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * 前端显示层类型定义
@@ -162,7 +168,7 @@ sealed interface ToolCallItem : DisplayItem {
     val status: ToolCallStatus
     val startTime: Long
     val endTime: Long?
-    val input: Map<String, Any?>
+    val input: JsonObject
     val result: ToolResult?
 }
 
@@ -175,17 +181,21 @@ data class ReadToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.READ
     
     // 专用字段作为计算属性
-    val filePath: String? get() = input["file_path"] as? String ?: input["path"] as? String
-    val offset: Int? get() = input["offset"] as? Int
-    val limit: Int? get() = input["limit"] as? Int
-    val viewRange: Pair<Int, Int>? get() = (input["view_range"] as? List<*>)?.let {
-        if (it.size >= 2) Pair((it[0] as Number).toInt(), (it[1] as Number).toInt()) else null
+    val filePath: String? get() = input.getString("file_path") ?: input.getString("path")
+    val offset: Int? get() = input.getInt("offset")
+    val limit: Int? get() = input.getInt("limit")
+    val viewRange: Pair<Int, Int>? get() {
+        val array = input["view_range"] as? JsonArray ?: return null
+        if (array.size < 2) return null
+        val start = array.getIntAt(0)
+        val end = array.getIntAt(1)
+        return if (start != null && end != null) Pair(start, end) else null
     }
 }
 
@@ -198,13 +208,13 @@ data class WriteToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.WRITE
     
-    val filePath: String? get() = input["file_path"] as? String ?: input["path"] as? String
-    val content: String? get() = input["content"] as? String
+    val filePath: String? get() = input.getString("file_path") ?: input.getString("path")
+    val content: String? get() = input.getString("content")
 }
 
 /**
@@ -216,15 +226,15 @@ data class EditToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.EDIT
     
-    val filePath: String get() = input["file_path"] as? String ?: ""
-    val oldString: String get() = input["old_string"] as? String ?: ""
-    val newString: String get() = input["new_string"] as? String ?: ""
-    val replaceAll: Boolean get() = input["replace_all"] as? Boolean ?: false
+    val filePath: String get() = input.getString("file_path") ?: ""
+    val oldString: String get() = input.getString("old_string") ?: ""
+    val newString: String get() = input.getString("new_string") ?: ""
+    val replaceAll: Boolean get() = input.getBoolean("replace_all") ?: false
 }
 
 /**
@@ -245,20 +255,19 @@ data class MultiEditToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.MULTI_EDIT
     
-    val filePath: String get() = input["file_path"] as? String ?: ""
-    val edits: List<EditOperation> get() = (input["edits"] as? List<*>)?.mapNotNull { edit ->
-        (edit as? Map<*, *>)?.let {
-            EditOperation(
-                oldString = it["old_string"] as? String ?: "",
-                newString = it["new_string"] as? String ?: "",
-                replaceAll = it["replace_all"] as? Boolean ?: false
-            )
-        }
+    val filePath: String get() = input.getString("file_path") ?: ""
+    val edits: List<EditOperation> get() = (input["edits"] as? JsonArray)?.mapNotNull { edit ->
+        val obj = edit as? JsonObject ?: return@mapNotNull null
+        EditOperation(
+            oldString = obj.getString("old_string") ?: "",
+            newString = obj.getString("new_string") ?: "",
+            replaceAll = obj.getBoolean("replace_all") ?: false
+        )
     } ?: emptyList()
 }
 
@@ -280,19 +289,18 @@ data class TodoWriteToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.TODO_WRITE
     
-    val todos: List<TodoItem> get() = (input["todos"] as? List<*>)?.mapNotNull { todo ->
-        (todo as? Map<*, *>)?.let {
-            TodoItem(
-                content = it["content"] as? String ?: "",
-                status = it["status"] as? String ?: "pending",
-                activeForm = it["activeForm"] as? String ?: ""
-            )
-        }
+    val todos: List<TodoItem> get() = (input["todos"] as? JsonArray)?.mapNotNull { todo ->
+        val obj = todo as? JsonObject ?: return@mapNotNull null
+        TodoItem(
+            content = obj.getString("content") ?: "",
+            status = obj.getString("status") ?: "pending",
+            activeForm = obj.getString("activeForm") ?: ""
+        )
     } ?: emptyList()
 }
 
@@ -305,15 +313,15 @@ data class BashToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.BASH
     
-    val command: String get() = input["command"] as? String ?: ""
-    val description: String? get() = input["description"] as? String
-    val cwd: String? get() = input["cwd"] as? String
-    val timeout: Int? get() = input["timeout"] as? Int
+    val command: String get() = input.getString("command") ?: ""
+    val description: String? get() = input.getString("description")
+    val cwd: String? get() = input.getString("cwd")
+    val timeout: Int? get() = input.getInt("timeout")
 }
 
 /**
@@ -325,16 +333,16 @@ data class GrepToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.GREP
     
-    val pattern: String get() = input["pattern"] as? String ?: ""
-    val path: String? get() = input["path"] as? String
-    val glob: String? get() = input["glob"] as? String
-    val type: String? get() = input["type"] as? String
-    val outputMode: String? get() = input["output_mode"] as? String
+    val pattern: String get() = input.getString("pattern") ?: ""
+    val path: String? get() = input.getString("path")
+    val glob: String? get() = input.getString("glob")
+    val type: String? get() = input.getString("type")
+    val outputMode: String? get() = input.getString("output_mode")
 }
 
 /**
@@ -346,13 +354,13 @@ data class GlobToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.GLOB
     
-    val pattern: String get() = input["pattern"] as? String ?: ""
-    val path: String? get() = input["path"] as? String
+    val pattern: String get() = input.getString("pattern") ?: ""
+    val path: String? get() = input.getString("path")
 }
 
 /**
@@ -364,14 +372,14 @@ data class WebSearchToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.WEB_SEARCH
     
-    val query: String get() = input["query"] as? String ?: ""
-    val allowedDomains: List<String> get() = (input["allowed_domains"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-    val blockedDomains: List<String> get() = (input["blocked_domains"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+    val query: String get() = input.getString("query") ?: ""
+    val allowedDomains: List<String> get() = input.getStringList("allowed_domains") ?: emptyList()
+    val blockedDomains: List<String> get() = input.getStringList("blocked_domains") ?: emptyList()
 }
 
 /**
@@ -383,13 +391,13 @@ data class WebFetchToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.WEB_FETCH
     
-    val url: String get() = input["url"] as? String ?: ""
-    val prompt: String get() = input["prompt"] as? String ?: ""
+    val url: String get() = input.getString("url") ?: ""
+    val prompt: String get() = input.getString("prompt") ?: ""
 }
 
 /**
@@ -401,7 +409,7 @@ data class TaskToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.TASK
@@ -416,7 +424,7 @@ data class NotebookEditToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.NOTEBOOK_EDIT
@@ -431,7 +439,7 @@ data class BashOutputToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.BASH_OUTPUT
@@ -446,7 +454,7 @@ data class KillShellToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.KILL_SHELL
@@ -461,7 +469,7 @@ data class ExitPlanModeToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.EXIT_PLAN_MODE
@@ -476,7 +484,7 @@ data class AskUserQuestionToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.ASK_USER_QUESTION
@@ -491,7 +499,7 @@ data class SkillToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.SKILL
@@ -506,7 +514,7 @@ data class SlashCommandToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.SLASH_COMMAND
@@ -521,7 +529,7 @@ data class ListMcpResourcesToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.LIST_MCP_RESOURCES
@@ -536,7 +544,7 @@ data class ReadMcpResourceToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem {
     override val toolType: String = ToolConstants.READ_MCP_RESOURCE
@@ -552,7 +560,12 @@ data class GenericToolCall(
     override val status: ToolCallStatus,
     override val startTime: Long,
     override val endTime: Long? = null,
-    override val input: Map<String, Any?>,
+    override val input: JsonObject,
     override val result: ToolResult? = null
 ) : ToolCallItem
+
+private fun JsonArray.getIntAt(index: Int): Int? {
+    val primitive = getOrNull(index) as? JsonPrimitive ?: return null
+    return primitive.content.toIntOrNull() ?: primitive.content.toDoubleOrNull()?.toInt()
+}
 

@@ -12,7 +12,7 @@ import kotlinx.serialization.json.*
 fun simpleTool(
     name: String,
     description: String = "",
-    handler: suspend (Map<String, Any>) -> Any
+    handler: suspend (JsonObject) -> ToolResult
 ): McpServer = object : McpServer {
     override val name: String = name
     override val version: String = "1.0.0" 
@@ -29,21 +29,15 @@ fun simpleTool(
         return listOf(tool.toDefinition())
     }
     
-    override suspend fun callTool(toolName: String, arguments: Map<String, Any>): ToolResult {
+    override suspend fun callTool(toolName: String, arguments: JsonObject): ToolResult {
         if (toolName != name) {
             return ToolResult.error("工具 '$toolName' 未找到")
         }
         
         return try {
-            val result = tool.handler(arguments)
-            when (result) {
-                is ToolResult -> result
-                Unit -> ToolResult.success("操作完成")
-                is String -> ToolResult.success(result)  // 显式匹配 String 以调用正确的重载
-                else -> ToolResult.success(result)
-            }
+            tool.handler(arguments)
         } catch (e: Exception) {
-            ToolResult.error("工具执行失败: ${e.message}")
+            ToolResult.error("Tool execution failed: ${e.message}")
         }
     }
 }

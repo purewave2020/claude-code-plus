@@ -22,8 +22,8 @@ import com.asakii.claude.agent.sdk.types.*
 /**
  * 添加MCP服务器实例
  */
-fun ClaudeAgentOptions.addMcpServer(name: String, server: Any): ClaudeAgentOptions {
-    val currentMcpServers = this.mcpServers?.toMutableMap() ?: mutableMapOf()
+fun ClaudeAgentOptions.addMcpServer(name: String, server: McpServerSpec): ClaudeAgentOptions {
+    val currentMcpServers = this.mcpServers.toMutableMap()
     currentMcpServers[name] = server
     
     return this.copy(mcpServers = currentMcpServers)
