@@ -39,6 +39,7 @@ data class ThreadOptions @JvmOverloads constructor(
     val networkAccessEnabled: Boolean? = null,
     val webSearchEnabled: Boolean? = null,
     val approvalPolicy: ApprovalMode? = null,
+    val developerInstructions: String? = null,
     val additionalDirectories: List<String> = emptyList(),
 )
 

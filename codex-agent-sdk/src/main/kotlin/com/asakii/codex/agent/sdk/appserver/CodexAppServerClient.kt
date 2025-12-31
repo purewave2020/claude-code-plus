@@ -1,22 +1,26 @@
-package com.asakii.codex.agent.sdk.appserver
+﻿package com.asakii.codex.agent.sdk.appserver
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.Closeable
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
+import java.util.logging.Level
+import java.util.logging.Logger
 
 /**
- * Codex App-Server 高层 API 客户端
+ * Codex App-Server 楂樺眰 API 瀹㈡埛绔?
  *
- * 提供与 codex app-server 交互的高层 API:
- * - 初始化握手
- * - 线程管理 (创建、恢复、列表)
- * - 回合管理 (开始、中断)
- * - 事件流处理
- * - 审批流程
+ * 鎻愪緵涓?codex app-server 浜や簰鐨勯珮灞?API:
+ * - 鍒濆鍖栨彙鎵?
+ * - 绾跨▼绠＄悊 (鍒涘缓銆佹仮澶嶃€佸垪琛?
+ * - 鍥炲悎绠＄悊 (寮€濮嬨€佷腑鏂?
+ * - 浜嬩欢娴佸鐞?
+ * - 瀹℃壒娴佺▼
  *
- * 使用示例:
+ * 浣跨敤绀轰緥:
  * ```kotlin
  * val client = CodexAppServerClient.create()
  * client.initialize()
@@ -39,9 +43,12 @@ class CodexAppServerClient private constructor(
     private val process: CodexAppServerProcess,
     private val scope: CoroutineScope
 ) : Closeable {
+    private val logger = Logger.getLogger(CodexAppServerClient::class.java.name)
 
     private val rpc = process.client
     private var initialized = false
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+    private val itemCache = ConcurrentHashMap<String, ThreadItem>()
 
     private val _events = MutableSharedFlow<AppServerEvent>(extraBufferCapacity = 100)
     val events: SharedFlow<AppServerEvent> = _events.asSharedFlow()
@@ -54,14 +61,14 @@ class CodexAppServerClient private constructor(
 
     private fun startEventProcessing() {
         eventProcessingJob = scope.launch {
-            // 处理通知事件
+            // 澶勭悊閫氱煡浜嬩欢
             launch {
                 rpc.notifications.collect { notification ->
                     processNotification(notification)
                 }
             }
 
-            // 处理服务器请求 (审批)
+            // 澶勭悊鏈嶅姟鍣ㄨ姹?(瀹℃壒)
             launch {
                 rpc.serverRequests.collect { request ->
                     processServerRequest(request)
@@ -71,143 +78,109 @@ class CodexAppServerClient private constructor(
     }
 
     private suspend fun processNotification(notification: JsonRpcNotification) {
-        val event = when (notification.method) {
-            "thread/started" -> {
-                notification.params?.let {
-                    AppServerEvent.ThreadStarted(
-                        kotlinx.serialization.json.Json.decodeFromJsonElement(
-                            ThreadInfo.serializer(),
-                            it.jsonObject["thread"]!!
+        val event = try {
+            when (notification.method) {
+                "thread/started" -> decodeParams<ThreadStartedNotification>(notification.params)
+                    ?.let { AppServerEvent.ThreadStarted(it.thread) }
+                "turn/started" -> decodeParams<TurnStartedNotification>(notification.params)
+                    ?.let { AppServerEvent.TurnStarted(it.threadId, it.turn) }
+                "turn/completed" -> decodeParams<TurnCompletedNotification>(notification.params)
+                    ?.let { AppServerEvent.TurnCompleted(it.threadId, it.turn) }
+                "item/started" -> decodeParams<ItemStartedNotification>(notification.params)
+                    ?.let {
+                        itemCache[it.item.id] = it.item
+                        AppServerEvent.ItemStarted(it.threadId, it.turnId, it.item)
+                    }
+                "item/completed" -> decodeParams<ItemCompletedNotification>(notification.params)
+                    ?.let {
+                        itemCache[it.item.id] = it.item
+                        AppServerEvent.ItemCompleted(it.threadId, it.turnId, it.item)
+                    }
+                "item/agentMessage/delta" -> decodeParams<AgentMessageDeltaNotification>(notification.params)
+                    ?.let { AppServerEvent.AgentMessageDelta(it.threadId, it.turnId, it.itemId, it.delta) }
+                "item/reasoning/summaryTextDelta" -> decodeParams<ReasoningSummaryTextDeltaNotification>(notification.params)
+                    ?.let {
+                        AppServerEvent.ReasoningDelta(
+                            it.threadId,
+                            it.turnId,
+                            it.itemId,
+                            it.delta
                         )
-                    )
-                }
-            }
-            "turn/started" -> {
-                notification.params?.let {
-                    AppServerEvent.TurnStarted(
-                        kotlinx.serialization.json.Json.decodeFromJsonElement(
-                            TurnInfo.serializer(),
-                            it.jsonObject["turn"]!!
+                    }
+                "item/reasoning/textDelta" -> decodeParams<ReasoningTextDeltaNotification>(notification.params)
+                    ?.let {
+                        AppServerEvent.ReasoningDelta(
+                            it.threadId,
+                            it.turnId,
+                            it.itemId,
+                            it.delta
                         )
-                    )
-                }
-            }
-            "turn/completed" -> {
-                notification.params?.let {
-                    AppServerEvent.TurnCompleted(
-                        kotlinx.serialization.json.Json.decodeFromJsonElement(
-                            TurnInfo.serializer(),
-                            it.jsonObject["turn"]!!
+                    }
+                "item/commandExecution/outputDelta" -> decodeParams<CommandExecutionOutputDeltaNotification>(notification.params)
+                    ?.let { AppServerEvent.CommandOutputDelta(it.threadId, it.turnId, it.itemId, it.delta) }
+                "thread/tokenUsage/updated" -> decodeParams<ThreadTokenUsageUpdatedNotification>(notification.params)
+                    ?.let { AppServerEvent.TokenUsageUpdated(it.threadId, it.turnId, it.tokenUsage) }
+                "error" -> decodeParams<ErrorNotification>(notification.params)
+                    ?.let {
+                        AppServerEvent.Error(
+                            threadId = it.threadId,
+                            turnId = it.turnId,
+                            message = it.error.message,
+                            willRetry = it.willRetry
                         )
-                    )
-                }
+                    }
+                else -> null
             }
-            "item/started" -> {
-                notification.params?.let {
-                    AppServerEvent.ItemStarted(
-                        kotlinx.serialization.json.Json.decodeFromJsonElement(
-                            ThreadItem.serializer(),
-                            it.jsonObject["item"]!!
-                        )
-                    )
-                }
+        } catch (e: Exception) {
+            logger.warning("Failed to parse notification ${notification.method}: ${e.message}")
+            if (logger.isLoggable(Level.FINE)) {
+                logger.fine("Notification params: ${notification.params}")
             }
-            "item/completed" -> {
-                notification.params?.let {
-                    AppServerEvent.ItemCompleted(
-                        kotlinx.serialization.json.Json.decodeFromJsonElement(
-                            ThreadItem.serializer(),
-                            it.jsonObject["item"]!!
-                        )
-                    )
-                }
-            }
-            "item/agentMessage/delta" -> {
-                notification.params?.let { params ->
-                    val obj = params.jsonObject
-                    AppServerEvent.AgentMessageDelta(
-                        itemId = obj["itemId"]?.jsonPrimitive?.content ?: "",
-                        delta = obj["delta"]?.jsonPrimitive?.content ?: ""
-                    )
-                }
-            }
-            "item/reasoning/summaryTextDelta" -> {
-                notification.params?.let { params ->
-                    val obj = params.jsonObject
-                    AppServerEvent.ReasoningDelta(
-                        itemId = obj["itemId"]?.jsonPrimitive?.content ?: "",
-                        summaryIndex = obj["summaryIndex"]?.jsonPrimitive?.int ?: 0,
-                        delta = obj["delta"]?.jsonPrimitive?.content ?: ""
-                    )
-                }
-            }
-            "item/commandExecution/outputDelta" -> {
-                notification.params?.let { params ->
-                    val obj = params.jsonObject
-                    AppServerEvent.CommandOutputDelta(
-                        itemId = obj["itemId"]?.jsonPrimitive?.content ?: "",
-                        delta = obj["delta"]?.jsonPrimitive?.content ?: ""
-                    )
-                }
-            }
-            "thread/tokenUsage/updated" -> {
-                notification.params?.let { params ->
-                    val obj = params.jsonObject
-                    AppServerEvent.TokenUsageUpdated(
-                        threadId = obj["threadId"]?.jsonPrimitive?.content ?: "",
-                        usage = kotlinx.serialization.json.Json.decodeFromJsonElement(
-                            TokenUsage.serializer(),
-                            obj["usage"]!!
-                        )
-                    )
-                }
-            }
-            "error" -> {
-                notification.params?.let { params ->
-                    val obj = params.jsonObject
-                    AppServerEvent.Error(
-                        message = obj["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content ?: "Unknown error"
-                    )
-                }
-            }
-            else -> null
+            null
         }
 
         event?.let { _events.emit(it) }
     }
 
+    private inline fun <reified T> decodeParams(params: JsonElement?): T? {
+        return params?.let { json.decodeFromJsonElement<T>(it) }
+    }
+
     private suspend fun processServerRequest(request: ServerRequest) {
         val event = when (request) {
             is ServerRequest.CommandApproval -> {
+                val cached = itemCache[request.params.itemId] as? ThreadItem.CommandExecution
                 AppServerEvent.CommandApprovalRequired(
                     requestId = request.requestId,
                     itemId = request.params.itemId,
                     threadId = request.params.threadId,
                     turnId = request.params.turnId,
-                    command = request.params.command,
-                    cwd = request.params.cwd,
+                    command = cached?.command,
+                    cwd = cached?.cwd,
                     reason = request.params.reason,
-                    risk = request.params.risk
+                    proposedExecpolicyAmendment = request.params.proposedExecpolicyAmendment
                 )
             }
             is ServerRequest.FileChangeApproval -> {
+                val cached = itemCache[request.params.itemId] as? ThreadItem.FileChange
                 AppServerEvent.FileChangeApprovalRequired(
                     requestId = request.requestId,
                     itemId = request.params.itemId,
                     threadId = request.params.threadId,
                     turnId = request.params.turnId,
-                    changes = request.params.changes,
-                    reason = request.params.reason
+                    changes = cached?.changes ?: emptyList(),
+                    reason = request.params.reason,
+                    grantRoot = request.params.grantRoot
                 )
             }
         }
         _events.emit(event)
     }
 
-    // ============== 初始化 ==============
+    // ============== 鍒濆鍖?==============
 
     /**
-     * 初始化连接 (必须首先调用)
+     * 鍒濆鍖栬繛鎺?(蹇呴』棣栧厛璋冪敤)
      */
     suspend fun initialize(
         clientName: String = "claude-code-plus",
@@ -233,16 +206,17 @@ class CodexAppServerClient private constructor(
         return result
     }
 
-    // ============== 线程管理 ==============
+    // ============== 绾跨▼绠＄悊 ==============
 
     /**
-     * 创建新线程
+     * 鍒涘缓鏂扮嚎绋?
      */
     suspend fun startThread(
         model: String? = null,
         cwd: String? = null,
         approvalPolicy: String? = null,
-        sandbox: String? = null
+        sandbox: String? = null,
+        developerInstructions: String? = null
     ): ThreadInfo {
         checkInitialized()
 
@@ -250,7 +224,8 @@ class CodexAppServerClient private constructor(
             model = model,
             cwd = cwd,
             approvalPolicy = approvalPolicy,
-            sandbox = sandbox
+            sandbox = sandbox,
+            developerInstructions = developerInstructions
         )
 
         val result: ThreadStartResult = rpc.request("thread/start", params)
@@ -258,7 +233,7 @@ class CodexAppServerClient private constructor(
     }
 
     /**
-     * 恢复已有线程
+     * 鎭㈠宸叉湁绾跨▼
      */
     suspend fun resumeThread(threadId: String): ThreadInfo {
         checkInitialized()
@@ -269,20 +244,17 @@ class CodexAppServerClient private constructor(
     }
 
     /**
-     * 归档线程
+     * 褰掓。绾跨▼
      */
     suspend fun archiveThread(threadId: String) {
         checkInitialized()
 
-        val params = buildMap<String, Any> {
-            put("threadId", threadId)
-        }
-
-        rpc.request<Unit>("thread/archive", params)
+        val params = ThreadArchiveParams(threadId = threadId)
+        rpc.requestUnit("thread/archive", params)
     }
 
     /**
-     * 列出所有线程
+     * 鍒楀嚭鎵€鏈夌嚎绋?
      */
     suspend fun listThreads(
         cursor: String? = null,
@@ -297,13 +269,70 @@ class CodexAppServerClient private constructor(
             modelProviders = modelProviders
         )
 
-        return rpc.request<ThreadListResult>("thread/list", params)
+        return rpc.request("thread/list", params)
     }
 
-    // ============== 回合管理 ==============
+    // ============== Models ==============
 
     /**
-     * 开始新回合 (发送用户消息)
+     * List available models.
+     */
+    suspend fun listModels(
+        cursor: String? = null,
+        limit: Int? = null
+    ): ModelListResponse {
+        checkInitialized()
+
+        val params = ModelListParams(
+            cursor = cursor,
+            limit = limit
+        )
+
+        return rpc.request("model/list", params)
+    }
+
+    // ============== MCP status ==============
+
+    /**
+     * List MCP server status.
+     */
+    suspend fun listMcpServerStatus(
+        cursor: String? = null,
+        limit: Int? = null
+    ): ListMcpServerStatusResponse {
+        checkInitialized()
+
+        val params = ListMcpServerStatusParams(
+            cursor = cursor,
+            limit = limit
+        )
+
+        return rpc.request("mcpServerStatus/list", params)
+    }
+
+    /**
+     * Start OAuth login for an MCP server.
+     */
+    suspend fun startMcpOauthLogin(
+        name: String,
+        scopes: List<String>? = null,
+        timeoutSecs: Long? = null
+    ): McpServerOauthLoginResponse {
+        checkInitialized()
+
+        val params = McpServerOauthLoginParams(
+            name = name,
+            scopes = scopes,
+            timeoutSecs = timeoutSecs
+        )
+
+        return rpc.request("mcpServer/oauth/login", params)
+    }
+
+    // ============== 鍥炲悎绠＄悊 ==============
+
+    /**
+     * 寮€濮嬫柊鍥炲悎 (鍙戦€佺敤鎴锋秷鎭?
      */
     suspend fun startTurn(
         threadId: String,
@@ -333,7 +362,7 @@ class CodexAppServerClient private constructor(
     }
 
     /**
-     * 中断当前回合
+     * 涓柇褰撳墠鍥炲悎
      */
     suspend fun interruptTurn(threadId: String, turnId: String) {
         checkInitialized()
@@ -343,19 +372,21 @@ class CodexAppServerClient private constructor(
             turnId = turnId
         )
 
-        rpc.request<Unit>("turn/interrupt", params)
+        rpc.requestUnit("turn/interrupt", params)
     }
 
-    // ============== 审批响应 ==============
+    // ============== 瀹℃壒鍝嶅簲 ==============
 
     /**
-     * 接受命令执行
+     * 鎺ュ彈鍛戒护鎵ц
      */
     suspend fun acceptCommand(requestId: String, forSession: Boolean = false) {
-        val response = ApprovalResponse(
-            decision = "accept",
-            acceptSettings = if (forSession) AcceptSettings(forSession = true) else null
-        )
+        val decision = if (forSession) {
+            ApprovalDecision.AcceptForSession
+        } else {
+            ApprovalDecision.Accept
+        }
+        val response = CommandExecutionRequestApprovalResponse(decision = decision)
         rpc.respondToServerRequest(requestId, response)
     }
 
@@ -363,7 +394,7 @@ class CodexAppServerClient private constructor(
      * 拒绝命令执行
      */
     suspend fun declineCommand(requestId: String) {
-        val response = ApprovalResponse(decision = "decline")
+        val response = CommandExecutionRequestApprovalResponse(decision = ApprovalDecision.Decline)
         rpc.respondToServerRequest(requestId, response)
     }
 
@@ -371,7 +402,7 @@ class CodexAppServerClient private constructor(
      * 接受文件修改
      */
     suspend fun acceptFileChange(requestId: String) {
-        val response = ApprovalResponse(decision = "accept")
+        val response = FileChangeRequestApprovalResponse(decision = ApprovalDecision.Accept)
         rpc.respondToServerRequest(requestId, response)
     }
 
@@ -379,7 +410,7 @@ class CodexAppServerClient private constructor(
      * 拒绝文件修改
      */
     suspend fun declineFileChange(requestId: String) {
-        val response = ApprovalResponse(decision = "decline")
+        val response = FileChangeRequestApprovalResponse(decision = ApprovalDecision.Decline)
         rpc.respondToServerRequest(requestId, response)
     }
 
@@ -391,8 +422,8 @@ class CodexAppServerClient private constructor(
     suspend fun readAccount(refreshToken: Boolean = false): AccountReadResult {
         checkInitialized()
 
-        val params = mapOf("refreshToken" to refreshToken)
-        return rpc.request<AccountReadResult>("account/read", params)
+        val params = AccountReadParams(refreshToken = refreshToken)
+        return rpc.request("account/read", params)
     }
 
     // ============== 辅助方法 ==============
@@ -418,12 +449,14 @@ class CodexAppServerClient private constructor(
             codexPath: Path? = null,
             workingDirectory: Path? = null,
             env: Map<String, String> = emptyMap(),
+            configOverrides: Map<String, String> = emptyMap(),
             scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         ): CodexAppServerClient {
             val process = CodexAppServerProcess.spawn(
                 codexPath = codexPath,
                 workingDirectory = workingDirectory,
                 env = env,
+                configOverrides = configOverrides,
                 scope = scope
             )
 
@@ -432,38 +465,49 @@ class CodexAppServerClient private constructor(
     }
 }
 
-// ============== 事件类型 ==============
 
 /**
- * App-Server 事件
+ * App-Server 浜嬩欢
  */
 sealed class AppServerEvent {
-    // 线程事件
     data class ThreadStarted(val thread: ThreadInfo) : AppServerEvent()
 
-    // 回合事件
-    data class TurnStarted(val turn: TurnInfo) : AppServerEvent()
-    data class TurnCompleted(val turn: TurnInfo) : AppServerEvent()
+    data class TurnStarted(val threadId: String, val turn: TurnInfo) : AppServerEvent()
+    data class TurnCompleted(val threadId: String, val turn: TurnInfo) : AppServerEvent()
 
-    // Item 事件
-    data class ItemStarted(val item: ThreadItem) : AppServerEvent()
-    data class ItemCompleted(val item: ThreadItem) : AppServerEvent()
+    data class ItemStarted(val threadId: String, val turnId: String, val item: ThreadItem) : AppServerEvent()
+    data class ItemCompleted(val threadId: String, val turnId: String, val item: ThreadItem) : AppServerEvent()
 
-    // 增量事件
-    data class AgentMessageDelta(val itemId: String, val delta: String) : AppServerEvent()
-    data class ReasoningDelta(val itemId: String, val summaryIndex: Int, val delta: String) : AppServerEvent()
-    data class CommandOutputDelta(val itemId: String, val delta: String) : AppServerEvent()
+    data class AgentMessageDelta(
+        val threadId: String,
+        val turnId: String,
+        val itemId: String,
+        val delta: String
+    ) : AppServerEvent()
 
-    // 审批请求
+    data class ReasoningDelta(
+        val threadId: String,
+        val turnId: String,
+        val itemId: String,
+        val delta: String
+    ) : AppServerEvent()
+
+    data class CommandOutputDelta(
+        val threadId: String,
+        val turnId: String,
+        val itemId: String,
+        val delta: String
+    ) : AppServerEvent()
+
     data class CommandApprovalRequired(
         val requestId: String,
         val itemId: String,
         val threadId: String,
         val turnId: String,
-        val command: String,
+        val command: String?,
         val cwd: String?,
         val reason: String?,
-        val risk: String?
+        val proposedExecpolicyAmendment: ExecPolicyAmendment?
     ) : AppServerEvent()
 
     data class FileChangeApprovalRequired(
@@ -471,18 +515,21 @@ sealed class AppServerEvent {
         val itemId: String,
         val threadId: String,
         val turnId: String,
-        val changes: List<FileChange>,
-        val reason: String?
+        val changes: List<FileUpdateChange>,
+        val reason: String?,
+        val grantRoot: String?
     ) : AppServerEvent()
 
-    // 使用量
-    data class TokenUsageUpdated(val threadId: String, val usage: TokenUsage) : AppServerEvent()
+    data class TokenUsageUpdated(
+        val threadId: String,
+        val turnId: String,
+        val usage: ThreadTokenUsage
+    ) : AppServerEvent()
 
-    // 错误
-    data class Error(val message: String) : AppServerEvent()
+    data class Error(
+        val threadId: String,
+        val turnId: String,
+        val message: String,
+        val willRetry: Boolean
+    ) : AppServerEvent()
 }
-
-// 添加 jsonPrimitive 和 jsonObject 扩展
-private val JsonElement.jsonPrimitive get() = this as? kotlinx.serialization.json.JsonPrimitive
-private val JsonElement.jsonObject get() = this as kotlinx.serialization.json.JsonObject
-private val kotlinx.serialization.json.JsonPrimitive.int get() = this.content.toInt()

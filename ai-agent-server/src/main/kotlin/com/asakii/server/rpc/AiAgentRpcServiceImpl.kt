@@ -4,6 +4,8 @@ import com.asakii.ai.agent.sdk.AiAgentProvider
 import com.asakii.ai.agent.sdk.capabilities.AgentCapabilities
 import com.asakii.ai.agent.sdk.capabilities.AiPermissionMode as SdkPermissionMode
 import com.asakii.ai.agent.sdk.client.AgentMessageInput
+import com.asakii.ai.agent.sdk.client.PermissionDecision
+import com.asakii.ai.agent.sdk.client.PermissionRequester
 import com.asakii.ai.agent.sdk.client.UnifiedAgentClient
 import com.asakii.ai.agent.sdk.client.UnifiedAgentClientFactory
 import com.asakii.ai.agent.sdk.connect.AiAgentConnectOptions
@@ -13,7 +15,12 @@ import com.asakii.ai.agent.sdk.model.*
 import com.asakii.claude.agent.sdk.exceptions.CLINotFoundException
 import com.asakii.claude.agent.sdk.exceptions.ClientNotConnectedException
 import com.asakii.claude.agent.sdk.exceptions.NodeNotFoundException
+import com.asakii.claude.agent.sdk.mcp.McpServer
 import com.asakii.claude.agent.sdk.types.ClaudeAgentOptions
+import com.asakii.claude.agent.sdk.types.McpHttpServerConfig
+import com.asakii.claude.agent.sdk.types.McpServerConfig
+import com.asakii.claude.agent.sdk.types.McpServerSpec
+import com.asakii.claude.agent.sdk.types.McpStdioServerConfig
 import com.asakii.server.rsocket.RSocketErrorCodes
 import io.rsocket.kotlin.RSocketError
 import com.asakii.claude.agent.sdk.types.PermissionMode
@@ -27,6 +34,7 @@ import com.asakii.claude.agent.sdk.types.PermissionRuleValue as SdkPermissionRul
 import com.asakii.claude.agent.sdk.types.CanUseTool
 import com.asakii.claude.agent.sdk.types.ToolType
 import com.asakii.claude.agent.sdk.utils.ClaudeSessionScanner
+import com.asakii.codex.agent.sdk.ApprovalMode
 import com.asakii.codex.agent.sdk.CodexClientOptions
 import com.asakii.codex.agent.sdk.SandboxMode
 import com.asakii.codex.agent.sdk.ThreadOptions
@@ -46,6 +54,7 @@ import com.asakii.server.mcp.PermissionUpdateType as McpPermissionUpdateType
 import com.asakii.server.mcp.PermissionBehavior as McpPermissionBehavior
 import com.asakii.server.mcp.PermissionMode as McpPermissionMode
 import com.asakii.server.mcp.PermissionRuleValue as McpPermissionRuleValue
+import com.asakii.server.mcp.McpHttpGateway
 import com.asakii.server.mcp.UserInteractionMcpServer
 import com.asakii.server.mcp.JetBrainsMcpServerProvider
 import com.asakii.server.services.FileContentCache
@@ -76,6 +85,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -121,6 +131,11 @@ class AiAgentRpcServiceImpl(
     // 用户交互 MCP Server（仅包含 AskUserQuestion，权限走 canUseTool 回调）
     private val userInteractionServer = UserInteractionMcpServer().apply {
         clientCaller?.let { setClientCaller(it) }
+    }
+
+    private companion object {
+        private const val GLOBAL_MCP_SESSION_ID = "__global__"
+        private val GLOBAL_MCP_PROVIDER = AiAgentProvider.CLAUDE
     }
 
     /**
@@ -179,13 +194,16 @@ class AiAgentRpcServiceImpl(
         val normalizedOptions = options ?: lastConnectOptions ?: RpcConnectOptions()
         sdkLog.debug("🔌 [SDK] 连接选项: provider=${normalizedOptions.provider}, model=${normalizedOptions.model}, permissionMode=${normalizedOptions.permissionMode}")
 
-        val connectOptions = buildConnectOptions(normalizedOptions)
-        currentProvider = connectOptions.provider
-
         disconnectInternal()
 
+        val connectOptions = buildConnectOptions(normalizedOptions)
+        currentProvider = connectOptions.provider
+        sdkLog.info("[connect] provider=${connectOptions.provider}, model=${connectOptions.model ?: "default"}")
+
         sdkLog.info("🔌 [SDK] 创建 ${connectOptions.provider} 客户端...")
-        val newClient = UnifiedAgentClientFactory.create(connectOptions.provider)
+        val permissionRequester = buildPermissionRequester()
+        val newClient = UnifiedAgentClientFactory.create(connectOptions.provider, permissionRequester)
+        sdkLog.info("[connect] clientImpl=${newClient::class.qualifiedName}, clientProvider=${newClient.provider}")
 
         // 添加超时保护，避免无限阻塞
         try {
@@ -205,6 +223,7 @@ class AiAgentRpcServiceImpl(
             throw RuntimeException("连接超时：Claude CLI 未能在 ${connectTimeoutMs / 1000} 秒内启动", e)
         }
         client = newClient
+        sdkLog.info("[connect] client connected: isConnected=${newClient.isConnected()}")
 
         val rpcProvider = currentProvider.toRpcProvider()
         val resolvedSystemPrompt = (connectOptions.systemPrompt as? String?) ?: normalizedOptions.systemPrompt
@@ -236,6 +255,8 @@ class AiAgentRpcServiceImpl(
     }
 
     override fun query(message: String): Flow<RpcMessage> {
+        val clientName = client?.javaClass?.simpleName ?: "null"
+        sdkLog.info("[query] provider=$currentProvider, client=$clientName")
         sdkLog.info("📤 [SDK] query: message=${message.take(200)}${if (message.length > 200) "..." else ""}")
         return executeTurn { unifiedClient ->
             unifiedClient.sendMessage(
@@ -245,6 +266,8 @@ class AiAgentRpcServiceImpl(
     }
 
     override fun queryWithContent(content: List<RpcContentBlock>): Flow<RpcMessage> {
+        val clientName = client?.javaClass?.simpleName ?: "null"
+        sdkLog.info("[queryWithContent] provider=$currentProvider, client=$clientName")
         sdkLog.info("📤 [SDK] queryWithContent: blocks=${content.size}")
         content.forEachIndexed { idx, block ->
             when (block) {
@@ -340,6 +363,7 @@ class AiAgentRpcServiceImpl(
         private fun executeTurn(block: suspend (UnifiedAgentClient) -> Unit): Flow<RpcMessage> {
         // 检查客户端状态
         val activeClient = client ?: error("AI Agent 尚未连接，请先调用 connect()")
+        sdkLog.info("[executeTurn] start (sessionId=$sessionId, provider=$currentProvider, client=${activeClient::class.simpleName}, isConnected=${activeClient.isConnected()})")
 
         return channelFlow {
             // 创建完成信号
@@ -433,7 +457,7 @@ class AiAgentRpcServiceImpl(
             }
 
             collectorReady.await()
-            sdkLog.info("[executeTurn] collector ready, run block")
+            sdkLog.info("[executeTurn] collector ready, invoking sendMessage")
 
             try {
                 block(activeClient)
@@ -554,9 +578,46 @@ class AiAgentRpcServiceImpl(
         } finally {
             client = null
         }
+        runCatching {
+            McpHttpGateway.unregisterProviderSession(currentProvider, sessionId)
+        }.onFailure { error ->
+            sdkLog.warn("[MCP] Failed to unregister session endpoints: ${error.message}")
+        }
+        runCatching {
+            terminalMcpServerProvider.disposeSession(sessionId)
+        }.onFailure { error ->
+            sdkLog.warn("[MCP] Failed to dispose terminal session: ${error.message}")
+        }
     }
 
-    private fun buildConnectOptions(options: RpcConnectOptions): AiAgentConnectOptions {
+    private fun buildPermissionRequester(): PermissionRequester? {
+        val caller = clientCaller ?: return null
+        return PermissionRequester { request ->
+            try {
+                val protoRequest = RequestPermissionRequest.newBuilder().apply {
+                    toolName = request.toolName
+                    inputJson = com.google.protobuf.ByteString.copyFrom(
+                        Json.encodeToString(JsonElement.serializer(), request.inputJson).toByteArray(Charsets.UTF_8)
+                    )
+                    request.toolUseId?.let { toolUseId = it }
+                }.build()
+
+                val protoResponse = caller.callRequestPermission(protoRequest)
+                PermissionDecision(
+                    approved = protoResponse.approved,
+                    denyReason = if (protoResponse.hasDenyReason()) protoResponse.denyReason else null
+                )
+            } catch (e: Exception) {
+                sdkLog.warn("?? [PermissionRequester] Failed: ${e.message}")
+                PermissionDecision(
+                    approved = false,
+                    denyReason = e.message ?: "Permission request failed"
+                )
+            }
+        }
+    }
+
+    private suspend fun buildConnectOptions(options: RpcConnectOptions): AiAgentConnectOptions {
         // 每次 connect 时调用 provider 获取最新配置
         val serviceConfig = serviceConfigProvider()
         sdkLog.info("🔧 [buildConnectOptions] 获取最新配置: enableUserInteractionMcp=${serviceConfig.claude.enableUserInteractionMcp}, enableJetBrainsMcp=${serviceConfig.claude.enableJetBrainsMcp}")
@@ -568,9 +629,9 @@ class AiAgentRpcServiceImpl(
         val sessionHint = options.sessionId
         val resume = options.resumeSessionId
         val metadata = options.metadata.ifEmpty { emptyMap() }
-
-        val claudeOverrides = buildClaudeOverrides(model, systemPrompt, options, metadata, serviceConfig)
-        val codexOverrides = buildCodexOverrides(model, options, serviceConfig)
+        val mcpSetup = prepareMcpSession(provider, options, serviceConfig)
+        val claudeOverrides = buildClaudeOverrides(model, systemPrompt, options, metadata, serviceConfig, mcpSetup)
+        val codexOverrides = buildCodexOverrides(model, options, serviceConfig, mcpSetup)
 
         return AiAgentConnectOptions(
             provider = provider,
@@ -585,17 +646,135 @@ class AiAgentRpcServiceImpl(
         )
     }
 
+    private data class McpSessionSetup(
+        val claudeServers: Map<String, McpServerSpec>,
+        val mcpSystemPromptAppendix: String,
+        val allowedTools: List<String>,
+        val codexConfigOverrides: Map<String, String>
+    )
+
+    private suspend fun prepareMcpSession(
+        provider: AiAgentProvider,
+        options: RpcConnectOptions,
+        serviceConfig: AiAgentServiceConfig
+    ): McpSessionSetup {
+        val defaults = serviceConfig.claude
+        val sessionServers = mutableMapOf<String, McpServer>()
+        val globalServers = mutableMapOf<String, McpServer>()
+        val claudeServers = mutableMapOf<String, McpServerSpec>()
+
+        if (defaults.enableUserInteractionMcp) {
+            sessionServers["user_interaction"] = userInteractionServer
+        }
+
+        if (defaults.enableJetBrainsMcp) {
+            jetBrainsMcpServerProvider.getServer()?.let { globalServers["jetbrains"] = it }
+        }
+
+        if (defaults.enableTerminalMcp) {
+            terminalMcpServerProvider.getServerForSession(sessionId)?.let { sessionServers["terminal"] = it }
+        }
+
+        if (defaults.enableGitMcp) {
+            gitMcpServerProvider.getServer()?.let { globalServers["jetbrains_git"] = it }
+        }
+
+        if (globalServers.isNotEmpty()) {
+            globalServers.forEach { (name, server) ->
+                val url = McpHttpGateway.registerServer(
+                    GLOBAL_MCP_PROVIDER,
+                    GLOBAL_MCP_SESSION_ID,
+                    name,
+                    server
+                )
+                claudeServers[name] = McpHttpServerConfig(url = url)
+                sdkLog.info("? [MCP] HTTP endpoint registered (scope=global): $name -> $url")
+            }
+        }
+
+        if (sessionServers.isNotEmpty()) {
+            sessionServers.forEach { (name, server) ->
+                val url = McpHttpGateway.registerServer(provider, sessionId, name, server)
+                claudeServers[name] = McpHttpServerConfig(url = url)
+                sdkLog.info("? [MCP] HTTP endpoint registered (scope=session): $name -> $url")
+            }
+        }
+
+        val internalServers = mutableMapOf<String, McpServer>().apply {
+            putAll(globalServers)
+            putAll(sessionServers)
+        }
+
+        for (mcpConfig in defaults.mcpServersConfig) {
+            if (!mcpConfig.enabled) continue
+
+            val serverConfig: McpServerConfig = when (mcpConfig.type) {
+                "http" -> McpHttpServerConfig(
+                    url = mcpConfig.url ?: continue,
+                    headers = mcpConfig.headers ?: emptyMap()
+                )
+                "stdio" -> McpStdioServerConfig(
+                    command = mcpConfig.command ?: continue,
+                    args = mcpConfig.args ?: emptyList(),
+                    env = mcpConfig.env ?: emptyMap()
+                )
+                else -> {
+                    sdkLog.warn("⚠️ [MCP] Unsupported server type: ${mcpConfig.type} for '${mcpConfig.name}'")
+                    continue
+                }
+            }
+
+            claudeServers[mcpConfig.name] = serverConfig
+            sdkLog.info("✅ [MCP] Added server config: ${mcpConfig.name} (type=${mcpConfig.type})")
+        }
+
+        var mcpSystemPromptAppendix = buildMcpSystemPromptAppendix(internalServers)
+
+        defaults.mcpInstructions?.takeIf { it.isNotBlank() }?.let { instructions ->
+            mcpSystemPromptAppendix = if (mcpSystemPromptAppendix.isNotBlank()) {
+                "$mcpSystemPromptAppendix\n\n$instructions"
+            } else {
+                instructions
+            }
+            sdkLog.info("📝 [MCP] Appended built-in MCP instructions")
+        }
+
+        val customInstructions = defaults.mcpServersConfig
+            .filter { it.enabled && !it.instructions.isNullOrBlank() }
+            .map { it.instructions!! }
+        if (customInstructions.isNotEmpty()) {
+            val customPrompt = customInstructions.joinToString("\n\n")
+            mcpSystemPromptAppendix = if (mcpSystemPromptAppendix.isNotBlank()) {
+                "$mcpSystemPromptAppendix\n\n$customPrompt"
+            } else {
+                customPrompt
+            }
+            sdkLog.info("📝 [MCP] Appended ${customInstructions.size} custom MCP instructions")
+        }
+
+        val allowedTools = buildMcpAllowedTools(internalServers)
+        val codexConfigOverrides = buildCodexMcpConfigOverrides(claudeServers)
+
+        return McpSessionSetup(
+            claudeServers = claudeServers,
+            mcpSystemPromptAppendix = mcpSystemPromptAppendix,
+            allowedTools = allowedTools,
+            codexConfigOverrides = codexConfigOverrides
+        )
+    }
+
     private fun buildClaudeOverrides(
         model: String?,
         systemPrompt: String?,
         options: RpcConnectOptions,
         metadata: Map<String, String>,
-        serviceConfig: AiAgentServiceConfig
+        serviceConfig: AiAgentServiceConfig,
+        mcpSetup: McpSessionSetup
     ): ClaudeOverrides {
         val cwd = ideTools.getProjectPath().takeIf { it.isNotBlank() }?.let { Path.of(it) }
         val defaults = serviceConfig.claude
 
-                val permissionMode = options.permissionMode?.toSdkPermissionMode()
+        val permissionMode = options.permissionMode?.toSdkPermissionMode()
             ?: defaults.permissionMode?.let { it.toPermissionModeOrNull() }
             ?: PermissionMode.DEFAULT
 
@@ -610,116 +789,15 @@ class AiAgentRpcServiceImpl(
             "output-format" to "stream-json"
         )
 
-        // 注册 MCP Server（根据配置决定是否启用）
-        val mcpServers = mutableMapOf<String, Any>()
+        val mcpServers = mcpSetup.claudeServers
+        val mcpSystemPromptAppendix = mcpSetup.mcpSystemPromptAppendix
 
-        // 添加用户交互 MCP Server（如果启用）
-        if (defaults.enableUserInteractionMcp) {
-            mcpServers["user_interaction"] = userInteractionServer
-            sdkLog.info("✅ [buildClaudeOverrides] 已添加 User Interaction MCP Server")
-        } else {
-            sdkLog.info("⏭️ [buildClaudeOverrides] User Interaction MCP Server 已禁用")
-        }
-
-        // 添加 JetBrains MCP Server（如果启用且可用）
-        if (defaults.enableJetBrainsMcp) {
-            jetBrainsMcpServerProvider.getServer()?.let { jetbrainsMcp ->
-                mcpServers["jetbrains"] = jetbrainsMcp
-                sdkLog.info("✅ [buildClaudeOverrides] 已添加 JetBrains MCP Server")
-            }
-        } else {
-            sdkLog.info("⏭️ [buildClaudeOverrides] JetBrains MCP Server 已禁用")
-        }
-
-        // 添加 Terminal MCP Server（如果启用且可用）
-        if (defaults.enableTerminalMcp) {
-            terminalMcpServerProvider.getServer()?.let { terminalMcp ->
-                mcpServers["terminal"] = terminalMcp
-                sdkLog.info("✅ [buildClaudeOverrides] 已添加 Terminal MCP Server")
-            }
-        } else {
-            sdkLog.info("⏭️ [buildClaudeOverrides] Terminal MCP Server 已禁用")
-        }
-
-        // 添加 Git MCP Server（如果启用且可用）
-        if (defaults.enableGitMcp) {
-            gitMcpServerProvider.getServer()?.let { gitMcp ->
-                mcpServers["jetbrains_git"] = gitMcp
-                sdkLog.info("✅ [buildClaudeOverrides] 已添加 Git MCP Server")
-            }
-        } else {
-            sdkLog.info("⏭️ [buildClaudeOverrides] Git MCP Server 已禁用")
-        }
-
-        // 添加从配置文件加载的 MCP 服务器
-        for (mcpConfig in defaults.mcpServersConfig) {
-            if (!mcpConfig.enabled) continue
-
-            val serverConfig: Map<String, Any> = when (mcpConfig.type) {
-                "http" -> {
-                    val config = mutableMapOf<String, Any>(
-                        "type" to "http",
-                        "url" to (mcpConfig.url ?: continue)
-                    )
-                    mcpConfig.headers?.let { config["headers"] = it }
-                    config
-                }
-                "stdio" -> {
-                    val config = mutableMapOf<String, Any>(
-                        "type" to "stdio",
-                        "command" to (mcpConfig.command ?: continue)
-                    )
-                    mcpConfig.args?.let { config["args"] = it }
-                    mcpConfig.env?.let { config["env"] = it }
-                    config
-                }
-                else -> {
-                    sdkLog.warn("⚠️ [buildClaudeOverrides] 未知 MCP 类型: ${mcpConfig.type} for '${mcpConfig.name}'")
-                    continue
-                }
-            }
-
-            mcpServers[mcpConfig.name] = serverConfig
-            sdkLog.info("✅ [buildClaudeOverrides] 已添加 MCP Server: ${mcpConfig.name} (type=${mcpConfig.type})")
-        }
-
-        // 从 IdeTools 获取子代理定义（如 JetBrains 专用的代码探索代理）
         val agents = ideTools.getAgentDefinitions()
         if (agents.isNotEmpty()) {
             sdkLog.info("📦 [buildClaudeOverrides] 加载了 ${agents.size} 个自定义代理: ${agents.keys.joinToString()}")
         } else {
             sdkLog.warn("⚠️ [buildClaudeOverrides] 未加载到任何自定义代理 (ideTools类型=${ideTools::class.simpleName})")
         }
-
-        // 收集所有 MCP 服务器的系统提示词追加内容
-        // 使用 appendSystemPromptFile 追加，不会替换 Claude Code 默认提示词
-        var mcpSystemPromptAppendix = buildMcpSystemPromptAppendix(mcpServers)
-
-        // 追加由 plugin 模块加载的 MCP 指令（Context7 等内置服务器）
-        defaults.mcpInstructions?.takeIf { it.isNotBlank() }?.let { instructions ->
-            mcpSystemPromptAppendix = if (mcpSystemPromptAppendix.isNotBlank()) {
-                "$mcpSystemPromptAppendix\n\n$instructions"
-            } else {
-                instructions
-            }
-            sdkLog.info("📝 [buildClaudeOverrides] 已追加内置 MCP 系统提示词")
-        }
-
-        // 追加自定义 MCP 服务器的 instructions
-        val customInstructions = defaults.mcpServersConfig
-            .filter { it.enabled && !it.instructions.isNullOrBlank() }
-            .map { it.instructions!! }
-        if (customInstructions.isNotEmpty()) {
-            val customPrompt = customInstructions.joinToString("\n\n")
-            mcpSystemPromptAppendix = if (mcpSystemPromptAppendix.isNotBlank()) {
-                "$mcpSystemPromptAppendix\n\n$customPrompt"
-            } else {
-                customPrompt
-            }
-            sdkLog.info("📝 [buildClaudeOverrides] 已追加 ${customInstructions.size} 个自定义 MCP 系统提示词")
-        }
-
-        // 收集需要禁用的内置工具
         val disallowedTools = buildDisallowedBuiltinTools().toMutableList()
 
         // 如果启用了 User Interaction MCP，禁用内置的 AskUserQuestion
@@ -820,7 +898,7 @@ class AiAgentRpcServiceImpl(
             maxThinkingTokens = maxThinkingTokens,
             extraArgs = extraArgs,
             // 动态收集所有 MCP 服务器声明的需要自动允许的工具
-            allowedTools = buildMcpAllowedTools(mcpServers),
+            allowedTools = mcpSetup.allowedTools,
             // 禁用的内置工具（如启用 Terminal MCP 时禁用 Bash）
             disallowedTools = disallowedTools,
             mcpServers = mcpServers,
@@ -846,12 +924,9 @@ class AiAgentRpcServiceImpl(
      * @param mcpServers MCP 服务器映射（名称 -> 服务器实例）
      * @return 合并后的系统提示词追加内容
      */
-    private fun buildMcpSystemPromptAppendix(mcpServers: Map<String, Any>): String {
+    private fun buildMcpSystemPromptAppendix(mcpServers: Map<String, McpServer>): String {
         return mcpServers.values
-            .filterIsInstance<com.asakii.claude.agent.sdk.mcp.McpServer>()
-            .mapNotNull { server ->
-                server.getSystemPromptAppendix()?.takeIf { it.isNotBlank() }
-            }
+            .mapNotNull { server -> server.getSystemPromptAppendix()?.takeIf { it.isNotBlank() } }
             .joinToString("\n\n")
     }
 
@@ -864,16 +939,74 @@ class AiAgentRpcServiceImpl(
      * @param mcpServers MCP 服务器映射（名称 -> 服务器实例）
      * @return 需要自动允许的工具列表（完整格式）
      */
-    private fun buildMcpAllowedTools(mcpServers: Map<String, Any>): List<String> {
+    private fun buildMcpAllowedTools(mcpServers: Map<String, McpServer>): List<String> {
         return mcpServers.entries
-            .mapNotNull { (serverName, server) ->
-                (server as? com.asakii.claude.agent.sdk.mcp.McpServer)?.let { mcpServer ->
-                    mcpServer.getAllowedTools().map { toolName ->
-                        "mcp__${serverName}__$toolName"
-                    }
+            .flatMap { (serverName, server) ->
+                server.getAllowedTools().map { toolName ->
+                    "mcp__${serverName}__$toolName"
                 }
             }
-            .flatten()
+    }
+
+    private fun buildCodexMcpConfigOverrides(mcpServers: Map<String, McpServerSpec>): Map<String, String> {
+        if (mcpServers.isEmpty()) return emptyMap()
+
+        val overrides = mutableMapOf<String, String>()
+        mcpServers.forEach { (name, server) ->
+            when (server) {
+                is McpHttpServerConfig -> {
+                    overrides["mcp_servers.$name.url"] = toTomlString(server.url)
+                    if (server.headers.isNotEmpty()) {
+                        overrides["mcp_servers.$name.http_headers"] = toTomlInlineTable(server.headers)
+                    }
+                }
+                is McpStdioServerConfig -> {
+                    overrides["mcp_servers.$name.command"] = toTomlString(server.command)
+                    if (server.args.isNotEmpty()) {
+                        overrides["mcp_servers.$name.args"] = toTomlArray(server.args)
+                    }
+                    if (server.env.isNotEmpty()) {
+                        overrides["mcp_servers.$name.env"] = toTomlInlineTable(server.env)
+                    }
+                }
+                is McpServerConfig -> {
+                    sdkLog.warn("[MCP] Unsupported MCP config for Codex: ${server.type} ($name)")
+                }
+                else -> {
+                    sdkLog.warn("[MCP] Unsupported MCP spec for Codex: ${server::class.simpleName ?: "unknown"} ($name)")
+                }
+            }
+        }
+        return overrides
+    }
+
+    private fun toTomlArray(values: List<String>): String {
+        return values.joinToString(prefix = "[", postfix = "]") { toTomlString(it) }
+    }
+
+    private fun toTomlInlineTable(entries: Map<String, String>): String {
+        return entries.entries.joinToString(prefix = "{ ", postfix = " }") { (key, value) ->
+            "${toTomlString(key)} = ${toTomlString(value)}"
+        }
+    }
+
+    private fun toTomlString(value: String): String {
+        return "\"${escapeTomlString(value)}\""
+    }
+
+    private fun escapeTomlString(value: String): String {
+        val builder = StringBuilder(value.length)
+        for (ch in value) {
+            when (ch) {
+                '\\' -> builder.append("\\\\")
+                '"' -> builder.append("\\\"")
+                '\n' -> builder.append("\\n")
+                '\r' -> builder.append("\\r")
+                '\t' -> builder.append("\\t")
+                else -> builder.append(ch)
+            }
+        }
+        return builder.toString()
     }
 
     /**
@@ -901,13 +1034,25 @@ class AiAgentRpcServiceImpl(
     private fun buildCodexOverrides(
         model: String?,
         options: RpcConnectOptions,
-        serviceConfig: AiAgentServiceConfig
+        serviceConfig: AiAgentServiceConfig,
+        mcpSetup: McpSessionSetup
     ): CodexOverrides {
         val codexDefaults = serviceConfig.codex
 
-                val clientOptions = CodexClientOptions(
+        val configOverrides = buildMap<String, String> {
+            putAll(mcpSetup.codexConfigOverrides)
+            codexDefaults.webSearchEnabled?.let { enabled ->
+                put("features.web_search_request", enabled.toString())
+            }
+        }
+
+        val clientOptions = CodexClientOptions(
+            codexPathOverride = codexDefaults.binaryPath
+                ?.takeIf { it.isNotBlank() }
+                ?.let { Path.of(it) },
             baseUrl = options.baseUrl ?: codexDefaults.baseUrl,
-            apiKey = options.apiKey ?: codexDefaults.apiKey
+            apiKey = options.apiKey ?: codexDefaults.apiKey,
+            configOverrides = configOverrides.ifEmpty { null }
         )
 
         val sandboxMode = options.sandboxMode?.toSdkSandboxMode()
@@ -915,10 +1060,28 @@ class AiAgentRpcServiceImpl(
                 runCatching { SandboxMode.valueOf(it.uppercase()) }.getOrNull()
             }
 
+        val approvalPolicy = when (options.permissionMode) {
+            RpcPermissionMode.BYPASS_PERMISSIONS -> ApprovalMode.NEVER
+            null -> null
+            else -> ApprovalMode.ON_REQUEST
+        }
+
+        val workingDirectory = ideTools.getProjectPath().takeIf { it.isNotBlank() }
+        val codexPathLog = codexDefaults.binaryPath?.takeIf { it.isNotBlank() } ?: "auto"
+        val apiKeyPresent = !(options.apiKey ?: codexDefaults.apiKey).isNullOrBlank()
+        val baseUrlLog = options.baseUrl ?: codexDefaults.baseUrl ?: "default"
+        val sandboxLog = sandboxMode?.name ?: "default"
+        val approvalLog = approvalPolicy?.name ?: "default"
+        val cwdLog = workingDirectory ?: "default"
+        sdkLog.info("[buildCodexOverrides] model=${model ?: "default"}, codexPath=$codexPathLog, baseUrl=$baseUrlLog, apiKeyPresent=$apiKeyPresent, sandbox=$sandboxLog, approval=$approvalLog, cwd=$cwdLog")
+
         val threadOptions = ThreadOptions(
             model = model,
             sandboxMode = sandboxMode,
-            skipGitRepoCheck = true
+            workingDirectory = workingDirectory,
+            skipGitRepoCheck = true,
+            approvalPolicy = approvalPolicy,
+            developerInstructions = mcpSetup.mcpSystemPromptAppendix.takeIf { it.isNotBlank() }
         )
 
         return CodexOverrides(
@@ -1032,16 +1195,21 @@ class AiAgentRpcServiceImpl(
             }
 
             is UiToolStart -> {
-                val toolTypeEnum = ToolType.fromToolName(toolName)
                 val index = toolContentIndex.getOrPut(toolId) { nextContentIndex++ }
+                val resolvedInput = input ?: inputPreview?.let { kotlinx.serialization.json.JsonPrimitive(it) }
+                val resolvedToolType = if (toolType.isNotBlank()) {
+                    toolType
+                } else {
+                    ToolType.fromToolName(toolName).type
+                }
                 wrapAsStreamEvent(
                     RpcContentBlockStartEvent(
                         index = index,
                         contentBlock = RpcToolUseBlock(
                             id = toolId,
                             toolName = toolName,
-                            toolType = toolTypeEnum.type,
-                            input = inputPreview?.let { kotlinx.serialization.json.JsonPrimitive(it) },
+                            toolType = resolvedToolType,
+                            input = resolvedInput,
                             status = RpcContentStatus.IN_PROGRESS
                         )
                     ),
@@ -1321,7 +1489,7 @@ class AiAgentRpcServiceImpl(
         is UiThinkingDelta -> "thinking=\"${event.thinking}\""
         is UiAssistantMessage -> "content=${formatContentBlocks(event.content)}"
         is UiUserMessage -> "content=${formatContentBlocks(event.content)}, isReplay=${event.isReplay}"
-        is UiToolStart -> "toolId=${event.toolId}, toolName=${event.toolName}, toolType=${event.toolType}, inputPreview=${event.inputPreview}, parentToolUseId=${event.parentToolUseId}"
+        is UiToolStart -> "toolId=${event.toolId}, toolName=${event.toolName}, toolType=${event.toolType}, inputPreview=${event.inputPreview}, input=${event.input?.toString()?.take(200)}, parentToolUseId=${event.parentToolUseId}"
         is UiToolProgress -> "toolId=${event.toolId}, status=${event.status}, outputPreview=${event.outputPreview}, parentToolUseId=${event.parentToolUseId}"
         is UiToolComplete -> "toolId=${event.toolId}, result=${event.result}, parentToolUseId=${event.parentToolUseId}"
         is UiMessageStart -> "messageId=${event.messageId}, content=${event.content?.let { formatContentBlocks(it) }}"
@@ -1385,6 +1553,16 @@ class AiAgentRpcServiceImpl(
             toolsCount = 0,
             error = "Client not connected"
         )
+
+        if (currentProvider == AiAgentProvider.CODEX) {
+            val authUrl = runCatching { currentClient.startMcpOauthLogin(serverName) }.getOrNull()
+            if (!authUrl.isNullOrBlank()) {
+                val openResult = ideTools.openUrl(authUrl)
+                if (openResult.isFailure) {
+                    sdkLog.warn("Failed to open MCP auth URL: ${openResult.exceptionOrNull()?.message}")
+                }
+            }
+        }
 
         return try {
             val result = currentClient.reconnectMcp(serverName)

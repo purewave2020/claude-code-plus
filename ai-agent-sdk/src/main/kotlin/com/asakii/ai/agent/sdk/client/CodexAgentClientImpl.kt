@@ -1,34 +1,59 @@
 package com.asakii.ai.agent.sdk.client
 
 import com.asakii.ai.agent.sdk.AiAgentProvider
-import com.asakii.ai.agent.sdk.AiAgentStreamBridge
+import com.asakii.ai.agent.sdk.adapter.CodexAppServerStreamAdapter
+import com.asakii.ai.agent.sdk.adapter.UiStreamAdapter
 import com.asakii.ai.agent.sdk.capabilities.AgentCapabilities
-import com.asakii.ai.agent.sdk.capabilities.CodexCapabilities
 import com.asakii.ai.agent.sdk.capabilities.AiPermissionMode
-import com.asakii.ai.agent.sdk.connect.AiAgentConnectContext
+import com.asakii.ai.agent.sdk.capabilities.CodexCapabilities
 import com.asakii.ai.agent.sdk.connect.AiAgentConnectOptions
 import com.asakii.ai.agent.sdk.connect.normalize
+import com.asakii.ai.agent.sdk.model.ImageContent
+import com.asakii.ai.agent.sdk.model.TextContent
 import com.asakii.ai.agent.sdk.model.UiError
 import com.asakii.ai.agent.sdk.model.UiStreamEvent
-import com.asakii.codex.agent.sdk.CodexClient
-import com.asakii.codex.agent.sdk.CodexSession
+import com.asakii.claude.agent.sdk.types.McpReconnectResponse
+import com.asakii.claude.agent.sdk.types.McpServerStatusInfo
+import com.asakii.claude.agent.sdk.types.McpToolInfo
+import com.asakii.claude.agent.sdk.types.McpToolsResponse
+import com.asakii.codex.agent.sdk.ApprovalMode
 import com.asakii.codex.agent.sdk.CodexClientOptions
 import com.asakii.codex.agent.sdk.ThreadOptions
-import com.asakii.codex.agent.sdk.TurnOptions
+import com.asakii.codex.agent.sdk.appserver.AppServerEvent
+import com.asakii.codex.agent.sdk.appserver.McpServerStatus
+import com.asakii.codex.agent.sdk.appserver.PatchChangeKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
+import java.util.Base64
+import java.util.UUID
 
-class CodexAgentClientImpl(
-    private val streamBridge: AiAgentStreamBridge = AiAgentStreamBridge(),
+internal class CodexAgentClientImpl(
+    private val permissionRequester: PermissionRequester? = null,
+    private val appServerFactory: CodexAppServerApiFactory = DefaultCodexAppServerApiFactory,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 ) : UnifiedAgentClient {
 
@@ -36,31 +61,63 @@ class CodexAgentClientImpl(
 
     private val eventFlow = MutableSharedFlow<UiStreamEvent>(extraBufferCapacity = 64)
     private val sendMutex = Mutex()
+    private val streamAdapter = CodexAppServerStreamAdapter(sessionIdProvider = { threadId })
+    private val uiAdapter = UiStreamAdapter()
 
-    private var client: CodexClient? = null
-    private var session: CodexSession? = null
-    private var context: AiAgentConnectContext? = null
+    private var client: CodexAppServerApi? = null
+    private var threadId: String? = null
+    private var currentTurnId: String? = null
+    private var currentThreadOptions: ThreadOptions? = null
+    private var currentClientOptions: CodexClientOptions? = null
+    private var approvalPolicy: ApprovalMode? = null
+    private var currentPermissionMode: AiPermissionMode = AiPermissionMode.DEFAULT
     private var activeCancellationJob: Job? = null
+    private var eventRelayJob: Job? = null
+    private var internalEvents = MutableSharedFlow<AppServerEvent>(
+        replay = 64,
+        extraBufferCapacity = 128,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    private val savedImages = mutableListOf<Path>()
 
     override suspend fun connect(options: AiAgentConnectOptions) {
         val normalized = options.normalize()
         require(normalized.provider == AiAgentProvider.CODEX) {
-            "CodexAgentClientImpl 只能处理 Codex provider"
+            "CodexAgentClientImpl only supports Codex provider"
         }
 
         val codexClientOptions = normalized.codexClientOptions ?: CodexClientOptions()
         val codexThreadOptions = normalized.codexThreadOptions ?: ThreadOptions()
 
-        val newClient = CodexClient(codexClientOptions)
-        val newSession = if (normalized.codexThreadId != null) {
-            newClient.resumeThread(normalized.codexThreadId, codexThreadOptions)
-        } else {
-            newClient.startThread(codexThreadOptions)
-        }
+        disconnect()
+
+        val newClient = appServerFactory.create(codexClientOptions, codexThreadOptions, scope)
+        newClient.initialize(
+            clientName = "claude-code-plus",
+            clientTitle = "Claude Code Plus",
+            clientVersion = "1.0.0"
+        )
 
         client = newClient
-        session = newSession
-        context = normalized
+        currentClientOptions = codexClientOptions
+        startEventRelay(newClient)
+
+        val thread = if (normalized.codexThreadId != null) {
+            newClient.resumeThread(normalized.codexThreadId)
+        } else {
+            newClient.startThread(
+                model = codexThreadOptions.model,
+                cwd = codexThreadOptions.workingDirectory,
+                approvalPolicy = codexThreadOptions.approvalPolicy?.wireValue,
+                sandbox = codexThreadOptions.sandboxMode?.wireValue,
+                developerInstructions = codexThreadOptions.developerInstructions
+            )
+        }
+
+        threadId = thread.id
+        currentThreadOptions = codexThreadOptions
+        approvalPolicy = codexThreadOptions.approvalPolicy
+        currentPermissionMode = codexThreadOptions.approvalPolicy.toPermissionMode()
 
         normalized.initialPrompt?.let {
             sendMessage(AgentMessageInput(text = it, sessionId = normalized.sessionId))
@@ -68,32 +125,40 @@ class CodexAgentClientImpl(
     }
 
     override suspend fun sendMessage(input: AgentMessageInput) {
-        val activeSession = session ?: error("Codex 会话尚未连接")
+        val activeClient = client ?: error("Codex session not connected")
+        val activeThreadId = threadId ?: error("Codex thread not available")
+        val threadOptions = currentThreadOptions ?: ThreadOptions()
 
         sendMutex.withLock {
             val cancellationJob = Job(scope.coroutineContext.job)
             activeCancellationJob = cancellationJob
             try {
-                // Codex 目前只支持纯文本，将内容块拍平成文本
-                val text = input.text ?: input.content?.joinToString("\n") { block ->
-                    when (block) {
-                        is com.asakii.ai.agent.sdk.model.TextContent -> block.text
-                        is com.asakii.ai.agent.sdk.model.ImageContent -> "[Image: ${block.mediaType}]"
-                        else -> "[${block.type}]"
-                    }
-                } ?: error("text 和 content 不能同时为空")
-
-                val turn = activeSession.runStreamed(
-                    text,
-                    turnOptions = TurnOptions(cancellation = cancellationJob)
+                val payload = buildInputPayload(input)
+                val turn = activeClient.startTurn(
+                    threadId = activeThreadId,
+                    message = payload.text,
+                    images = payload.images,
+                    cwd = threadOptions.workingDirectory,
+                    model = threadOptions.model,
+                    approvalPolicy = threadOptions.approvalPolicy?.wireValue
                 )
-                val flow = streamBridge.fromCodex(turn.events)
-                flow.collect { eventFlow.emit(it) }
+                currentTurnId = turn.id
+
+                val turnEvents = buildTurnEventFlow(turn.id, activeThreadId)
+                withContext(cancellationJob) {
+                    turnEvents.collect { event ->
+                        streamAdapter.convert(event).forEach { normalized ->
+                            uiAdapter.convert(normalized).forEach { eventFlow.emit(it) }
+                        }
+                    }
+                }
             } catch (t: Throwable) {
-                eventFlow.emit(UiError("Codex 会话失败: ${t.message}"))
+                eventFlow.emit(UiError("Codex session failed: ${t.message}"))
                 throw t
             } finally {
+                cancellationJob.cancel()
                 activeCancellationJob = null
+                currentTurnId = null
             }
         }
     }
@@ -101,6 +166,12 @@ class CodexAgentClientImpl(
     override fun streamEvents(): Flow<UiStreamEvent> = eventFlow.asSharedFlow()
 
     override suspend fun interrupt() {
+        val activeClient = client ?: return
+        val activeThreadId = threadId ?: return
+        val turnId = currentTurnId
+        if (turnId != null) {
+            runCatching { activeClient.interruptTurn(activeThreadId, turnId) }
+        }
         activeCancellationJob?.cancel()
     }
 
@@ -111,30 +182,45 @@ class CodexAgentClientImpl(
     }
 
     override suspend fun disconnect() {
-        activeCancellationJob?.cancel()
+        activeCancellationJob?.cancelAndJoin()
+        eventRelayJob?.cancelAndJoin()
+        client?.close()
+        clearSavedImages()
         client = null
-        session = null
-        context = null
+        threadId = null
+        currentTurnId = null
+        currentThreadOptions = null
+        currentClientOptions = null
+        approvalPolicy = null
+        currentPermissionMode = AiPermissionMode.DEFAULT
+        eventRelayJob = null
+        activeCancellationJob = null
     }
 
     override fun isConnected(): Boolean {
-        return client != null && session != null
+        return client != null && threadId != null
     }
-
-    // ==================== 能力相关方法 ====================
 
     override fun getCapabilities(): AgentCapabilities = CodexCapabilities
 
     override suspend fun setModel(model: String): String? {
-        throw UnsupportedOperationException(
-            "setModel is not supported by ${provider.name}"
-        )
+        checkCapability(getCapabilities().canSwitchModel, "setModel")
+        val options = currentThreadOptions ?: ThreadOptions()
+        currentThreadOptions = options.copy(model = model)
+        return model
     }
 
     override suspend fun setPermissionMode(mode: AiPermissionMode) {
-        throw UnsupportedOperationException(
-            "setPermissionMode is not supported by ${provider.name}"
-        )
+        val caps = getCapabilities()
+        checkCapability(caps.canSwitchPermissionMode, "setPermissionMode")
+        require(mode in caps.supportedPermissionModes) {
+            "Mode $mode is not supported. Supported: ${caps.supportedPermissionModes}"
+        }
+        currentPermissionMode = mode
+        val mappedPolicy = mode.toApprovalMode()
+        approvalPolicy = mappedPolicy
+        val options = currentThreadOptions ?: ThreadOptions()
+        currentThreadOptions = options.copy(approvalPolicy = mappedPolicy)
     }
 
     override suspend fun setMaxThinkingTokens(maxThinkingTokens: Int?) {
@@ -143,6 +229,449 @@ class CodexAgentClientImpl(
         )
     }
 
-    override fun getCurrentPermissionMode(): AiPermissionMode? = null
-}
+    override fun getCurrentPermissionMode(): AiPermissionMode? = currentPermissionMode
 
+    override suspend fun getMcpStatus(): List<McpServerStatusInfo> {
+        val activeClient = client ?: return emptyList()
+        val statuses = fetchMcpServerStatuses(activeClient)
+        return statuses.map { status ->
+            McpServerStatusInfo(
+                name = status.name,
+                status = status.toDisplayStatus(),
+                serverInfo = status.toServerInfoJson()
+            )
+        }
+    }
+
+    override suspend fun getMcpTools(serverName: String?): McpToolsResponse {
+        val activeClient = client ?: return McpToolsResponse(serverName, emptyList(), 0)
+        val statuses = fetchMcpServerStatuses(activeClient)
+        val filtered = if (serverName == null) statuses else statuses.filter { it.name == serverName }
+        val tools = filtered.flatMap { status ->
+            status.tools.map { (toolName, tool) ->
+                McpToolInfo(
+                    name = tool.name ?: toolName,
+                    description = tool.description ?: "",
+                    inputSchema = tool.inputSchema
+                )
+            }
+        }
+        return McpToolsResponse(serverName, tools, tools.size)
+    }
+
+    override suspend fun reconnectMcp(serverName: String): McpReconnectResponse {
+        val activeClient = client ?: return McpReconnectResponse(
+            success = false,
+            serverName = serverName,
+            status = null,
+            toolsCount = 0,
+            error = "Codex session not connected"
+        )
+
+        val activeThreadId = threadId
+        val status = runCatching { fetchMcpServerStatuses(activeClient) }.getOrNull()
+        val serverStatus = status?.firstOrNull { it.name == serverName }
+        if (status != null && serverStatus == null) {
+            return McpReconnectResponse(
+                success = false,
+                serverName = serverName,
+                status = null,
+                toolsCount = 0,
+                error = "MCP server not found"
+            )
+        }
+
+        if (serverStatus?.authStatus?.lowercase() == "notloggedin") {
+            runCatching { activeClient.startMcpOauthLogin(name = serverName) }
+        }
+
+        return runCatching {
+            activeCancellationJob?.cancel()
+            sendMutex.withLock {
+                restartAppServer(activeThreadId)
+            }
+            val refreshedClient = client ?: error("Codex session not connected")
+            val refreshedStatus = fetchMcpServerStatuses(refreshedClient)
+                .firstOrNull { it.name == serverName }
+                ?: return McpReconnectResponse(
+                    success = false,
+                    serverName = serverName,
+                    status = null,
+                    toolsCount = 0,
+                    error = "MCP server not found"
+                )
+            McpReconnectResponse(
+                success = true,
+                serverName = serverName,
+                status = refreshedStatus.toDisplayStatus(),
+                toolsCount = refreshedStatus.tools.size
+            )
+        }.getOrElse { throwable ->
+            McpReconnectResponse(
+                success = false,
+                serverName = serverName,
+                status = null,
+                toolsCount = 0,
+                error = throwable.message ?: "Unknown error"
+            )
+        }
+    }
+
+    override suspend fun startMcpOauthLogin(serverName: String): String? {
+        val activeClient = client ?: return null
+        val status = fetchMcpServerStatuses(activeClient).firstOrNull { it.name == serverName } ?: return null
+        val authStatus = status.authStatus?.lowercase()
+        if (authStatus != "notloggedin") return null
+
+        return runCatching { activeClient.startMcpOauthLogin(name = serverName) }
+            .getOrNull()
+            ?.authorizationUrl
+    }
+
+    private fun buildInputPayload(input: AgentMessageInput): InputPayload {
+        val images = input.content
+            ?.filterIsInstance<ImageContent>()
+            ?.map { persistImage(it) }
+            ?: emptyList()
+
+        val text = input.text ?: input.content
+            ?.filterIsInstance<TextContent>()
+            ?.map { it.text }
+            ?.filter { it.isNotBlank() }
+            ?.joinToString("\n")
+            .orEmpty()
+
+        if (text.isBlank() && images.isEmpty()) {
+            error("text and content cannot both be null")
+        }
+
+        return InputPayload(text = text, images = images)
+    }
+
+    private fun persistImage(block: ImageContent): String {
+        val targetDir = resolveImageDirectory()
+        val extension = imageFileExtension(block.mediaType)
+        val fileName = "codex-image-${UUID.randomUUID()}$extension"
+        val targetPath = targetDir.resolve(fileName)
+        val bytes = decodeBase64(block.data)
+        Files.write(targetPath, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
+        savedImages.add(targetPath)
+        return targetPath.toAbsolutePath().toString()
+    }
+
+    private fun decodeBase64(data: String): ByteArray {
+        val trimmed = data.trim()
+        val payload = if (trimmed.startsWith("data:", ignoreCase = true)) {
+            trimmed.substringAfter(',', trimmed)
+        } else {
+            trimmed
+        }
+        val normalized = payload.replace("\\s".toRegex(), "")
+        return Base64.getDecoder().decode(normalized)
+    }
+
+    private fun resolveImageDirectory(): Path {
+        val workspace = currentThreadOptions?.workingDirectory?.let { Path.of(it) }
+        if (workspace != null) {
+            val candidate = workspace.resolve(".claude-code-plus").resolve("codex-images")
+            try {
+                Files.createDirectories(candidate)
+                return candidate
+            } catch (_: Exception) {
+                // Fall back to temp directory.
+            }
+        }
+        val tmpRoot = System.getProperty("java.io.tmpdir")
+        val tmpDir = Paths.get(tmpRoot, "claude-code-plus", "codex-images")
+        Files.createDirectories(tmpDir)
+        return tmpDir
+    }
+
+    private fun imageFileExtension(mediaType: String): String {
+        val normalized = mediaType.lowercase().substringBefore(';').trim()
+        return when (normalized) {
+            "image/png" -> ".png"
+            "image/jpeg", "image/jpg" -> ".jpg"
+            "image/webp" -> ".webp"
+            "image/gif" -> ".gif"
+            "image/bmp" -> ".bmp"
+            "image/svg+xml" -> ".svg"
+            else -> ".img"
+        }
+    }
+
+    private fun clearSavedImages() {
+        val iterator = savedImages.iterator()
+        while (iterator.hasNext()) {
+            val path = iterator.next()
+            runCatching { Files.deleteIfExists(path) }
+            iterator.remove()
+        }
+    }
+
+    private data class InputPayload(
+        val text: String,
+        val images: List<String>
+    )
+
+    private fun startEventRelay(newClient: CodexAppServerApi) {
+        internalEvents = MutableSharedFlow(
+            replay = 64,
+            extraBufferCapacity = 128,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST
+        )
+
+        eventRelayJob?.cancel()
+        eventRelayJob = scope.launch {
+            newClient.events.collect { event ->
+                internalEvents.emit(event)
+                when (event) {
+                    is AppServerEvent.CommandApprovalRequired -> {
+                        launch { handleCommandApproval(event) }
+                    }
+                    is AppServerEvent.FileChangeApprovalRequired -> {
+                        launch { handleFileChangeApproval(event) }
+                    }
+                    else -> {}
+                }
+            }
+        }
+    }
+
+    private suspend fun restartAppServer(threadIdToResume: String?) {
+        val options = currentClientOptions ?: CodexClientOptions()
+        val threadOptions = currentThreadOptions ?: ThreadOptions()
+
+        activeCancellationJob?.cancelAndJoin()
+        eventRelayJob?.cancelAndJoin()
+        client?.close()
+
+        val newClient = appServerFactory.create(options, threadOptions, scope)
+        newClient.initialize(
+            clientName = "claude-code-plus",
+            clientTitle = "Claude Code Plus",
+            clientVersion = "1.0.0"
+        )
+
+        client = newClient
+        startEventRelay(newClient)
+
+        val thread = if (threadIdToResume != null) {
+            newClient.resumeThread(threadIdToResume)
+        } else {
+            newClient.startThread(
+                model = threadOptions.model,
+                cwd = threadOptions.workingDirectory,
+                approvalPolicy = threadOptions.approvalPolicy?.wireValue,
+                sandbox = threadOptions.sandboxMode?.wireValue,
+                developerInstructions = threadOptions.developerInstructions
+            )
+        }
+        threadId = thread.id
+        currentTurnId = null
+    }
+
+    private fun buildTurnEventFlow(turnId: String, threadId: String): Flow<AppServerEvent> = channelFlow {
+        val job = scope.launch {
+            var inTurn = false
+            internalEvents.collect { event ->
+                when (event) {
+                    is AppServerEvent.TurnStarted -> {
+                        if (event.threadId == threadId && event.turn.id == turnId) {
+                            inTurn = true
+                            send(event)
+                        }
+                    }
+                    is AppServerEvent.TurnCompleted -> {
+                        if (event.threadId == threadId && event.turn.id == turnId) {
+                            inTurn = true
+                            send(event)
+                            close()
+                        }
+                    }
+                    is AppServerEvent.ItemStarted -> {
+                        if (event.threadId == threadId && event.turnId == turnId) {
+                            inTurn = true
+                            send(event)
+                        }
+                    }
+                    is AppServerEvent.ItemCompleted -> {
+                        if (event.threadId == threadId && event.turnId == turnId) {
+                            inTurn = true
+                            send(event)
+                        }
+                    }
+                    is AppServerEvent.AgentMessageDelta -> {
+                        if (event.threadId == threadId && event.turnId == turnId) {
+                            inTurn = true
+                            send(event)
+                        }
+                    }
+                    is AppServerEvent.ReasoningDelta -> {
+                        if (event.threadId == threadId && event.turnId == turnId) {
+                            inTurn = true
+                            send(event)
+                        }
+                    }
+                    is AppServerEvent.CommandOutputDelta -> {
+                        if (event.threadId == threadId && event.turnId == turnId) {
+                            inTurn = true
+                            send(event)
+                        }
+                    }
+                    is AppServerEvent.TokenUsageUpdated -> {
+                        if (event.threadId == threadId && event.turnId == turnId) {
+                            send(event)
+                        }
+                    }
+                    is AppServerEvent.CommandApprovalRequired -> {
+                        if (event.threadId == threadId && event.turnId == turnId) {
+                            send(event)
+                        }
+                    }
+                    is AppServerEvent.FileChangeApprovalRequired -> {
+                        if (event.threadId == threadId && event.turnId == turnId) {
+                            send(event)
+                        }
+                    }
+                    is AppServerEvent.Error -> {
+                        if (event.threadId == threadId && event.turnId == turnId) {
+                            send(event)
+                            if (!event.willRetry) {
+                                close()
+                            }
+                        }
+                    }
+                    else -> {
+                        if (inTurn) {
+                            send(event)
+                        }
+                    }
+                }
+            }
+        }
+        awaitClose { job.cancel() }
+    }
+
+    private suspend fun handleCommandApproval(event: AppServerEvent.CommandApprovalRequired) {
+        val bypass = currentPermissionMode == AiPermissionMode.BYPASS_PERMISSIONS
+        val decision = if (bypass) {
+            null
+        } else {
+            permissionRequester?.requestPermission(
+                PermissionRequest(
+                    toolName = "Bash",
+                    inputJson = buildJsonObject {
+                        event.command?.let { put("command", it) }
+                        event.cwd?.let { put("cwd", it) }
+                        event.reason?.let { put("reason", it) }
+                        event.proposedExecpolicyAmendment?.let { amendment ->
+                            put("proposedExecpolicyAmendment", buildJsonObject {
+                                put("command", buildJsonArray {
+                                    amendment.command.forEach { add(it) }
+                                })
+                            })
+                        }
+                    },
+                    toolUseId = event.requestId
+                )
+            )
+        }
+
+        val approveByDefault = bypass || approvalPolicy == ApprovalMode.NEVER
+        val approved = decision?.approved ?: approveByDefault
+        if (approved) {
+            client?.acceptCommand(event.requestId, forSession = false)
+        } else {
+            client?.declineCommand(event.requestId)
+        }
+    }
+
+    private suspend fun handleFileChangeApproval(event: AppServerEvent.FileChangeApprovalRequired) {
+        val autoApprove = currentPermissionMode == AiPermissionMode.BYPASS_PERMISSIONS ||
+            currentPermissionMode == AiPermissionMode.ACCEPT_EDITS ||
+            approvalPolicy == ApprovalMode.NEVER
+        val decision = if (autoApprove) {
+            null
+        } else {
+            permissionRequester?.requestPermission(
+                PermissionRequest(
+                    toolName = "Edit",
+                    inputJson = buildJsonObject {
+                        put("changes", buildJsonArray {
+                            event.changes.forEach { change ->
+                                add(buildJsonObject {
+                                    put("path", change.path)
+                                    put("kind", change.kind.toKindString())
+                                    put("diff", change.diff)
+                                })
+                            }
+                        })
+                        event.reason?.let { put("reason", it) }
+                        event.grantRoot?.let { put("grantRoot", it) }
+                    },
+                    toolUseId = event.requestId
+                )
+            )
+        }
+
+        val approved = decision?.approved ?: autoApprove
+        if (approved) {
+            client?.acceptFileChange(event.requestId)
+        } else {
+            client?.declineFileChange(event.requestId)
+        }
+    }
+
+    private fun PatchChangeKind.toKindString(): String = when (this) {
+        is PatchChangeKind.Add -> "add"
+        is PatchChangeKind.Delete -> "delete"
+        is PatchChangeKind.Update -> "update"
+    }
+
+    private fun checkCapability(supported: Boolean, method: String) {
+        if (!supported) {
+            throw UnsupportedOperationException(
+                "$method is not supported by ${provider.name}"
+            )
+        }
+    }
+
+    private fun AiPermissionMode.toApprovalMode(): ApprovalMode = when (this) {
+        AiPermissionMode.BYPASS_PERMISSIONS -> ApprovalMode.NEVER
+        AiPermissionMode.DEFAULT,
+        AiPermissionMode.ACCEPT_EDITS,
+        AiPermissionMode.PLAN -> ApprovalMode.ON_REQUEST
+    }
+
+    private fun ApprovalMode?.toPermissionMode(): AiPermissionMode = when (this) {
+        ApprovalMode.NEVER -> AiPermissionMode.BYPASS_PERMISSIONS
+        ApprovalMode.ON_REQUEST,
+        ApprovalMode.ON_FAILURE,
+        ApprovalMode.UNTRUSTED,
+        null -> AiPermissionMode.DEFAULT
+    }
+
+    private suspend fun fetchMcpServerStatuses(activeClient: CodexAppServerApi): List<McpServerStatus> {
+        val result = mutableListOf<McpServerStatus>()
+        var cursor: String? = null
+        do {
+            val page = activeClient.listMcpServerStatus(cursor = cursor, limit = null)
+            result.addAll(page.data)
+            cursor = page.nextCursor?.takeIf { it.isNotBlank() }
+        } while (cursor != null)
+        return result
+    }
+
+    private fun McpServerStatus.toDisplayStatus(): String = when (authStatus?.lowercase()) {
+        "notloggedin" -> "needs-auth"
+        else -> "connected"
+    }
+
+    private fun McpServerStatus.toServerInfoJson(): JsonElement = buildJsonObject {
+        authStatus?.let { put("authStatus", it) }
+        put("toolsCount", tools.size)
+        put("resourcesCount", resources.size)
+        put("resourceTemplatesCount", resourceTemplates.size)
+    }
+}
