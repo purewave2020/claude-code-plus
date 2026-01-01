@@ -5,6 +5,7 @@ import com.asakii.claude.agent.sdk.mcp.ContentItem
 import com.asakii.claude.agent.sdk.mcp.McpServer as SdkMcpServer
 import com.asakii.claude.agent.sdk.mcp.ToolResult
 import io.modelcontextprotocol.json.McpJsonMapper
+import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapperSupplier
 import io.modelcontextprotocol.server.McpServer as OfficialMcpServer
 import io.modelcontextprotocol.server.McpServerFeatures
 import io.modelcontextprotocol.server.McpSyncServer
@@ -44,7 +45,7 @@ object McpHttpGateway {
     )
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val jsonMapper: McpJsonMapper by lazy { createJsonMapper() }
+    private val jsonMapper: McpJsonMapper by lazy { JacksonMcpJsonMapperSupplier().get() }
     private val endpointsByKey = ConcurrentHashMap<EndpointKey, Endpoint>()
     private val endpointsByPath = ConcurrentHashMap<String, Endpoint>()
     private val lifecycleLock = Any()
@@ -100,6 +101,7 @@ object McpHttpGateway {
 
         val endpointPath = buildEndpointPath(provider, sessionId, serverName)
         val transport = HttpServletStreamableServerTransportProvider.builder()
+            .jsonMapper(jsonMapper)
             .mcpEndpoint(endpointPath)
             .build()
 
@@ -145,18 +147,6 @@ object McpHttpGateway {
     private fun resolveTransport(path: String): HttpServletStreamableServerTransportProvider? {
         val normalized = path.trimEnd('/')
         return endpointsByPath[normalized]?.transport
-    }
-
-    private fun createJsonMapper(): McpJsonMapper {
-        val loader = McpHttpGateway::class.java.classLoader
-        val thread = Thread.currentThread()
-        val previous = thread.contextClassLoader
-        return try {
-            thread.contextClassLoader = loader
-            McpJsonMapper.getDefault()
-        } finally {
-            thread.contextClassLoader = previous
-        }
     }
 
     private suspend fun registerTools(syncServer: McpSyncServer, server: SdkMcpServer) {
