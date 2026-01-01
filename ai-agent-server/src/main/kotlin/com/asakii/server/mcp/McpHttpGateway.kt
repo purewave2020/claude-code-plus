@@ -4,9 +4,7 @@ import com.asakii.ai.agent.sdk.AiAgentProvider
 import com.asakii.claude.agent.sdk.mcp.ContentItem
 import com.asakii.claude.agent.sdk.mcp.McpServer as SdkMcpServer
 import com.asakii.claude.agent.sdk.mcp.ToolResult
-import com.fasterxml.jackson.databind.ObjectMapper
 import io.modelcontextprotocol.json.McpJsonMapper
-import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper
 import io.modelcontextprotocol.server.McpServer as OfficialMcpServer
 import io.modelcontextprotocol.server.McpServerFeatures
 import io.modelcontextprotocol.server.McpSyncServer
@@ -156,9 +154,6 @@ object McpHttpGateway {
         return try {
             thread.contextClassLoader = loader
             McpJsonMapper.getDefault()
-        } catch (t: Throwable) {
-            logger.warn(t) { "[MCP] Failed to load default McpJsonMapper, falling back to Jackson" }
-            JacksonMcpJsonMapper(ObjectMapper())
         } finally {
             thread.contextClassLoader = previous
         }
