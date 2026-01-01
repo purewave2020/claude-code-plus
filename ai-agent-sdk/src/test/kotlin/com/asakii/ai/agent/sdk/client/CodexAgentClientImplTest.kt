@@ -22,6 +22,7 @@ import com.asakii.codex.agent.sdk.appserver.ThreadInfo
 import com.asakii.codex.agent.sdk.appserver.ThreadItem
 import com.asakii.codex.agent.sdk.appserver.TurnInfo
 import com.asakii.codex.agent.sdk.appserver.TurnStatus
+import com.asakii.codex.agent.sdk.appserver.SandboxPolicy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
@@ -596,11 +597,12 @@ class CodexAgentClientImplTest {
             images: List<String>,
             cwd: String?,
             model: String?,
-            approvalPolicy: String?
+            approvalPolicy: String?,
+            sandboxPolicy: SandboxPolicy?
         ): TurnInfo {
             val turnId = "turn-${startTurnCalls.size + 1}"
             lastStartTurnId = turnId
-            startTurnCalls.add(StartTurnArgs(threadId, message, images, cwd, model, approvalPolicy))
+            startTurnCalls.add(StartTurnArgs(threadId, message, images, cwd, model, approvalPolicy, sandboxPolicy))
             return TurnInfo(id = turnId, status = TurnStatus.InProgress)
         }
 
@@ -660,7 +662,8 @@ class CodexAgentClientImplTest {
             val images: List<String>,
             val cwd: String?,
             val model: String?,
-            val approvalPolicy: String?
+            val approvalPolicy: String?,
+            val sandboxPolicy: SandboxPolicy?
         )
     }
 }

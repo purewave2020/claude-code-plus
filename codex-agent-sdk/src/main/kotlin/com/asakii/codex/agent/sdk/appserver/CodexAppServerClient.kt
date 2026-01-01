@@ -340,7 +340,8 @@ class CodexAppServerClient private constructor(
         images: List<String> = emptyList(),
         cwd: String? = null,
         model: String? = null,
-        approvalPolicy: String? = null
+        approvalPolicy: String? = null,
+        sandboxPolicy: SandboxPolicy? = null
     ): TurnInfo {
         checkInitialized()
 
@@ -354,7 +355,8 @@ class CodexAppServerClient private constructor(
             input = input,
             cwd = cwd,
             model = model,
-            approvalPolicy = approvalPolicy
+            approvalPolicy = approvalPolicy,
+            sandboxPolicy = sandboxPolicy
         )
 
         val result: TurnStartResult = rpc.request("turn/start", params)

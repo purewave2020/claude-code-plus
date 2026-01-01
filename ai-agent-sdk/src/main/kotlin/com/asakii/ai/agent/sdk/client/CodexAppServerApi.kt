@@ -7,6 +7,7 @@ import com.asakii.codex.agent.sdk.appserver.CodexAppServerClient
 import com.asakii.codex.agent.sdk.appserver.ListMcpServerStatusResponse
 import com.asakii.codex.agent.sdk.appserver.McpServerOauthLoginResponse
 import com.asakii.codex.agent.sdk.appserver.ModelListResponse
+import com.asakii.codex.agent.sdk.appserver.SandboxPolicy
 import com.asakii.codex.agent.sdk.appserver.ThreadInfo
 import com.asakii.codex.agent.sdk.appserver.TurnInfo
 import kotlinx.coroutines.CoroutineScope
@@ -32,7 +33,8 @@ internal interface CodexAppServerApi : Closeable {
         images: List<String> = emptyList(),
         cwd: String? = null,
         model: String? = null,
-        approvalPolicy: String? = null
+        approvalPolicy: String? = null,
+        sandboxPolicy: SandboxPolicy? = null
     ): TurnInfo
     suspend fun interruptTurn(threadId: String, turnId: String)
     suspend fun acceptCommand(requestId: String, forSession: Boolean = false)
@@ -71,14 +73,16 @@ internal class DefaultCodexAppServerApi(private val client: CodexAppServerClient
         images: List<String>,
         cwd: String?,
         model: String?,
-        approvalPolicy: String?
+        approvalPolicy: String?,
+        sandboxPolicy: SandboxPolicy?
     ): TurnInfo = client.startTurn(
         threadId,
         message,
         images = images,
         cwd = cwd,
         model = model,
-        approvalPolicy = approvalPolicy
+        approvalPolicy = approvalPolicy,
+        sandboxPolicy = sandboxPolicy
     )
 
     override suspend fun interruptTurn(threadId: String, turnId: String) {

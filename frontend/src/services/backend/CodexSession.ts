@@ -138,6 +138,7 @@ export class CodexSession extends BaseBackendSession {
       reject: (error: Error) => void
     }
   >()
+  private pendingItems = new Map<string, CodexItem>()
 
   // Process management
   private backendUrl: string | null = null
@@ -369,13 +370,14 @@ export class CodexSession extends BaseBackendSession {
 
   private async startThread(projectPath?: string): Promise<void> {
     const config = this.state.config as CodexBackendConfig
+    const sandbox = this.mapSandboxMode(config.sandboxMode)
 
     const response = await this.sendRequest('thread/start', {
       model: config.modelId,
       modelProvider: config.modelProvider,
       cwd: projectPath || process.cwd(),
       approvalPolicy: this.mapPermissionModeToApprovalPolicy(config.permissionMode),
-      sandbox: config.sandboxMode,
+      sandbox: sandbox || undefined,
       baseInstructions: config.systemPrompt || undefined,
       modelReasoningEffort: config.reasoningEffort || undefined,
     })
@@ -402,6 +404,7 @@ export class CodexSession extends BaseBackendSession {
     }
 
     const config = this.state.config as CodexBackendConfig
+    const sandboxPolicy = this.buildSandboxPolicy(config)
 
     const response = await this.sendRequest('turn/start', {
       threadId: this.currentThreadId,
@@ -410,6 +413,7 @@ export class CodexSession extends BaseBackendSession {
         ? this.mapThinkingToEffort(message.thinkingConfig)
         : config.reasoningEffort || undefined,
       summary: config.reasoningSummary || 'auto',
+      sandboxPolicy,
     })
 
     this.currentTurnId = (response as { turnId: string }).turnId
@@ -600,6 +604,9 @@ export class CodexSession extends BaseBackendSession {
 
       case 'item/started': {
         const item = params.item as CodexItem
+        if (item?.id) {
+          this.pendingItems.set(item.id, item)
+        }
         if (item.type === 'commandExecution') {
           this.emitEvent({
             type: 'tool_started',
@@ -656,6 +663,9 @@ export class CodexSession extends BaseBackendSession {
 
       case 'item/completed': {
         const item = params.item as CodexItem
+        if (item?.id) {
+          this.pendingItems.delete(item.id)
+        }
         this.emitEvent({
           type: 'tool_completed',
           sessionId,
@@ -717,6 +727,10 @@ export class CodexSession extends BaseBackendSession {
     requestId: number,
     params: Record<string, unknown>
   ): void {
+    const itemId = params.itemId as string | undefined
+    const cachedItem = itemId ? this.pendingItems.get(itemId) : undefined
+    const details = cachedItem ? { ...params, ...cachedItem } : params
+
     // Emit approval request event
     this.emitEvent({
       type: 'approval_request',
@@ -724,7 +738,7 @@ export class CodexSession extends BaseBackendSession {
       timestamp: Date.now(),
       requestId: String(requestId),
       approvalType: 'command',
-      details: params,
+      details,
     })
 
     // Wait for user response via respondToApproval()
@@ -752,6 +766,10 @@ export class CodexSession extends BaseBackendSession {
     requestId: number,
     params: Record<string, unknown>
   ): void {
+    const itemId = params.itemId as string | undefined
+    const cachedItem = itemId ? this.pendingItems.get(itemId) : undefined
+    const details = cachedItem ? { ...params, ...cachedItem } : params
+
     // Emit approval request event
     this.emitEvent({
       type: 'approval_request',
@@ -759,7 +777,7 @@ export class CodexSession extends BaseBackendSession {
       timestamp: Date.now(),
       requestId: String(requestId),
       approvalType: 'file_change',
-      details: params,
+      details,
     })
 
     // Wait for user response
@@ -846,16 +864,40 @@ export class CodexSession extends BaseBackendSession {
     return inputs
   }
 
-  private mapPermissionModeToApprovalPolicy(mode: string): ApprovalPolicy {
+  private mapPermissionModeToApprovalPolicy(_mode: string): ApprovalPolicy {
+    // Always request approvals; bypass is handled by the frontend.
+    return 'on-request'
+  }
+
+  private mapSandboxMode(mode: string | null | undefined): string | null {
     switch (mode) {
-      case 'bypass':
-        return 'never'
-      case 'plan':
-      case 'default':
-      case 'accept-edits':
+      case 'read-only':
+        return 'readOnly'
+      case 'workspace-write':
+        return 'workspaceWrite'
+      case 'danger-full-access':
+      case 'full-access':
+        return 'dangerFullAccess'
       default:
-        return 'on-request'
+        return null
     }
+  }
+
+  private buildSandboxPolicy(config: CodexBackendConfig): Record<string, unknown> | undefined {
+    const mode = this.mapSandboxMode(config.sandboxMode)
+    if (!mode) {
+      return undefined
+    }
+
+    const policy: Record<string, unknown> = { type: mode }
+    if (config.sandboxWritableRoots && config.sandboxWritableRoots.length > 0) {
+      policy.writableRoots = config.sandboxWritableRoots
+    }
+    if (config.networkAccess !== undefined) {
+      policy.networkAccess = config.networkAccess
+    }
+
+    return policy
   }
 
   private mapThinkingToEffort(

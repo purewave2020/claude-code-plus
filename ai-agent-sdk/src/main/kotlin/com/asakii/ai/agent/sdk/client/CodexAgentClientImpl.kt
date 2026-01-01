@@ -18,10 +18,12 @@ import com.asakii.claude.agent.sdk.types.McpToolInfo
 import com.asakii.claude.agent.sdk.types.McpToolsResponse
 import com.asakii.codex.agent.sdk.ApprovalMode
 import com.asakii.codex.agent.sdk.CodexClientOptions
+import com.asakii.codex.agent.sdk.SandboxMode
 import com.asakii.codex.agent.sdk.ThreadOptions
 import com.asakii.codex.agent.sdk.appserver.AppServerEvent
 import com.asakii.codex.agent.sdk.appserver.McpServerStatus
 import com.asakii.codex.agent.sdk.appserver.PatchChangeKind
+import com.asakii.codex.agent.sdk.appserver.SandboxPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -134,13 +136,15 @@ internal class CodexAgentClientImpl(
             activeCancellationJob = cancellationJob
             try {
                 val payload = buildInputPayload(input)
+                val sandboxPolicy = buildSandboxPolicy(threadOptions)
                 val turn = activeClient.startTurn(
                     threadId = activeThreadId,
                     message = payload.text,
                     images = payload.images,
                     cwd = threadOptions.workingDirectory,
                     model = threadOptions.model,
-                    approvalPolicy = threadOptions.approvalPolicy?.wireValue
+                    approvalPolicy = threadOptions.approvalPolicy?.wireValue,
+                    sandboxPolicy = sandboxPolicy
                 )
                 currentTurnId = turn.id
 
@@ -346,6 +350,18 @@ internal class CodexAgentClientImpl(
         }
 
         return InputPayload(text = text, images = images)
+    }
+
+    private fun buildSandboxPolicy(options: ThreadOptions): SandboxPolicy? {
+        return when (options.sandboxMode) {
+            SandboxMode.READ_ONLY -> SandboxPolicy.ReadOnly
+            SandboxMode.DANGER_FULL_ACCESS -> SandboxPolicy.DangerFullAccess
+            SandboxMode.WORKSPACE_WRITE -> SandboxPolicy.WorkspaceWrite(
+                writableRoots = options.additionalDirectories,
+                networkAccess = options.networkAccessEnabled ?: false
+            )
+            null -> null
+        }
     }
 
     private fun persistImage(block: ImageContent): String {
