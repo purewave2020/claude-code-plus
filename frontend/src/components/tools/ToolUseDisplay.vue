@@ -21,7 +21,7 @@
     </template>
 
     <!-- Codex McpToolCall → MCP 显示 -->
-    <GenericMcpToolDisplay
+    <ToolCallDisplay
       v-else-if="isCodexMcpToolCall"
       :tool-call="asMcpToolCall"
     />
@@ -70,7 +70,6 @@ import ToolCallDisplay from '@/components/chat/ToolCallDisplay.vue'
 import BashToolDisplay from './base/BashToolDisplay.vue'
 import WriteToolDisplay from './base/WriteToolDisplay.vue'
 import EditToolDisplay from './base/EditToolDisplay.vue'
-import GenericMcpToolDisplay from './GenericMcpToolDisplay.vue'
 
 interface Props {
   toolCall: ToolCall
@@ -172,6 +171,7 @@ const asClaudeBashToolCall = computed(() => {
   const input = props.toolCall.input as any
   return {
     ...props.toolCall,
+    toolName: 'Bash',
     toolType: CLAUDE_TOOL_TYPE.BASH,
     input: {
       command: input.command || input.cmd || '',
@@ -190,6 +190,7 @@ const asClaudeWriteToolCall = computed(() => {
   const input = props.toolCall.input as any
   return {
     ...props.toolCall,
+    toolName: 'Write',
     toolType: CLAUDE_TOOL_TYPE.WRITE,
     input: {
       file_path: input.path || input.filePath,
@@ -207,6 +208,7 @@ const asClaudeEditToolCall = computed(() => {
   const input = props.toolCall.input as any
   return {
     ...props.toolCall,
+    toolName: 'Edit',
     toolType: CLAUDE_TOOL_TYPE.EDIT,
     input: {
       file_path: input.path || input.filePath,
@@ -223,10 +225,13 @@ const asClaudeEditToolCall = computed(() => {
  */
 const asMcpToolCall = computed(() => {
   const input = props.toolCall.input as any
+  const server = input.server || input.mcpServer
+  const tool = input.tool || input.toolName || input.name
+  const mcpToolName = server && tool ? `mcp__${server}__${tool}` : (tool || 'mcp__unknown')
   return {
     ...props.toolCall,
     toolType: OTHER_TOOL_TYPE.MCP,
-    toolName: input.toolName || input.name || 'mcp__unknown',
+    toolName: mcpToolName,
     input: input.parameters || input.args || input,
     result: adaptCodexResultToClaudeFormat(props.toolCall.result)
   }

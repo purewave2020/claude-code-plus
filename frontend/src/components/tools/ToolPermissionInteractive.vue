@@ -16,72 +16,12 @@
 
       <!-- 工具参数预览 -->
       <div class="permission-content">
-        <template v-if="pendingPermission.toolName === 'Bash'">
-          <pre class="command-preview">{{ pendingPermission.input.command }}</pre>
-        </template>
-        <template v-else-if="pendingPermission.toolName === 'Write'">
-          <div class="file-info">
-            <span class="file-icon">📄</span>
-            <span class="file-path">{{ pendingPermission.input.file_path }}</span>
-          </div>
-          <div v-if="pendingPermission.input.content" class="content-preview">
-            <pre class="content-text">{{ truncateContent(pendingPermission.input.content) }}</pre>
-          </div>
-        </template>
-        <template v-else-if="pendingPermission.toolName === 'Edit'">
-          <div class="file-info">
-            <span class="file-icon">✏️</span>
-            <span class="file-path">{{ pendingPermission.input.file_path }}</span>
-            <button v-if="isIdeEnvironment()" class="btn-preview" @click="showEditPreview">
-              {{ t('permission.viewInIdea') }}
-            </button>
-          </div>
-          <div v-if="pendingPermission.input.old_string" class="edit-preview">
-            <div class="edit-section">
-              <span class="edit-label">{{ t('permission.replace') }}:</span>
-              <pre class="edit-text old">{{ truncateContent(pendingPermission.input.old_string) }}</pre>
-            </div>
-            <div class="edit-section">
-              <span class="edit-label">{{ t('permission.with') }}:</span>
-              <pre class="edit-text new">{{ truncateContent(pendingPermission.input.new_string || '') }}</pre>
-            </div>
-          </div>
-        </template>
-        <template v-else-if="pendingPermission.toolName === 'MultiEdit'">
-          <div class="file-info">
-            <span class="file-icon">📋</span>
-            <span class="file-path">{{ pendingPermission.input.file_path }}</span>
-            <button v-if="isIdeEnvironment()" class="btn-preview" @click="showMultiEditPreview">
-              {{ t('permission.viewInIdea') }}
-            </button>
-          </div>
-          <div class="multi-edit-info">
-            <span class="edit-count">{{ pendingPermission.input.edits?.length || 0 }} {{ t('permission.edits') }}</span>
-          </div>
-        </template>
-        <template v-else-if="isExitPlanMode">
-          <div class="plan-info">
-            <span class="plan-icon">📋</span>
-            <span class="plan-label">{{ t('permission.planReady') }}</span>
-            <button class="btn-preview" @click="togglePlanExpand">
-              {{ planExpanded ? t('permission.collapse') : t('permission.expand') }}
-            </button>
-            <button v-if="isIdeEnvironment() && planContent" class="btn-preview" @click="openPlanInIdea">
-              {{ t('permission.viewInIdea') }}
-            </button>
-          </div>
-          <!-- 展开显示 plan 内容 -->
-          <div v-if="planExpanded && planContent" class="plan-expanded-content">
-            <MarkdownRenderer :content="planContent" />
-          </div>
-          <div v-else-if="planExpanded && !planContent" class="plan-error">
-            {{ t('permission.noPlanContent') }}
-          </div>
-        </template>
-        <template v-else>
-          <pre v-if="hasInputParams(pendingPermission.input)" class="params-preview">{{ formatParams(pendingPermission.input) }}</pre>
-          <div v-else class="no-params-hint">{{ t('permission.noParams') }}</div>
-        </template>
+        <ToolUseDisplay
+          v-if="permissionToolCall"
+          :tool-call="permissionToolCall"
+          :backend-type="permissionBackendType"
+        />
+        <div v-else class="no-params-hint">{{ t('permission.noParams') }}</div>
       </div>
 
       <!-- 操作选项 -->
@@ -135,9 +75,10 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useI18n } from '@/composables/useI18n'
-import { jetbrainsBridge, isIdeEnvironment } from '@/services/jetbrainsApi'
-import MarkdownRenderer from '@/components/markdown/MarkdownRenderer.vue'
-import type { PermissionUpdate } from '@/types/permission'
+import ToolUseDisplay from '@/components/tools/ToolUseDisplay.vue'
+import { resolveToolType } from '@/constants/toolTypes'
+import { ToolCallStatus, type ToolCall } from '@/types/display'
+import type { PendingPermissionRequest, PermissionUpdate } from '@/types/permission'
 
 const { t } = useI18n()
 const sessionStore = useSessionStore()
@@ -145,46 +86,55 @@ const sessionStore = useSessionStore()
 const containerRef = ref<HTMLElement | null>(null)
 const denyReason = ref('')
 
-// Plan 展开状态
-const planExpanded = ref(false)
-
-// Plan 内容（计算属性）
-const planContent = computed(() => {
-  if (!pendingPermission.value) return ''
-  return (pendingPermission.value.input.plan as string) || ''
-})
-
-// 切换 plan 展开/收起
-function togglePlanExpand() {
-  planExpanded.value = !planExpanded.value
-}
-
-// 在 IDEA 中打开 plan
-async function openPlanInIdea() {
-  if (!planContent.value) return
-
-  const success = await jetbrainsBridge.showMarkdown({
-    content: planContent.value,
-    title: t('permission.planPreviewTitle')
-  })
-
-  if (!success) {
-    console.warn('[ToolPermission] Failed to open plan in IDEA')
-  }
-}
-
-// 获取当前会话的第一个待处理授权请求
 const pendingPermission = computed(() => {
   const permissions = sessionStore.getCurrentPendingPermissions()
   return permissions.length > 0 ? permissions[0] : null
 })
 
-// 检查是否是 ExitPlanMode 权限请求
+const permissionBackendType = computed(() => {
+  const request = pendingPermission.value
+  if (!request) return 'claude'
+
+  const toolName = request.toolName
+  const inputType = String((request.input as any)?.type || '').toLowerCase()
+  if (
+    toolName === 'CommandExecution' ||
+    toolName === 'FileChange' ||
+    toolName === 'McpToolCall' ||
+    inputType === 'commandexecution' ||
+    inputType === 'filechange' ||
+    inputType === 'mcptoolcall' ||
+    inputType === 'reasoning'
+  ) {
+    return 'codex'
+  }
+
+  return 'claude'
+})
+
+const permissionToolCall = computed<ToolCall | null>(() => {
+  const request = pendingPermission.value
+  if (!request) return null
+
+  const toolName = request.toolName || 'Unknown'
+  const normalizedInput = normalizePermissionInput(request)
+
+  return {
+    id: request.id,
+    displayType: 'toolCall',
+    toolName,
+    toolType: resolveToolType(toolName),
+    status: ToolCallStatus.RUNNING,
+    startTime: request.createdAt,
+    timestamp: request.createdAt,
+    input: normalizedInput,
+  } as ToolCall
+})
+
 const isExitPlanMode = computed(() => {
   return pendingPermission.value?.toolName === 'ExitPlanMode'
 })
 
-// 当有新的权限请求时，自动聚焦并清空拒绝原因
 watch(pendingPermission, (newVal) => {
   if (newVal) {
     denyReason.value = ''
@@ -200,17 +150,13 @@ function handleApprove() {
   }
 }
 
-// ExitPlanMode 专用：允许并切换到指定模式
 async function handleApproveWithMode(mode: 'default' | 'acceptEdits' | 'bypassPermissions') {
   if (pendingPermission.value) {
-    // 先返回权限结果为 true
     sessionStore.respondPermission(pendingPermission.value.id, { approved: true })
 
-    // 然后调用 API 设置权限模式
     const tab = sessionStore.currentTab
     if (tab) {
       await tab.setPermissionMode(mode)
-      // 如果是 bypassPermissions 模式，同时更新 UI 上的 Bypass 开关
       if (mode === 'bypassPermissions') {
         tab.skipPermissions.value = true
       }
@@ -220,11 +166,8 @@ async function handleApproveWithMode(mode: 'default' | 'acceptEdits' | 'bypassPe
 
 function handleAllowWithUpdate(update: PermissionUpdate) {
   if (pendingPermission.value) {
-    // 如果是 setMode 类型，只更新本地 UI 状态
-    // 不需要调用 setPermissionMode RPC，SDK 收到响应后会自行切换
     if (update.type === 'setMode' && update.mode) {
       sessionStore.setLocalPermissionMode(update.mode)
-      // 如果是 bypassPermissions 模式，同时更新 UI 上的 Bypass 开关
       if (update.mode === 'bypassPermissions') {
         const tab = sessionStore.currentTab
         if (tab) {
@@ -249,46 +192,40 @@ function handleDeny() {
   }
 }
 
-// ========== IDE 预览方法 ==========
+function normalizePermissionInput(request: PendingPermissionRequest): Record<string, any> {
+  const rawInput = (request.input || {}) as Record<string, any>
+  const item = rawInput.item && typeof rawInput.item === 'object'
+    ? rawInput.item as Record<string, any>
+    : null
+  const merged: Record<string, any> = item ? { ...rawInput, ...item } : { ...rawInput }
 
-async function showEditPreview() {
-  if (!pendingPermission.value) return
-  const input = pendingPermission.value.input
-
-  const success = await jetbrainsBridge.showEditPreviewDiff({
-    filePath: input.file_path || '',
-    edits: [{
-      oldString: input.old_string || '',
-      newString: input.new_string || '',
-      replaceAll: input.replace_all || false
-    }],
-    title: `${t('permission.editPreviewTitle')}: ${input.file_path}`
-  })
-
-  if (!success) {
-    console.warn('[ToolPermission] Failed to show edit preview')
+  if (request.toolName === 'CommandExecution') {
+    const parsed = merged.parsedCmd || merged.parsed_cmd
+    if (!merged.command && parsed) {
+      merged.command = typeof parsed === 'string'
+        ? parsed
+        : (parsed.raw || parsed.command || parsed.text || '')
+    }
   }
-}
 
-async function showMultiEditPreview() {
-  if (!pendingPermission.value) return
-  const input = pendingPermission.value.input
-
-  if (!input.file_path || !input.edits) return
-
-  const success = await jetbrainsBridge.showEditPreviewDiff({
-    filePath: input.file_path,
-    edits: input.edits.map((e: any) => ({
-      oldString: e.old_string || '',
-      newString: e.new_string || '',
-      replaceAll: e.replace_all || false
-    })),
-    title: `${t('permission.multiEditPreviewTitle')}: ${input.file_path}`
-  })
-
-  if (!success) {
-    console.warn('[ToolPermission] Failed to show multi-edit preview')
+  if (request.toolName === 'FileChange') {
+    const changes = Array.isArray(merged.changes) ? merged.changes : null
+    if (changes && changes.length > 0) {
+      const first = changes[0] as Record<string, any>
+      if (!merged.path && first.path) {
+        merged.path = first.path
+      }
+      if (!merged.operation) {
+        const kind = first.kind
+        const kindType = typeof kind === 'string' ? kind : (kind?.type || kind?.kind)
+        if (kindType === 'add') merged.operation = 'create'
+        else if (kindType === 'delete') merged.operation = 'delete'
+        else if (kindType) merged.operation = 'edit'
+      }
+    }
   }
+
+  return merged
 }
 
 function formatSuggestion(suggestion: PermissionUpdate): string {
@@ -347,7 +284,10 @@ function getToolDisplayName(name: string): string {
     'Read': 'Read File',
     'MultiEdit': 'Multi Edit',
     'Glob': 'Find Files',
-    'Grep': 'Search Content'
+    'Grep': 'Search Content',
+    'CommandExecution': 'Command Execution',
+    'FileChange': 'File Change',
+    'McpToolCall': 'MCP Tool'
   }
   return names[name] || name
 }
@@ -360,30 +300,15 @@ function getToolIcon(name: string): string {
     'Read': '📖',
     'MultiEdit': '📋',
     'Glob': '🔍',
-    'Grep': '🔎'
+    'Grep': '🔎',
+    'CommandExecution': '🖥',
+    'FileChange': '📝',
+    'McpToolCall': '🧩'
   }
   return icons[name] || '🔧'
 }
-
-function truncateContent(content: string, maxLength: number = 200): string {
-  if (!content) return ''
-  if (content.length <= maxLength) return content
-  return content.substring(0, maxLength) + '...'
-}
-
-function formatParams(params: Record<string, unknown>): string {
-  try {
-    return JSON.stringify(params, null, 2)
-  } catch {
-    return String(params)
-  }
-}
-
-function hasInputParams(input: Record<string, unknown>): boolean {
-  if (!input) return false
-  return Object.keys(input).length > 0
-}
 </script>
+
 
 <style scoped>
 .permission-request {
@@ -443,155 +368,6 @@ function hasInputParams(input: Record<string, unknown>): boolean {
   min-height: 0;
   overflow-y: auto;
   background: var(--theme-background, #fff);
-}
-
-.command-preview {
-  background: #2d2d2d;
-  color: #e6e6e6;
-  padding: 12px;
-  border-radius: 6px;
-  font-family: var(--theme-editor-font-family);
-  font-size: 13px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  margin: 0;
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--theme-panel-background, #f6f8fa);
-  border-radius: 6px;
-  margin-bottom: 8px;
-}
-
-.btn-preview {
-  font-size: 12px;
-  padding: 4px 8px;
-  background: var(--theme-accent-subtle, #e8f1fb);
-  color: var(--theme-accent, #0366d6);
-  border: 1px solid var(--theme-accent, #0366d6);
-  border-radius: 4px;
-  cursor: pointer;
-  margin-left: auto;
-  transition: all 0.15s ease;
-}
-
-.btn-preview:hover {
-  background: var(--theme-accent, #0366d6);
-  color: #fff;
-}
-
-.multi-edit-info {
-  padding: 8px 12px;
-  background: var(--theme-panel-background, #f6f8fa);
-  border-radius: 6px;
-}
-
-.edit-count {
-  font-size: 13px;
-  color: var(--theme-secondary-foreground, #586069);
-}
-
-.plan-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--theme-panel-background, #f6f8fa);
-  border-radius: 6px;
-}
-
-.plan-icon {
-  font-size: 16px;
-}
-
-.plan-label {
-  font-size: 13px;
-  color: var(--theme-foreground, #24292e);
-}
-
-.file-icon {
-  font-size: 16px;
-}
-
-.file-path {
-  font-family: var(--theme-editor-font-family);
-  font-size: 13px;
-  color: var(--theme-foreground, #24292e);
-  word-break: break-all;
-}
-
-.content-preview,
-.edit-preview {
-  margin-top: 8px;
-}
-
-.content-text {
-  background: var(--theme-code-background, #f6f8fa);
-  color: var(--theme-foreground, #24292e);
-  padding: 8px;
-  border-radius: 4px;
-  font-family: var(--theme-editor-font-family);
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  margin: 0;
-  max-height: 80px;
-  overflow-y: auto;
-}
-
-.edit-section {
-  margin-bottom: 8px;
-}
-
-.edit-label {
-  font-size: 12px;
-  color: var(--theme-secondary-foreground, #586069);
-  display: block;
-  margin-bottom: 4px;
-}
-
-.edit-text {
-  background: var(--theme-code-background, #f6f8fa);
-  color: var(--theme-foreground, #24292e);
-  padding: 8px;
-  border-radius: 4px;
-  font-family: var(--theme-editor-font-family);
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  margin: 0;
-  max-height: 50px;
-  overflow-y: auto;
-}
-
-.edit-text.old {
-  background: var(--theme-diff-removed-bg, rgba(248, 81, 73, 0.15));
-  border-left: 3px solid var(--theme-diff-removed-border, #f85149);
-  color: var(--theme-diff-removed-text, var(--theme-foreground, #24292e));
-}
-
-.edit-text.new {
-  background: var(--theme-diff-added-bg, rgba(63, 185, 80, 0.15));
-  border-left: 3px solid var(--theme-diff-added-border, #3fb950);
-  color: var(--theme-diff-added-text, var(--theme-foreground, #24292e));
-}
-
-.params-preview {
-  background: var(--theme-code-background, #f6f8fa);
-  color: var(--theme-foreground, #24292e);
-  padding: 12px;
-  border-radius: 6px;
-  font-family: var(--theme-editor-font-family);
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  margin: 0;
-  max-height: 100px;
-  overflow-y: auto;
 }
 
 .no-params-hint {
@@ -693,35 +469,4 @@ function hasInputParams(input: Record<string, unknown>): boolean {
   border-top: 1px solid var(--theme-border, #e1e4e8);
 }
 
-/* Plan 展开内容样式 */
-.plan-expanded-content {
-  margin-top: 12px;
-  padding: 12px;
-  background: var(--theme-code-background, #f6f8fa);
-  border: 1px solid var(--theme-border, #e1e4e8);
-  border-radius: 6px;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.plan-expanded-content :deep(pre) {
-  margin: 0;
-  padding: 8px;
-  background: var(--theme-background, #fff);
-  border-radius: 4px;
-}
-
-.plan-expanded-content :deep(code) {
-  font-size: 12px;
-}
-
-.plan-error {
-  margin-top: 12px;
-  padding: 12px;
-  background: var(--theme-error-subtle, rgba(220, 53, 69, 0.1));
-  border: 1px solid var(--theme-error, #dc3545);
-  border-radius: 6px;
-  color: var(--theme-error, #dc3545);
-  font-size: 13px;
-}
 </style>

@@ -58,38 +58,6 @@
       </el-option>
     </el-select>
 
-    <!-- 审批模式选择器 -->
-    <el-select
-      v-model="localApprovalMode"
-      class="cursor-selector approval-selector"
-      :disabled="disabled"
-      placement="top-start"
-      :teleported="true"
-      popper-class="chat-input-select-dropdown mode-dropdown"
-      :popper-options="{
-        modifiers: [
-          { name: 'preventOverflow', options: { boundary: 'viewport' } },
-          { name: 'flip', options: { fallbackPlacements: ['top-start', 'top'] } }
-        ]
-      }"
-      @change="handleApprovalChange"
-    >
-      <template #prefix>
-        <span class="mode-prefix-icon">{{ getApprovalModeIcon(localApprovalMode) }}</span>
-      </template>
-      <el-option
-        v-for="option in approvalOptions"
-        :key="option.value"
-        :value="option.value"
-        :label="option.label"
-      >
-        <span class="mode-option-label">
-          <span class="mode-icon">{{ option.icon }}</span>
-          <span>{{ option.label }}</span>
-        </span>
-      </el-option>
-    </el-select>
-
     <!-- 沙盒模式选择器 -->
     <el-select
       v-model="localSandboxMode"
@@ -125,22 +93,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
-  CODEX_MODELS,
-  APPROVAL_MODE_OPTIONS,
   SANDBOX_MODE_OPTIONS,
   REASONING_EFFORT_OPTIONS,
-  getApprovalModeIcon,
   getSandboxModeIcon,
-  type CodexApprovalMode,
   type CodexSandboxMode,
   type CodexReasoningEffort,
 } from '@/types/codex'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 interface Props {
   model: string
-  approvalMode: CodexApprovalMode
   sandboxMode: CodexSandboxMode
   reasoningEffort: CodexReasoningEffort
   disabled?: boolean
@@ -148,7 +112,6 @@ interface Props {
 
 interface Emits {
   (e: 'update:model', value: string): void
-  (e: 'update:approvalMode', value: CodexApprovalMode): void
   (e: 'update:sandboxMode', value: CodexSandboxMode): void
   (e: 'update:reasoningEffort', value: CodexReasoningEffort): void
 }
@@ -161,19 +124,32 @@ const emit = defineEmits<Emits>()
 
 // Local state
 const localModel = ref(props.model)
-const localApprovalMode = ref(props.approvalMode)
 const localSandboxMode = ref(props.sandboxMode)
 const localReasoningEffort = ref(props.reasoningEffort)
 
 // Options
-const codexModels = CODEX_MODELS
-const approvalOptions = APPROVAL_MODE_OPTIONS
+const settingsStore = useSettingsStore()
+const codexModels = computed(() => {
+  const models = settingsStore.getModelsForBackend('codex') || []
+  const currentModelId = props.model
+  if (!currentModelId || models.some(model => model.id === currentModelId)) {
+    return models
+  }
+  return [
+    {
+      id: currentModelId,
+      displayName: currentModelId,
+      description: 'Custom model',
+      supportsThinking: true,
+    },
+    ...models
+  ]
+})
 const sandboxOptions = SANDBOX_MODE_OPTIONS
 const reasoningOptions = REASONING_EFFORT_OPTIONS
 
 // Watch props
 watch(() => props.model, (val) => { localModel.value = val })
-watch(() => props.approvalMode, (val) => { localApprovalMode.value = val })
 watch(() => props.sandboxMode, (val) => { localSandboxMode.value = val })
 watch(() => props.reasoningEffort, (val) => { localReasoningEffort.value = val })
 
@@ -182,9 +158,6 @@ function handleModelChange(value: string) {
   emit('update:model', value)
 }
 
-function handleApprovalChange(value: CodexApprovalMode) {
-  emit('update:approvalMode', value)
-}
 
 function handleSandboxChange(value: CodexSandboxMode) {
   emit('update:sandboxMode', value)
@@ -217,10 +190,6 @@ function handleReasoningChange(value: CodexReasoningEffort) {
   min-width: 60px;
 }
 
-.cursor-selector.approval-selector {
-  width: auto;
-  min-width: 90px;
-}
 
 .cursor-selector.sandbox-selector {
   width: auto;

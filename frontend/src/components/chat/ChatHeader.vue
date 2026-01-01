@@ -55,19 +55,23 @@
           </div>
         </div>
       </div>
-      <button
-        class="icon-btn"
-        type="button"
-        title="Reconnect"
-        :disabled="!canReconnect"
-        :class="{ loading: isReconnecting }"
-        @click="handleReconnect"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12a9 9 0 1 1-3-6.7"/>
-          <polyline points="21 3 21 9 15 9"/>
-        </svg>
-      </button>
+      <el-tooltip content="重载会话" placement="bottom" :show-after="200">
+        <span class="icon-tooltip-wrapper">
+          <button
+            class="icon-btn"
+            type="button"
+            aria-label="重载会话"
+            :disabled="!canReconnect"
+            :class="{ loading: isReconnecting }"
+            @click="handleReconnect"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12a9 9 0 1 1-3-6.7"/>
+              <polyline points="21 3 21 9 15 9"/>
+            </svg>
+          </button>
+        </span>
+      </el-tooltip>
       <button
         class="icon-btn server-btn"
         type="button"
@@ -418,6 +422,10 @@ function handleRename(tabId: string, newName: string) {
   font-size: 12px;
   color: var(--theme-foreground, #24292e);
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.icon-tooltip-wrapper {
+  display: inline-flex;
 }
 
 .icon-btn:hover {

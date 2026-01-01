@@ -272,12 +272,10 @@
         <CodexToolbar
           v-if="backendType === 'codex'"
           :model="codexModel"
-          :approval-mode="codexApprovalMode"
           :sandbox-mode="codexSandboxMode"
           :reasoning-effort="codexReasoningEffort"
           :disabled="!enabled"
           @update:model="handleCodexModelChange"
-          @update:approval-mode="handleCodexApprovalModeChange"
           @update:sandbox-mode="handleCodexSandboxModeChange"
           @update:reasoning-effort="handleCodexReasoningEffortChange"
         />
@@ -475,7 +473,7 @@ import type { BackendType } from '@/types/backend'
 import type { ThinkingConfig } from '@/types/thinking'
 import { isCodexThinking, getCodexEffortLevels } from '@/types/thinking'
 // Codex types
-import type { CodexApprovalMode, CodexSandboxMode, CodexReasoningEffort } from '@/types/codex'
+import type { CodexSandboxMode, CodexReasoningEffort } from '@/types/codex'
 import { DEFAULT_CODEX_CONFIG } from '@/types/codex'
 
 interface PendingTask {
@@ -605,10 +603,6 @@ const codexModel = computed(() => {
   return sessionStore.currentTab?.modelId?.value ?? settingsStore.settings.codexModel ?? DEFAULT_CODEX_CONFIG.model
 })
 
-const codexApprovalMode = computed(() => {
-  return (settingsStore.settings as any).codexApprovalMode ?? DEFAULT_CODEX_CONFIG.approvalMode
-})
-
 const codexSandboxMode = computed(() => {
   return (settingsStore.settings as any).codexSandboxMode ?? DEFAULT_CODEX_CONFIG.sandboxMode
 })
@@ -627,14 +621,16 @@ function handleCodexModelChange(model: string) {
   settingsStore.saveSettings({ codexModel: model })
 }
 
-function handleCodexApprovalModeChange(mode: CodexApprovalMode) {
-  console.log(`🔄 [Codex] 切换审批模式: ${mode}`)
-  settingsStore.saveSettings({ codexApprovalMode: mode } as any)
-}
-
 function handleCodexSandboxModeChange(mode: CodexSandboxMode) {
   console.log(`🔄 [Codex] 切换沙盒模式: ${mode}`)
   settingsStore.saveSettings({ codexSandboxMode: mode } as any)
+  const tab = sessionStore.currentTab
+  if (tab?.backendType.value === 'codex' && tab.isConnected.value && !tab.isGenerating.value) {
+    tab.reconnect({
+      continueConversation: true,
+      resumeSessionId: tab.sessionId.value || undefined
+    })
+  }
 }
 
 function handleCodexReasoningEffortChange(effort: CodexReasoningEffort) {

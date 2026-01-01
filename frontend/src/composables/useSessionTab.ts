@@ -803,6 +803,9 @@ export function useSessionTab(initialOrder: number = 0) {
                 // 统一协议：传递 provider 参数，后端根据此参数路由到对应的 AI Agent
                 provider: (resolvedOptions as any).provider || backendType.value
             }
+            if (backendType.value === 'codex' && settingsStore.settings.codexSandboxMode) {
+                connectOptions.sandboxMode = settingsStore.settings.codexSandboxMode as any
+            }
 
             // 连接并获取 sessionId
             const newSessionId = await session.connect(connectOptions)
@@ -1080,6 +1083,9 @@ export function useSessionTab(initialOrder: number = 0) {
                 resumeSessionId: options?.resumeSessionId,
                 // 统一协议：传递 provider 参数
                 provider: backendType.value
+            }
+            if (backendType.value === 'codex' && settingsStore.settings.codexSandboxMode) {
+                connectOptions.sandboxMode = settingsStore.settings.codexSandboxMode as any
             }
 
             // 使用 reconnectSession 复用 WebSocket
@@ -1851,11 +1857,25 @@ export function useSessionTab(initialOrder: number = 0) {
      * 处理 Codex 审批请求
      */
     function handleCodexApprovalRequest(event: import('@/types/backend').ApprovalRequestEvent): void {
+        if (skipPermissions.value) {
+            log.info(`[Tab ${tabId}] skipPermissions 已启用，自动放行 Codex 审批请求: ${event.approvalType}`)
+            if (backendSession.value) {
+                backendSession.value.respondToApproval({
+                    requestId: event.requestId,
+                    approved: true
+                })
+            }
+            return
+        }
+
+        const details = event.details as Record<string, unknown>
+        const matchedToolCallId = (details as any).itemId || (details as any).item_id
         const request: Omit<PendingPermissionRequest, 'createdAt'> = {
             id: event.requestId,
             sessionId: sessionId.value!,
             toolName: event.approvalType === 'command' ? 'CommandExecution' : 'FileChange',
-            input: event.details as Record<string, unknown>,
+            input: details,
+            matchedToolCallId: matchedToolCallId ? String(matchedToolCallId) : undefined,
             resolve: (response) => {
                 // 发送审批响应到后端
                 if (backendSession.value) {

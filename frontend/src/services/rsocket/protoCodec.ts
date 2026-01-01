@@ -564,6 +564,7 @@ function mapSandboxModeToProto(mode: string): SandboxMode {
   switch (mode) {
     case 'read-only': return SandboxMode.READ_ONLY
     case 'workspace-write': return SandboxMode.WORKSPACE_WRITE
+    case 'full-access': return SandboxMode.DANGER_FULL_ACCESS
     case 'danger-full-access': return SandboxMode.DANGER_FULL_ACCESS
     default: return SandboxMode.READ_ONLY
   }
