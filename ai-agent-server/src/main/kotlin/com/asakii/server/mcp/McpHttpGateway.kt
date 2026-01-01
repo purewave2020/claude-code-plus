@@ -1,11 +1,10 @@
 package com.asakii.server.mcp
 
 import com.asakii.ai.agent.sdk.AiAgentProvider
+import com.asakii.common.JsonTools
 import com.asakii.claude.agent.sdk.mcp.ContentItem
 import com.asakii.claude.agent.sdk.mcp.McpServer as SdkMcpServer
 import com.asakii.claude.agent.sdk.mcp.ToolResult
-import io.modelcontextprotocol.json.McpJsonMapper
-import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapperSupplier
 import io.modelcontextprotocol.server.McpServer as OfficialMcpServer
 import io.modelcontextprotocol.server.McpServerFeatures
 import io.modelcontextprotocol.server.McpSyncServer
@@ -17,7 +16,6 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import mu.KotlinLogging
@@ -44,8 +42,8 @@ object McpHttpGateway {
         val transport: HttpServletStreamableServerTransportProvider
     )
 
-    private val json = Json { ignoreUnknownKeys = true }
-    private val jsonMapper: McpJsonMapper by lazy { JacksonMcpJsonMapperSupplier().get() }
+    private val json = JsonTools.kotlinJson
+    private val jsonMapper = JsonTools.mcpJsonMapper
     private val endpointsByKey = ConcurrentHashMap<EndpointKey, Endpoint>()
     private val endpointsByPath = ConcurrentHashMap<String, Endpoint>()
     private val lifecycleLock = Any()

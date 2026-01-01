@@ -37,6 +37,7 @@ include(
     "jetbrains-plugin",
     "claude-agent-sdk",
     "codex-agent-sdk",
+    "ai-agent-common",
     "ai-agent-sdk",
     "ai-agent-rpc-api",
     "ai-agent-proto",  // RSocket + Protobuf 通信模块
