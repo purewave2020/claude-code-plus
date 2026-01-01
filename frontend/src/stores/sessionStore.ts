@@ -73,7 +73,7 @@ function getConnectOptionsForBackend(backendType: BackendType, settingsStore: Re
   } else {
     // Codex 后端
     return {
-      model: globalSettings.codexModel || 'gpt-5.1-codex-max',
+      model: globalSettings.codexModel || 'gpt-5.2-codex',
       thinkingLevel: undefined, // Codex 使用 effort level，不是 token budget
       reasoningEffort: globalSettings.codexReasoningEffort || 'medium',
       permissionMode: globalSettings.permissionMode,

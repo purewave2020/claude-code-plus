@@ -24,7 +24,8 @@ data class AiAgentServiceConfig(
     val defaultSystemPrompt: String? = null,
     val claude: ClaudeDefaults = ClaudeDefaults(),
     val codex: CodexDefaults = CodexDefaults(),
-    val customModels: List<CustomModelInfo> = emptyList()  // 用户自定义模型列表
+    val customModels: List<CustomModelInfo> = emptyList(),  // Claude 自定义模型列表
+    val codexCustomModels: List<CustomModelInfo> = emptyList()  // Codex 自定义模型列表
 )
 
 /**
@@ -87,7 +88,8 @@ data class CodexDefaults(
     val baseUrl: String? = null,
     val apiKey: String? = null,
     val sandboxMode: String? = null,
-    val webSearchEnabled: Boolean? = null
+    val webSearchEnabled: Boolean? = null,
+    val defaultModelId: String? = null
 )
 
 

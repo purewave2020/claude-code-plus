@@ -127,6 +127,8 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var nodePath: String = "",
         var codexPath: String = "",
         var codexWebSearchEnabled: Boolean = false,
+        var codexDefaultModelId: String = "gpt-5.2-codex",
+        var codexCustomModels: String = "[]",
 
         // 默认模型（使用枚举名称存储，如 "OPUS_45"）
         var defaultModel: String = DefaultModel.OPUS_45.name,
@@ -475,6 +477,10 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         get() = state.codexWebSearchEnabled
         set(value) { state.codexWebSearchEnabled = value }
 
+    var codexDefaultModelId: String
+        get() = state.codexDefaultModelId
+        set(value) { state.codexDefaultModelId = value }
+
     var defaultModel: String
         get() = state.defaultModel
         set(value) { state.defaultModel = value }
@@ -499,6 +505,10 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         get() = state.customModels
         set(value) { state.customModels = value }
 
+    var codexCustomModelsJson: String
+        get() = state.codexCustomModels
+        set(value) { state.codexCustomModels = value }
+
     /**
      * 获取自定义模型列表
      */
@@ -515,6 +525,24 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
      */
     fun setCustomModels(models: List<CustomModelConfig>) {
         state.customModels = json.encodeToString(models)
+    }
+
+    /**
+     * 获取 Codex 自定义模型列表
+     */
+    fun getCodexCustomModels(): List<CustomModelConfig> {
+        return try {
+            json.decodeFromString<List<CustomModelConfig>>(state.codexCustomModels)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * 设置 Codex 自定义模型列表
+     */
+    fun setCodexCustomModels(models: List<CustomModelConfig>) {
+        state.codexCustomModels = json.encodeToString(models)
     }
 
     /**
@@ -573,6 +601,27 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     }
 
     /**
+     * 获取 Codex 内置模型列表
+     */
+    fun getCodexBuiltInModels(): List<ModelInfo> {
+        return listOf(
+            ModelInfo("gpt-5.2-codex", "gpt-5.2-codex", "gpt-5.2-codex", isBuiltIn = true),
+            ModelInfo("gpt-5.2", "gpt-5.2", "gpt-5.2", isBuiltIn = true)
+        )
+    }
+
+    /**
+     * 获取 Codex 所有可用模型（内置 + 自定义）
+     */
+    fun getAllCodexModels(): List<ModelInfo> {
+        val builtIn = getCodexBuiltInModels()
+        val custom = getCodexCustomModels().map {
+            ModelInfo(it.modelId, it.displayName, it.modelId, isBuiltIn = false)
+        }
+        return builtIn + custom
+    }
+
+    /**
      * 根据 ID 获取模型信息
      */
     fun getModelById(id: String): ModelInfo? {
@@ -588,10 +637,27 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     }
 
     /**
+     * 根据 ID 获取 Codex 模型信息
+     */
+    fun getCodexModelById(id: String): ModelInfo? {
+        getCodexBuiltInModels().find { it.id == id }?.let { return it }
+        return getCodexCustomModels().find { it.modelId == id }?.let {
+            ModelInfo(it.modelId, it.displayName, it.modelId, isBuiltIn = false)
+        }
+    }
+
+    /**
      * 获取当前默认模型的实际 modelId（支持自定义模型）
      */
     val effectiveDefaultModelId: String
         get() = getModelById(state.defaultModel)?.modelId ?: DefaultModel.OPUS_45.modelId
+
+    /**
+     * 获取当前 Codex 默认模型的 modelId
+     */
+    val effectiveCodexDefaultModelId: String
+        get() = getCodexModelById(state.codexDefaultModelId)?.modelId
+            ?: getCodexBuiltInModels().first().modelId
 
     var defaultThinkingLevelId: String
         get() {

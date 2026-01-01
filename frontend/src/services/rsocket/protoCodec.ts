@@ -1310,6 +1310,7 @@ export interface SettingsChangedParams {
     enableUserInteractionMcp: boolean
     enableJetbrainsMcp: boolean
     includePartialMessages: boolean
+    codexDefaultModelId?: string
     defaultThinkingLevel: string
     defaultThinkingTokens: number
     defaultThinkingLevelId: string
@@ -1342,6 +1343,7 @@ function mapSettingsChangedFromProto(proto: IdeSettingsChangedNotify): SettingsC
       enableUserInteractionMcp: s?.enableUserInteractionMcp ?? true,
       enableJetbrainsMcp: s?.enableJetbrainsMcp ?? true,
       includePartialMessages: s?.includePartialMessages ?? true,
+      codexDefaultModelId: s?.codexDefaultModelId || '',
       defaultThinkingLevel: s?.defaultThinkingLevel || 'ULTRA',
       defaultThinkingTokens: s?.defaultThinkingTokens ?? 8096,
       defaultThinkingLevelId: s?.defaultThinkingLevelId || 'ultra',

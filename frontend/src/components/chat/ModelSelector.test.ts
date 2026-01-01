@@ -45,24 +45,17 @@ vi.mock('@/services/backendCapabilities', () => ({
     } else {
       return [
         {
-          id: 'gpt-5.1-codex-max',
-          displayName: 'GPT-5.1 Codex Max',
-          description: 'Most capable Codex model',
+          id: 'gpt-5.2-codex',
+          displayName: 'gpt-5.2-codex',
+          description: 'Default Codex model',
           supportsThinking: true,
           isDefault: true,
         },
         {
-          id: 'o3',
-          displayName: 'o3',
-          description: 'Advanced reasoning',
+          id: 'gpt-5.2',
+          displayName: 'gpt-5.2',
+          description: 'General Codex model',
           supportsThinking: true,
-          isDefault: false,
-        },
-        {
-          id: 'gpt-4o',
-          displayName: 'GPT-4o',
-          description: 'Multimodal model',
-          supportsThinking: false,
           isDefault: false,
         },
       ]
@@ -76,9 +69,8 @@ vi.mock('@/services/backendCapabilities', () => ({
           { id: 'claude-haiku-4-5-20251101', displayName: 'Claude Haiku 4.5', supportsThinking: true },
         ]
       : [
-          { id: 'gpt-5.1-codex-max', displayName: 'GPT-5.1 Codex Max', supportsThinking: true, isDefault: true },
-          { id: 'o3', displayName: 'o3', supportsThinking: true },
-          { id: 'gpt-4o', displayName: 'GPT-4o', supportsThinking: false },
+          { id: 'gpt-5.2-codex', displayName: 'gpt-5.2-codex', supportsThinking: true, isDefault: true },
+          { id: 'gpt-5.2', displayName: 'gpt-5.2', supportsThinking: true },
         ]
     return models.find(m => m.id === id)
   },
@@ -88,7 +80,7 @@ vi.mock('@/services/backendCapabilities', () => ({
   isValidModel: (type: BackendType, modelId: string) => {
     const models = type === 'claude'
       ? ['claude-opus-4-5-20251101', 'claude-sonnet-4-5-20251101', 'claude-haiku-4-5-20251101']
-      : ['gpt-5.1-codex-max', 'o3', 'gpt-4o']
+      : ['gpt-5.2-codex', 'gpt-5.2']
     return models.includes(modelId)
   },
 }))
@@ -120,7 +112,7 @@ describe('ModelSelector', () => {
     it('should render with Codex backend', () => {
       wrapper = mount(ModelSelector, {
         props: {
-          modelValue: 'gpt-5.1-codex-max',
+          modelValue: 'gpt-5.2-codex',
           backendType: 'codex',
         },
       })
@@ -160,14 +152,14 @@ describe('ModelSelector', () => {
     it('should only show Codex models for Codex backend', () => {
       wrapper = mount(ModelSelector, {
         props: {
-          modelValue: 'gpt-5.1-codex-max',
+          modelValue: 'gpt-5.2-codex',
           backendType: 'codex',
         },
       })
 
       const options = wrapper.findAll('option')
       expect(options.length).toBeGreaterThan(0)
-      expect(options.some(opt => opt.text().includes('GPT') || opt.text().includes('o3'))).toBe(true)
+      expect(options.some(opt => opt.text().includes('gpt-5.2'))).toBe(true)
     })
   })
 
@@ -197,7 +189,7 @@ describe('ModelSelector', () => {
 
       const select = wrapper.find('.model-select')
       // 尝试选择 Codex 模型
-      await select.setValue('gpt-5.1-codex-max')
+      await select.setValue('gpt-5.2-codex')
 
       expect(wrapper.emitted('backend-mismatch')).toBeTruthy()
       expect(wrapper.emitted('update:modelValue')).toBeFalsy()
@@ -220,13 +212,13 @@ describe('ModelSelector', () => {
       // 应该发出 update:modelValue 事件，切换到 Codex 默认模型
       expect(wrapper.emitted('update:modelValue')).toBeTruthy()
       const lastEmit = wrapper.emitted('update:modelValue')!.slice(-1)[0]
-      expect(lastEmit[0]).toBe('gpt-5.1-codex-max')
+      expect(lastEmit[0]).toBe('gpt-5.2-codex')
     })
 
     it('should not emit when model is valid for new backend', async () => {
       wrapper = mount(ModelSelector, {
         props: {
-          modelValue: 'gpt-5.1-codex-max',
+          modelValue: 'gpt-5.2-codex',
           backendType: 'codex',
         },
       })
@@ -284,7 +276,7 @@ describe('ModelSelector', () => {
     it('should show warning when model does not match backend', async () => {
       wrapper = mount(ModelSelector, {
         props: {
-          modelValue: 'gpt-5.1-codex-max',
+          modelValue: 'gpt-5.2-codex',
           backendType: 'claude',
         },
       })

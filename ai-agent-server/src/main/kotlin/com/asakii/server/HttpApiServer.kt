@@ -539,6 +539,9 @@ class HttpApiServer(
                                     val response = FrontendResponse(
                                         success = true,
                                         data = mapOf(
+                                            "defaultBackendType" to JsonPrimitive(config.defaultProvider.name.lowercase()),
+                                            "claudeDefaultModelId" to JsonPrimitive(config.defaultModel ?: ""),
+                                            "codexDefaultModelId" to JsonPrimitive(config.codex.defaultModelId ?: "gpt-5.2-codex"),
                                             "defaultModelId" to JsonPrimitive(config.defaultModel ?: ""),
                                             "defaultBypassPermissions" to JsonPrimitive(config.claude.dangerouslySkipPermissions),
                                             "includePartialMessages" to JsonPrimitive(config.claude.includePartialMessages),
@@ -553,7 +556,7 @@ class HttpApiServer(
                                     val config = serviceConfigProvider()
 
                                     // 内置模型列表
-                                    val builtInModels = listOf(
+                                    val builtInClaudeModels = listOf(
                                         mapOf(
                                             "id" to JsonPrimitive("OPUS_45"),
                                             "displayName" to JsonPrimitive("Opus 4.5"),
@@ -575,7 +578,7 @@ class HttpApiServer(
                                     )
 
                                     // 自定义模型列表
-                                    val customModels = config.customModels.map { model ->
+                                    val claudeCustomModels = config.customModels.map { model ->
                                         mapOf(
                                             "id" to JsonPrimitive(model.id),
                                             "displayName" to JsonPrimitive(model.displayName),
@@ -584,15 +587,41 @@ class HttpApiServer(
                                         )
                                     }
 
-                                    val allModels = builtInModels + customModels
+                                    val builtInCodexModels = listOf(
+                                        mapOf(
+                                            "id" to JsonPrimitive("gpt-5.2-codex"),
+                                            "displayName" to JsonPrimitive("gpt-5.2-codex"),
+                                            "modelId" to JsonPrimitive("gpt-5.2-codex"),
+                                            "isBuiltIn" to JsonPrimitive(true),
+                                            "supportsThinking" to JsonPrimitive(true)
+                                        ),
+                                        mapOf(
+                                            "id" to JsonPrimitive("gpt-5.2"),
+                                            "displayName" to JsonPrimitive("gpt-5.2"),
+                                            "modelId" to JsonPrimitive("gpt-5.2"),
+                                            "isBuiltIn" to JsonPrimitive(true),
+                                            "supportsThinking" to JsonPrimitive(true)
+                                        )
+                                    )
+
+                                    val codexCustomModels = config.codexCustomModels.map { model ->
+                                        mapOf(
+                                            "id" to JsonPrimitive(model.modelId),
+                                            "displayName" to JsonPrimitive(model.displayName),
+                                            "modelId" to JsonPrimitive(model.modelId),
+                                            "isBuiltIn" to JsonPrimitive(false),
+                                            "supportsThinking" to JsonPrimitive(true)
+                                        )
+                                    }
 
                                     val response = FrontendResponse(
                                         success = true,
                                         data = mapOf(
-                                            "models" to JsonArray(allModels.map { model ->
-                                                JsonObject(model)
-                                            }),
-                                            "defaultModelId" to JsonPrimitive(config.defaultModel)
+                                            "claudeModels" to JsonArray((builtInClaudeModels + claudeCustomModels).map { JsonObject(it) }),
+                                            "codexModels" to JsonArray((builtInCodexModels + codexCustomModels).map { JsonObject(it) }),
+                                            "defaultBackendType" to JsonPrimitive(config.defaultProvider.name.lowercase()),
+                                            "defaultClaudeModelId" to JsonPrimitive(config.defaultModel),
+                                            "defaultCodexModelId" to JsonPrimitive(config.codex.defaultModelId ?: "gpt-5.2-codex")
                                         )
                                     )
                                     call.respondText(json.encodeToString(response), ContentType.Application.Json)

@@ -168,7 +168,7 @@ async function createSession() {
 ```typescript
 // 示例：从 Claude 切换到 Codex
 backendType.value = 'codex'
-// => selectedModel 自动从 'claude-sonnet-4-5-20251101' 切换到 'gpt-5.1-codex-max'
+// => selectedModel 自动从 'claude-sonnet-4-5-20251101' 切换到 'gpt-5.2-codex'
 ```
 
 ### 场景 2: 模型不可用
@@ -298,7 +298,7 @@ test('model selector should work with backend switching', async () => {
     '[data-testid="model-selector"]',
     select => select.value
   )
-  expect(selectedModel).toMatch(/gpt|o3/)
+  expect(selectedModel).toMatch(/gpt/)
 })
 ```
 

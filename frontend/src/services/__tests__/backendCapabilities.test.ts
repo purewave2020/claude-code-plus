@@ -91,9 +91,9 @@ describe('Capability Lookups', () => {
     })
 
     it('should find Codex model by ID', () => {
-      const model = getModelById('codex', 'gpt-4o')
+      const model = getModelById('codex', 'gpt-5.2')
       expect(model).toBeDefined()
-      expect(model?.displayName).toBe('GPT-4o')
+      expect(model?.displayName).toBe('gpt-5.2')
     })
 
     it('should return undefined for non-existent model', () => {
@@ -228,11 +228,11 @@ describe('Model Validation', () => {
     })
 
     it('should return true for valid Codex model', () => {
-      expect(isValidModel('codex', 'gpt-4o')).toBe(true)
+      expect(isValidModel('codex', 'gpt-5.2')).toBe(true)
     })
 
     it('should return false for invalid model', () => {
-      expect(isValidModel('claude', 'gpt-4o')).toBe(false)
+      expect(isValidModel('claude', 'gpt-5.2')).toBe(false)
       expect(isValidModel('codex', 'claude-sonnet-4-5-20251101')).toBe(false)
     })
 

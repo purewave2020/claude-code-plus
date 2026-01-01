@@ -290,6 +290,7 @@ class JetBrainsRSocketHandler(
                 .setDefaultThinkingLevelId(settings.defaultThinkingLevelId)
                 .addAllThinkingLevels(thinkingLevelsProto)
                 .setPermissionMode(settings.permissionMode)
+                .setCodexDefaultModelId(settings.codexDefaultModelId)
                 .build()
 
             val response = GetIdeSettingsResponse.newBuilder()
@@ -550,6 +551,7 @@ class JetBrainsRSocketHandler(
                 .setDefaultThinkingLevelId(settings.defaultThinkingLevelId)
                 .addAllThinkingLevels(thinkingLevelsProto)
                 .setPermissionMode(settings.permissionMode)
+                .setCodexDefaultModelId(settings.codexDefaultModelId)
                 .build()
 
             // 构建 IdeSettingsChangedNotify

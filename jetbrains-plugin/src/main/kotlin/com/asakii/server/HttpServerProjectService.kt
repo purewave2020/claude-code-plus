@@ -194,11 +194,19 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                     ),
                     codex = CodexDefaults(
                         binaryPath = codexPath,
-                        webSearchEnabled = settings.codexWebSearchEnabled
+                        webSearchEnabled = settings.codexWebSearchEnabled,
+                        defaultModelId = settings.codexDefaultModelId
                     ),
                     customModels = settings.getCustomModels().map { model ->
                         CustomModelInfo(
                             id = model.id,
+                            displayName = model.displayName,
+                            modelId = model.modelId
+                        )
+                    },
+                    codexCustomModels = settings.getCodexCustomModels().map { model ->
+                        CustomModelInfo(
+                            id = model.modelId,
                             displayName = model.displayName,
                             modelId = model.modelId
                         )

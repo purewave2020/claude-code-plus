@@ -94,31 +94,17 @@ export const CLAUDE_CAPABILITIES: BackendCapabilities = {
  */
 export const CODEX_MODELS: BackendModelInfo[] = [
   {
-    id: 'gpt-5.1-codex-max',
-    displayName: 'GPT-5.1 Codex Max',
-    description: 'Most capable Codex model',
+    id: 'gpt-5.2-codex',
+    displayName: 'gpt-5.2-codex',
+    description: 'Default Codex model',
     supportsThinking: true,
     isDefault: true,
   },
   {
-    id: 'o3',
-    displayName: 'o3',
-    description: 'Advanced reasoning model',
+    id: 'gpt-5.2',
+    displayName: 'gpt-5.2',
+    description: 'General Codex model',
     supportsThinking: true,
-    isDefault: false,
-  },
-  {
-    id: 'gpt-4o',
-    displayName: 'GPT-4o',
-    description: 'Balanced multimodal model',
-    supportsThinking: false,
-    isDefault: false,
-  },
-  {
-    id: 'gpt-4o-mini',
-    displayName: 'GPT-4o Mini',
-    description: 'Fast and efficient',
-    supportsThinking: false,
     isDefault: false,
   },
 ]

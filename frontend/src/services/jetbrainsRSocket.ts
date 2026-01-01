@@ -252,6 +252,7 @@ function decodeSettingsResponse(data: Uint8Array): IdeSettings | null {
     enableUserInteractionMcp: s.enableUserInteractionMcp,
     enableJetbrainsMcp: s.enableJetbrainsMcp,
     includePartialMessages: s.includePartialMessages,
+    codexDefaultModelId: s.codexDefaultModelId || undefined,
     defaultThinkingLevel: s.defaultThinkingLevel || 'ULTRA',
     defaultThinkingTokens: s.defaultThinkingTokens || 8096,
     defaultThinkingLevelId: s.defaultThinkingLevelId || 'ultra',
@@ -386,6 +387,7 @@ export interface IdeSettings {
   enableUserInteractionMcp: boolean
   enableJetbrainsMcp: boolean
   includePartialMessages: boolean
+  codexDefaultModelId?: string
   // 思考配置
   defaultThinkingLevelId: string  // 默认思考级别 ID（如 "off", "think", "ultra", "custom_xxx"）
   defaultThinkingTokens: number   // 默认思考 token 数量
@@ -484,6 +486,7 @@ class JetBrainsRSocketService {
           enableUserInteractionMcp: settingsData.enableUserInteractionMcp ?? true,
           enableJetbrainsMcp: settingsData.enableJetbrainsMcp ?? true,
           includePartialMessages: settingsData.includePartialMessages ?? true,
+          codexDefaultModelId: settingsData.codexDefaultModelId || undefined,
           defaultThinkingLevel: settingsData.defaultThinkingLevel || 'ULTRA',
           defaultThinkingTokens: settingsData.defaultThinkingTokens ?? 8096,
           defaultThinkingLevelId: settingsData.defaultThinkingLevelId || 'ultra',

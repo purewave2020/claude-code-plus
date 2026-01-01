@@ -42,7 +42,7 @@ describe('Type Guards', () => {
     it('should return false for Codex config', () => {
       const config: CodexBackendConfig = {
         type: 'codex',
-        modelId: 'gpt-5.1-codex-max',
+        modelId: 'gpt-5.2-codex',
         modelProvider: 'openai',
         permissionMode: 'default',
         skipPermissions: false,
@@ -59,7 +59,7 @@ describe('Type Guards', () => {
     it('should return true for Codex config', () => {
       const config: CodexBackendConfig = {
         type: 'codex',
-        modelId: 'gpt-5.1-codex-max',
+        modelId: 'gpt-5.2-codex',
         modelProvider: 'openai',
         permissionMode: 'default',
         skipPermissions: false,

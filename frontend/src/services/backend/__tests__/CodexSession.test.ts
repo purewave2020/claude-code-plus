@@ -34,7 +34,7 @@ vi.stubGlobal('EventSource', vi.fn().mockImplementation(() => mockEventSource))
 
 const TEST_CODEX_CONFIG: CodexBackendConfig = {
   type: 'codex',
-  modelId: 'gpt-5.1-codex-max',
+  modelId: 'gpt-5.2-codex',
   modelProvider: 'openai',
   permissionMode: 'default',
   skipPermissions: false,
