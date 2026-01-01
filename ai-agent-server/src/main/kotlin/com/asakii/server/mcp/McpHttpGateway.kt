@@ -1,7 +1,7 @@
 package com.asakii.server.mcp
 
 import com.asakii.ai.agent.sdk.AiAgentProvider
-import com.asakii.common.JsonTools
+import com.asakii.server.util.JsonTools
 import com.asakii.claude.agent.sdk.mcp.ContentItem
 import com.asakii.claude.agent.sdk.mcp.McpServer as SdkMcpServer
 import com.asakii.claude.agent.sdk.mcp.ToolResult

@@ -1,4 +1,4 @@
-package com.asakii.common
+package com.asakii.server.util
 
 import io.modelcontextprotocol.json.McpJsonMapper
 import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapperSupplier
