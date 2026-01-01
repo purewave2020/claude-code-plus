@@ -106,6 +106,7 @@ object McpHttpGateway {
         val serverBuilder = OfficialMcpServer.sync(transport)
             .serverInfo(server.name, server.version)
             .capabilities(ServerCapabilities.builder().tools(true).build())
+            .jsonMapper(JsonTools.mcpJsonMapper)
             .jsonSchemaValidator(JsonTools.mcpJsonSchemaValidator)
 
         server.getSystemPromptAppendix()
