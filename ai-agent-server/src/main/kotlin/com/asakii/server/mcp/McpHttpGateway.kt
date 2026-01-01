@@ -4,7 +4,9 @@ import com.asakii.ai.agent.sdk.AiAgentProvider
 import com.asakii.claude.agent.sdk.mcp.ContentItem
 import com.asakii.claude.agent.sdk.mcp.McpServer as SdkMcpServer
 import com.asakii.claude.agent.sdk.mcp.ToolResult
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.modelcontextprotocol.json.McpJsonMapper
+import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper
 import io.modelcontextprotocol.server.McpServer as OfficialMcpServer
 import io.modelcontextprotocol.server.McpServerFeatures
 import io.modelcontextprotocol.server.McpSyncServer
@@ -44,7 +46,7 @@ object McpHttpGateway {
     )
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val jsonMapper = McpJsonMapper.getDefault()
+    private val jsonMapper: McpJsonMapper by lazy { createJsonMapper() }
     private val endpointsByKey = ConcurrentHashMap<EndpointKey, Endpoint>()
     private val endpointsByPath = ConcurrentHashMap<String, Endpoint>()
     private val lifecycleLock = Any()
@@ -145,6 +147,21 @@ object McpHttpGateway {
     private fun resolveTransport(path: String): HttpServletStreamableServerTransportProvider? {
         val normalized = path.trimEnd('/')
         return endpointsByPath[normalized]?.transport
+    }
+
+    private fun createJsonMapper(): McpJsonMapper {
+        val loader = McpHttpGateway::class.java.classLoader
+        val thread = Thread.currentThread()
+        val previous = thread.contextClassLoader
+        return try {
+            thread.contextClassLoader = loader
+            McpJsonMapper.getDefault()
+        } catch (t: Throwable) {
+            logger.warn(t) { "[MCP] Failed to load default McpJsonMapper, falling back to Jackson" }
+            JacksonMcpJsonMapper(ObjectMapper())
+        } finally {
+            thread.contextClassLoader = previous
+        }
     }
 
     private suspend fun registerTools(syncServer: McpSyncServer, server: SdkMcpServer) {
