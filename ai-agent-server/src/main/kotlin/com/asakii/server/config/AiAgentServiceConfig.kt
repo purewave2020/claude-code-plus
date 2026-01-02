@@ -20,12 +20,17 @@ data class CustomModelInfo(
  */
 data class AiAgentServiceConfig(
     val defaultProvider: AiAgentProvider = AiAgentProvider.CLAUDE,
-    val defaultModel: String = "OPUS_45",  // 默认模型 ID（内置或自定义）
+    val defaultModel: String = "OPUS_45",  // ???? ID????????
     val defaultSystemPrompt: String? = null,
     val claude: ClaudeDefaults = ClaudeDefaults(),
     val codex: CodexDefaults = CodexDefaults(),
-    val customModels: List<CustomModelInfo> = emptyList(),  // Claude 自定义模型列表
-    val codexCustomModels: List<CustomModelInfo> = emptyList()  // Codex 自定义模型列表
+    val customModels: List<CustomModelInfo> = emptyList(),  // Claude ???????
+    val codexCustomModels: List<CustomModelInfo> = emptyList(),  // Codex ???????
+    // MCP ????????? = ?????
+    val mcpEnabledBackends: Set<AiAgentProvider> = setOf(
+        AiAgentProvider.CLAUDE,
+        AiAgentProvider.CODEX
+    )
 )
 
 /**

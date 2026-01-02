@@ -620,7 +620,7 @@ class AiAgentRpcServiceImpl(
     private suspend fun buildConnectOptions(options: RpcConnectOptions): AiAgentConnectOptions {
         // 每次 connect 时调用 provider 获取最新配置
         val serviceConfig = serviceConfigProvider()
-        sdkLog.info("🔧 [buildConnectOptions] 获取最新配置: enableUserInteractionMcp=${serviceConfig.claude.enableUserInteractionMcp}, enableJetBrainsMcp=${serviceConfig.claude.enableJetBrainsMcp}")
+        sdkLog.info("?? [buildConnectOptions] ??????: enableUserInteractionMcp=${serviceConfig.claude.enableUserInteractionMcp}, enableJetBrainsMcp=${serviceConfig.claude.enableJetBrainsMcp}, mcpBackends=${serviceConfig.mcpEnabledBackends.joinToString()}")
 
         val provider = options.provider.toSdkProvider(serviceConfig.defaultProvider)
         val model = options.model  // 前端负责发送正确的 API 模型 ID，不做回退
@@ -659,6 +659,16 @@ class AiAgentRpcServiceImpl(
         serviceConfig: AiAgentServiceConfig
     ): McpSessionSetup {
         val defaults = serviceConfig.claude
+        val enabledBackends = serviceConfig.mcpEnabledBackends
+        if (enabledBackends.isEmpty() || !enabledBackends.contains(provider)) {
+            sdkLog.info("?? [MCP] Provider=$provider is not enabled (enabledBackends=${enabledBackends.joinToString()}), skip MCP registration")
+            return McpSessionSetup(
+                claudeServers = emptyMap(),
+                mcpSystemPromptAppendix = "",
+                allowedTools = emptyList(),
+                codexConfigOverrides = emptyMap()
+            )
+        }
         val sessionServers = mutableMapOf<String, McpServer>()
         val globalServers = mutableMapOf<String, McpServer>()
         val claudeServers = mutableMapOf<String, McpServerSpec>()
@@ -754,6 +764,9 @@ class AiAgentRpcServiceImpl(
 
         val allowedTools = buildMcpAllowedTools(internalServers)
         val codexConfigOverrides = buildCodexMcpConfigOverrides(claudeServers)
+        if (claudeServers.isNotEmpty()) {
+            sdkLog.info("?? [MCP] Registered servers: ${claudeServers.keys.joinToString()}")
+        }
 
         return McpSessionSetup(
             claudeServers = claudeServers,
@@ -798,10 +811,10 @@ class AiAgentRpcServiceImpl(
         } else {
             sdkLog.warn("⚠️ [buildClaudeOverrides] 未加载到任何自定义代理 (ideTools类型=${ideTools::class.simpleName})")
         }
-        val disallowedTools = buildDisallowedBuiltinTools().toMutableList()
+        val disallowedTools = buildDisallowedBuiltinTools(mcpSetup).toMutableList()
 
         // 如果启用了 User Interaction MCP，禁用内置的 AskUserQuestion
-        if (defaults.enableUserInteractionMcp) {
+        if (defaults.enableUserInteractionMcp && mcpSetup.claudeServers.containsKey("user_interaction")) {
             disallowedTools.add("AskUserQuestion")
             sdkLog.info("🚫 [buildClaudeOverrides] User Interaction MCP 已启用，禁用内置 AskUserQuestion")
         }
@@ -1019,14 +1032,17 @@ class AiAgentRpcServiceImpl(
      *
      * @return 需要禁用的内置工具名称列表
      */
-    private fun buildDisallowedBuiltinTools(): List<String> {
+    private fun buildDisallowedBuiltinTools(mcpSetup: McpSessionSetup): List<String> {
         val disallowedTools = mutableListOf<String>()
 
-        // 从 JetBrains MCP 提供者获取需要禁用的工具（Glob, Grep）
-        disallowedTools.addAll(jetBrainsMcpServerProvider.getDisallowedBuiltinTools())
+        // ???? MCP ????????????
+        if (mcpSetup.claudeServers.containsKey("jetbrains")) {
+            disallowedTools.addAll(jetBrainsMcpServerProvider.getDisallowedBuiltinTools())
+        }
 
-        // 从 Terminal MCP 提供者获取需要禁用的工具（Bash）
-        disallowedTools.addAll(terminalMcpServerProvider.getDisallowedBuiltinTools())
+        if (mcpSetup.claudeServers.containsKey("terminal")) {
+            disallowedTools.addAll(terminalMcpServerProvider.getDisallowedBuiltinTools())
+        }
 
         return disallowedTools.distinct()
     }
@@ -1754,7 +1770,6 @@ private fun ProtoPermissionUpdate.toMcpPermissionUpdate(): McpPermissionUpdate {
         }
     )
 }
-
 
 
 

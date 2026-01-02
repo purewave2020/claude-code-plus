@@ -168,7 +168,8 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 val codexPath = settings.codexPath
                     .takeIf { it.isNotBlank() }
                     ?: AgentSettingsService.detectCodexPath().takeIf { it.isNotBlank() }
-                logger.info("📦 Loading agent settings: nodePath=${settings.nodePath.ifBlank { "(system PATH)" }}, model=${settings.defaultModelEnum.displayName}, thinkingLevel=$thinkingLevelName (${settings.defaultThinkingTokens} tokens), permissionMode=${settings.permissionMode}, userInteractionMcp=${settings.enableUserInteractionMcp}, jetbrainsMcp=${settings.enableJetBrainsMcp}, defaultBypass=${settings.defaultBypassPermissions}")
+                val mcpEnabledBackends = settings.getMcpEnabledProviders()
+                logger.info("📦 Loading agent settings: nodePath=${settings.nodePath.ifBlank { "(system PATH)" }}, model=${settings.defaultModelEnum.displayName}, thinkingLevel=$thinkingLevelName (${settings.defaultThinkingTokens} tokens), permissionMode=${settings.permissionMode}, userInteractionMcp=${settings.enableUserInteractionMcp}, jetbrainsMcp=${settings.enableJetBrainsMcp}, mcpBackends=${mcpEnabledBackends.joinToString()}, defaultBypass=${settings.defaultBypassPermissions}")
 
                 // 创建 IDEA 文件同步 hooks
                 val fileSyncHooks = IdeaFileSyncHooks.create(project)
@@ -197,6 +198,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         webSearchEnabled = settings.codexWebSearchEnabled,
                         defaultModelId = settings.codexDefaultModelId
                     ),
+                    mcpEnabledBackends = mcpEnabledBackends,
                     customModels = settings.getCustomModels().map { model ->
                         CustomModelInfo(
                             id = model.id,

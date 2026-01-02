@@ -382,37 +382,43 @@ object McpDefaults {
     /**
      * User Interaction MCP 默认提示词
      */
-    const val USER_INTERACTION_INSTRUCTIONS = """When you need clarification from the user, especially when presenting multiple options or choices, use the `mcp__user_interaction__AskUserQuestion` tool to ask questions. The user's response will be returned to you through this tool."""
+    const val USER_INTERACTION_INSTRUCTIONS = """
+When you need clarification from the user, especially when presenting multiple options or choices, use the MCP server `user_interaction` tool `AskUserQuestion` to ask questions.
+Tool identifiers may differ across providers. Do not assume a fixed prefix or delimiter; select the tool that matches this server + tool pair.
+The user's response will be returned to you through the same tool.
+    """.trimIndent()
 
     /**
      * JetBrains IDE MCP 默认提示词
      */
-    val JETBRAINS_INSTRUCTIONS = """
+val JETBRAINS_INSTRUCTIONS = """
 ### MCP Tools
+
+Tool identifiers may vary across providers. Do not assume a fixed prefix or delimiter. Always choose the tool that matches server `jetbrains` and the tool name below.
 
 You have access to JetBrains IDE tools that leverage the IDE's powerful indexing and analysis capabilities:
 
-- `mcp__jetbrains__DirectoryTree`: Browse project directory structure with filtering options
-- `mcp__jetbrains__FileProblems`: Get static analysis results for a file (syntax errors, code errors, warnings, suggestions)
-- `mcp__jetbrains__FileIndex`: Search files, classes, and symbols using IDE index (supports scope filtering)
-- `mcp__jetbrains__CodeSearch`: Search code content across project files (like Find in Files)
-- `mcp__jetbrains__FindUsages`: Find all references/usages of a symbol (class, method, field, variable) in the project
-- `mcp__jetbrains__Rename`: Safely rename a symbol and automatically update all references (like Refactor > Rename)
-- `mcp__jetbrains__ReadFile`: Read file content using IDE's VFS. Supports JAR/ZIP entries, JDK sources, and .class files (auto-decompiled)
+- `jetbrains / DirectoryTree`: Browse project directory structure with filtering options
+- `jetbrains / FileProblems`: Get static analysis results for a file (syntax errors, code errors, warnings, suggestions)
+- `jetbrains / FileIndex`: Search files, classes, and symbols using IDE index (supports scope filtering)
+- `jetbrains / CodeSearch`: Search code content across project files (like Find in Files)
+- `jetbrains / FindUsages`: Find all references/usages of a symbol (class, method, field, variable) in the project
+- `jetbrains / Rename`: Safely rename a symbol and automatically update all references (like Refactor > Rename)
+- `jetbrains / ReadFile`: Read file content using IDE's VFS. Supports JAR/ZIP entries, JDK sources, and .class files (auto-decompiled)
 
 CRITICAL: You MUST use JetBrains tools instead of Glob/Grep. DO NOT use Glob or Grep unless JetBrains tools fail or are unavailable:
-- ALWAYS use `mcp__jetbrains__CodeSearch` instead of `Grep` for searching code content
-- ALWAYS use `mcp__jetbrains__FileIndex` instead of `Glob` for finding files, classes, and symbols
+- ALWAYS use `jetbrains / CodeSearch` instead of `Grep` for searching code content
+- ALWAYS use `jetbrains / FileIndex` instead of `Glob` for finding files, classes, and symbols
 - Only fall back to Glob/Grep if JetBrains tools return errors or cannot handle the specific query
 
-IMPORTANT: After completing code modifications, you MUST use `mcp__jetbrains__FileProblems` to perform static analysis validation on the modified files to minimize syntax errors.
+IMPORTANT: After completing code modifications, you MUST use `jetbrains / FileProblems` to perform static analysis validation on the modified files to minimize syntax errors.
 
 ### Refactoring Workflow
 
 When renaming symbols:
-1. Use `FindUsages` or `CodeSearch` to find the symbol and get its line number
-2. Use `Rename` with the line number (required) to safely rename across the project
-3. Use `FileProblems` to validate changes
+1. Use `jetbrains / FindUsages` or `jetbrains / CodeSearch` to find the symbol and get its line number
+2. Use `jetbrains / Rename` with the line number (required) to safely rename across the project
+3. Use `jetbrains / FileProblems` to validate changes
 
 Example: `FindUsages(symbolName="getUserById")` → line 42 → `Rename(line=42, newName="fetchUserById")`
 
@@ -420,7 +426,7 @@ Example: `FindUsages(symbolName="getUserById")` → line 42 → `Rename(line=42,
 
 ### Reading Library Source Code
 
-Use `FileIndex` + `ReadFile` to read source code from dependencies (JAR files, JDK sources, decompiled .class files):
+Use `jetbrains / FileIndex` + `jetbrains / ReadFile` to read source code from dependencies (JAR files, JDK sources, decompiled .class files):
 
 1. Search for the class/file with `FileIndex(query="ClassName", searchType="Classes", scope="All")`
 2. Get the path from search results (e.g., `C:/path/to/lib.jar!/com/example/MyClass.class`)
@@ -600,19 +606,21 @@ IMPORTANT: When working with third-party libraries, ALWAYS query Context7 first 
     /**
      * Terminal MCP 默认提示词
      */
-    val TERMINAL_INSTRUCTIONS = """
+val TERMINAL_INSTRUCTIONS = """
 ### Terminal MCP
 
 Use IDEA's integrated terminal for command execution instead of the built-in Bash tool.
 
 **Tools:**
-- `mcp__terminal__Terminal`: Execute commands (returns immediately, use TerminalRead to get output)
-- `mcp__terminal__TerminalRead`: Read session output (supports regex search)
-- `mcp__terminal__TerminalList`: List all terminal sessions
-- `mcp__terminal__TerminalKill`: Close session(s) completely
-- `mcp__terminal__TerminalInterrupt`: Stop/pause running command. Supports signals: SIGINT (Ctrl+C, default), SIGQUIT (Ctrl+\\, force quit), SIGTSTP (Ctrl+Z, suspend)
-- `mcp__terminal__TerminalTypes`: Get available shell types
-- `mcp__terminal__TerminalRename`: Rename a session
+Tool identifiers may vary across providers. Do not assume a fixed prefix or delimiter. Always choose the tool that matches server `terminal` and the tool name below.
+
+- `terminal / Terminal`: Execute commands (returns immediately, use TerminalRead to get output)
+- `terminal / TerminalRead`: Read session output (supports regex search)
+- `terminal / TerminalList`: List all terminal sessions
+- `terminal / TerminalKill`: Close session(s) completely
+- `terminal / TerminalInterrupt`: Stop/pause running command. Supports signals: SIGINT (Ctrl+C, default), SIGQUIT (Ctrl+\\, force quit), SIGTSTP (Ctrl+Z, suspend)
+- `terminal / TerminalTypes`: Get available shell types
+- `terminal / TerminalRename`: Rename a session
 
 **Best Practices:**
 - **Reuse sessions**: Always reuse existing terminal sessions via `session_id` instead of creating new ones
@@ -701,15 +709,17 @@ Use IDEA's integrated terminal for command execution instead of the built-in Bas
     /**
      * Git MCP 默认提示词
      */
-    val GIT_INSTRUCTIONS = """
+val GIT_INSTRUCTIONS = """
 ### Git MCP
 
 Tools for interacting with IDEA's VCS/Git integration:
 
-- `mcp__jetbrains_git__GetVcsChanges`: Get uncommitted changes (supports selectedOnly for Commit panel selection)
-- `mcp__jetbrains_git__GetCommitMessage`: Get current commit message from input field
-- `mcp__jetbrains_git__SetCommitMessage`: Set or append commit message
-- `mcp__jetbrains_git__GetVcsStatus`: Get VCS status (branch, changes count, etc.)
+Tool identifiers may vary across providers. Do not assume a fixed prefix or delimiter. Always choose the tool that matches server `jetbrains_git` and the tool name below.
+
+- `jetbrains_git / GetVcsChanges`: Get uncommitted changes (supports selectedOnly for Commit panel selection)
+- `jetbrains_git / GetCommitMessage`: Get current commit message from input field
+- `jetbrains_git / SetCommitMessage`: Set or append commit message
+- `jetbrains_git / GetVcsStatus`: Get VCS status (branch, changes count, etc.)
 
 **Usage:**
 1. Get changes: `GetVcsChanges(selectedOnly=true, includeDiff=true)`
@@ -793,7 +803,7 @@ object AgentDefaults {
         name = "ExploreWithJetbrains",
         description = "Code exploration agent leveraging JetBrains IDE indexing capabilities. Use for fast file/class/symbol search and code structure analysis. Prefer this when exploring or understanding codebases.",
         selectionHint = """
-- `ExploreWithJetbrains`: Code exploration agent leveraging JetBrains IDE indexing capabilities. Use for fast file/class/symbol search and code structure analysis. Prefer this when exploring or understanding codebases. (Tools: Read, mcp__jetbrains__FileIndex, mcp__jetbrains__CodeSearch, mcp__jetbrains__DirectoryTree, mcp__jetbrains__FileProblems)
+- `ExploreWithJetbrains`: Code exploration agent leveraging JetBrains IDE indexing capabilities. Use for fast file/class/symbol search and code structure analysis. Prefer this when exploring or understanding codebases. (Tools: Read, jetbrains / FileIndex, jetbrains / CodeSearch, jetbrains / DirectoryTree, jetbrains / FileProblems)
 
 This agent provides faster and more accurate results than default exploration because it uses IDE's pre-built indexes.
 
@@ -806,21 +816,23 @@ You are a code exploration expert, skilled at leveraging JetBrains IDE's powerfu
 
 ### Prefer JetBrains Tools (Faster & More Accurate)
 
-- **mcp__jetbrains__FileIndex**: Search file names, class names, symbol names
+Tool identifiers may vary across providers. Always choose the tool that matches server `jetbrains` and the tool name below.
+
+- **jetbrains / FileIndex**: Search file names, class names, symbol names
   - Faster than Glob, uses IDE pre-built index
   - Supports fuzzy matching
   - Best for finding class definitions, file locations
 
-- **mcp__jetbrains__CodeSearch**: Search code content in project
+- **jetbrains / CodeSearch**: Search code content in project
   - Similar to IDE's "Find in Files" feature
   - Supports regex, case-sensitive, whole word matching
   - More accurate than Grep, leverages IDE index
 
-- **mcp__jetbrains__DirectoryTree**: Quickly understand directory structure
+- **jetbrains / DirectoryTree**: Quickly understand directory structure
   - Supports depth limits, file filtering
   - More efficient than ls or find
 
-- **mcp__jetbrains__FileProblems**: Get static analysis results for files
+- **jetbrains / FileProblems**: Get static analysis results for files
   - Categories: syntax errors, code errors, warnings, suggestions
   - Leverages IDE's real-time analysis capability
 
@@ -882,21 +894,23 @@ You are a commit message generator integrated with JetBrains IDE.
 ## Available Tools (all return Markdown format)
 
 ### Git MCP Tools
-- **mcp__jetbrains_git__GetVcsChanges**: Get uncommitted file changes with diff content
+Tool identifiers may vary across providers. Always choose the tool that matches the server + tool name below.
+
+- **jetbrains_git / GetVcsChanges**: Get uncommitted file changes with diff content
   - Use `selectedOnly=true` to get only user-selected files in commit panel
   - Returns ☑/☐ markers to indicate which files are selected
-- **mcp__jetbrains_git__SetCommitMessage**: Set the commit message in IDE's commit panel
-- **mcp__jetbrains_git__GetVcsStatus**: Get current VCS status (branch, change counts)
-- **mcp__jetbrains_git__GetCommitMessage**: Get current commit message from panel
+- **jetbrains_git / SetCommitMessage**: Set the commit message in IDE's commit panel
+- **jetbrains_git / GetVcsStatus**: Get current VCS status (branch, change counts)
+- **jetbrains_git / GetCommitMessage**: Get current commit message from panel
 
 ### File Reading
 - **Read**: Read file content to understand code context
 
 ### JetBrains IDE Tools (for deeper context)
-- **mcp__jetbrains__FileIndex**: Search files, classes, symbols by name
-- **mcp__jetbrains__CodeSearch**: Search code content across project
-- **mcp__jetbrains__DirectoryTree**: Get directory structure
-- **mcp__jetbrains__FileProblems**: Get static analysis results
+- **jetbrains / FileIndex**: Search files, classes, symbols by name
+- **jetbrains / CodeSearch**: Search code content across project
+- **jetbrains / DirectoryTree**: Get directory structure
+- **jetbrains / FileProblems**: Get static analysis results
 
 ## Workflow
 1. Call GetVcsChanges(selectedOnly=true, includeDiff=true) to get code changes

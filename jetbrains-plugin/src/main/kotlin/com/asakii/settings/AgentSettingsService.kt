@@ -1,5 +1,6 @@
 package com.asakii.settings
 
+import com.asakii.ai.agent.sdk.AiAgentProvider
 import com.intellij.openapi.components.*
 import com.intellij.util.xmlb.XmlSerializerUtil
 import kotlinx.serialization.Serializable
@@ -105,6 +106,8 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var terminalAvailableShells: String = "",      // Terminal 可用 shell 列表（逗号分隔，空 = 全部）
         var terminalReadTimeout: Int = 10,             // TerminalRead 默认超时时间（秒）
         var enableGitMcp: Boolean = false,             // Git MCP（VCS 集成，默认禁用）
+        // MCP 启用的后端（JSON 数组或逗号分隔；all/claude/codex）
+        var mcpEnabledBackends: String = "all",
 
         // MCP 系统提示词（自定义，空字符串表示使用默认值）
         var userInteractionInstructions: String = "",
@@ -367,6 +370,47 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     var gitInstructions: String
         get() = state.gitInstructions
         set(value) { state.gitInstructions = value }
+
+    private fun normalizeMcpBackendKeys(keys: Set<String>): Set<String> {
+        val normalized = keys.map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        if (normalized.contains(MCP_BACKEND_ALL)) {
+            return setOf(MCP_BACKEND_ALL)
+        }
+        return normalized.intersect(setOf(MCP_BACKEND_CLAUDE, MCP_BACKEND_CODEX))
+    }
+
+    fun getMcpEnabledBackendKeys(): Set<String> {
+        val raw = state.mcpEnabledBackends.trim()
+        if (raw.isBlank()) return emptySet()
+        val parsed = try {
+            json.decodeFromString<List<String>>(raw).toSet()
+        } catch (_: Exception) {
+            raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        }
+        return normalizeMcpBackendKeys(parsed)
+    }
+
+    fun setMcpEnabledBackendKeys(keys: Set<String>) {
+        val normalized = normalizeMcpBackendKeys(keys)
+        state.mcpEnabledBackends = if (normalized.isEmpty()) {
+            ""
+        } else {
+            json.encodeToString(normalized.sorted())
+        }
+    }
+
+    fun getMcpEnabledProviders(): Set<AiAgentProvider> {
+        val keys = getMcpEnabledBackendKeys()
+        if (keys.contains(MCP_BACKEND_ALL)) {
+            return setOf(AiAgentProvider.CLAUDE, AiAgentProvider.CODEX)
+        }
+        val providers = mutableSetOf<AiAgentProvider>()
+        if (keys.contains(MCP_BACKEND_CLAUDE)) providers.add(AiAgentProvider.CLAUDE)
+        if (keys.contains(MCP_BACKEND_CODEX)) providers.add(AiAgentProvider.CODEX)
+        return providers
+    }
 
     // Git Generate 配置属性
     var gitGenerateSystemPrompt: String
@@ -766,6 +810,10 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         }
 
     companion object {
+        const val MCP_BACKEND_ALL = "all"
+        const val MCP_BACKEND_CLAUDE = "claude"
+        const val MCP_BACKEND_CODEX = "codex"
+
         @JvmStatic
         fun getInstance(): AgentSettingsService = service()
 
