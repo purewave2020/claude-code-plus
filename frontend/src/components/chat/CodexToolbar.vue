@@ -92,6 +92,7 @@
         </span>
       </el-option>
     </el-select>
+
   </div>
 </template>
 
@@ -192,36 +193,38 @@ function handleReasoningChange(value: CodexReasoningEffort) {
 .codex-toolbar {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
-/* ========== Cursor 风格选择器 - 与 ChatInput.vue 保持一致 ========== */
+/* ========== Cursor 风格选择器 - 自动宽度 ========== */
 .cursor-selector {
   font-size: 11px;
+  flex: 0 0 auto;
+  margin: 0;
 }
 
-.cursor-selector.model-selector {
-  width: auto;
+/* 强制 el-select 根据内容自适应宽度 */
+.cursor-selector.el-select {
+  flex: 0 0 auto;
+  margin: 0;
+  /* 关键：覆盖 Element Plus 的 CSS 变量 */
+  --el-select-width: auto !important;
+  width: auto !important;
+  display: inline-block;
 }
 
-.cursor-selector.reasoning-selector {
-  width: auto;
-}
-
-
-.cursor-selector.sandbox-selector {
-  width: auto;
-}
-
-/* 移除边框和背景，使用纯文字样式（与 ChatInput 一致） */
+/* 内部 wrapper 也需要自适应宽度 */
 .cursor-selector :deep(.el-select__wrapper) {
+  display: inline-flex !important;
+  width: auto !important;
+  min-width: unset !important;
   padding: 2px 4px;
   border: none !important;
   border-radius: 4px;
   background: transparent !important;
   box-shadow: none !important;
   min-height: 20px;
-  gap: 1px;
+  gap: 2px;
 }
 
 .cursor-selector :deep(.el-select__wrapper):hover {
@@ -238,14 +241,44 @@ function handleReasoningChange(value: CodexReasoningEffort) {
   font-size: 11px;
 }
 
+/* 选中项文本 - 不截断，自动宽度 */
 .cursor-selector :deep(.el-select__selection) {
   color: var(--theme-secondary-foreground, #6a737d);
   font-size: 11px;
+  /* 关键：覆盖 Element Plus 的 flex: 1 */
+  flex: 0 0 auto !important;
+  min-width: 0;
+  overflow: visible;
 }
 
+.cursor-selector :deep(.el-select__selected-item) {
+  white-space: nowrap;
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+/* 隐藏 placeholder 的绝对定位，避免影响宽度 */
+.cursor-selector :deep(.el-select__placeholder) {
+  position: static !important;
+  width: auto !important;
+  transform: none !important;
+}
+
+/* 确保内部 input wrapper 不影响宽度 */
+.cursor-selector :deep(.el-select__input-wrapper) {
+  flex: 0 0 auto !important;
+  width: 0 !important;
+}
+
+.cursor-selector :deep(.el-select__input-wrapper.is-hidden) {
+  display: none !important;
+}
+
+/* 下拉箭头 */
 .cursor-selector :deep(.el-select__suffix) {
   color: var(--theme-secondary-foreground, #9ca3af);
   margin-left: 0;
+  flex-shrink: 0;
 }
 
 .cursor-selector :deep(.el-select__suffix .el-icon) {
@@ -262,6 +295,7 @@ function handleReasoningChange(value: CodexReasoningEffort) {
   font-size: 12px;
   color: var(--theme-secondary-foreground, #6a737d);
   margin-right: 1px;
+  flex-shrink: 0;
 }
 
 /* 推理选择器前缀图标颜色 - 使用主题强调色 */

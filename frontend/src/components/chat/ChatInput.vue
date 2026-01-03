@@ -843,7 +843,6 @@ const selectedModelValue = computed({
   }
 })
 
-
 // Computed
 const sendContextMenuRef = ref<HTMLElement | null>(null)
 
@@ -2080,21 +2079,22 @@ onUnmounted(() => {
 .cursor-style-selectors {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
-/* ========== Cursor 风格选择器 - 更紧凑样式 ========== */
-.cursor-selector {
+/* ========== Cursor 风格选择器 - 自动宽度 ========== */
+.cursor-style-selectors :deep(.el-select.cursor-selector) {
   font-size: 11px;
+  flex: 0 0 auto;
+  margin: 0;
+  /* 关键：覆盖 Element Plus 的 CSS 变量 */
+  --el-select-width: auto !important;
+  width: auto !important;
+  display: inline-block;
 }
 
 /* 模式选择器 - 带灰色背景 */
-.cursor-selector.mode-selector {
-  width: auto;
-  min-width: 80px;
-}
-
-.cursor-selector.mode-selector :deep(.el-select__wrapper) {
+.cursor-style-selectors :deep(.el-select.mode-selector .el-select__wrapper) {
   background: rgba(0, 0, 0, 0.08) !important;
   border-radius: 4px;
   padding: 2px 6px;
@@ -2104,54 +2104,83 @@ onUnmounted(() => {
 .mode-prefix-icon {
   font-size: 12px;
   color: var(--theme-secondary-foreground, #6a737d);
-  margin-right: 1px;
+  margin-right: 2px;
+  flex-shrink: 0;
 }
 
-.cursor-selector.model-selector {
-  width: auto;
-  min-width: 100px;
-}
-
-/* 移除边框和背景，使用纯文字样式 */
-.cursor-selector :deep(.el-select__wrapper) {
+/* 内部 wrapper - 自适应宽度 */
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__wrapper) {
+  display: inline-flex !important;
+  width: auto !important;
+  min-width: unset !important;
   padding: 2px 4px;
   border: none !important;
   border-radius: 4px;
   background: transparent !important;
   box-shadow: none !important;
   min-height: 20px;
-  gap: 1px;
+  gap: 2px;
 }
 
-.cursor-selector :deep(.el-select__wrapper):hover {
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__wrapper:hover) {
   background: var(--theme-hover-background, rgba(0, 0, 0, 0.05)) !important;
 }
 
-.cursor-selector :deep(.el-select__wrapper.is-focused) {
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__wrapper.is-focused) {
   background: var(--theme-hover-background, rgba(0, 0, 0, 0.05)) !important;
   box-shadow: none !important;
 }
 
-.cursor-selector :deep(.el-select__placeholder) {
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__placeholder) {
   color: var(--theme-secondary-foreground, #6a737d);
   font-size: 11px;
 }
 
-.cursor-selector :deep(.el-select__selection) {
+/* 选中项文本 - 不截断，自动宽度 */
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__selection) {
   color: var(--theme-secondary-foreground, #6a737d);
   font-size: 11px;
+  /* 关键：覆盖 Element Plus 的 flex: 1 */
+  flex: 0 0 auto !important;
+  min-width: 0;
+  overflow: visible;
 }
 
-.cursor-selector :deep(.el-select__suffix) {
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__selected-item) {
+  white-space: nowrap;
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+/* 隐藏 placeholder 的绝对定位，避免影响宽度 */
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__placeholder) {
+  position: static !important;
+  width: auto !important;
+  transform: none !important;
+}
+
+/* 确保内部 input wrapper 不影响宽度 */
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__input-wrapper) {
+  flex: 0 0 auto !important;
+  width: 0 !important;
+}
+
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__input-wrapper.is-hidden) {
+  display: none !important;
+}
+
+/* 下拉箭头 */
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__suffix) {
   color: var(--theme-secondary-foreground, #9ca3af);
   margin-left: 0;
+  flex-shrink: 0;
 }
 
-.cursor-selector :deep(.el-select__suffix .el-icon) {
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__suffix .el-icon) {
   font-size: 12px;
 }
 
-.cursor-selector.is-disabled :deep(.el-select__wrapper) {
+.cursor-style-selectors :deep(.el-select.cursor-selector.is-disabled .el-select__wrapper) {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -2173,13 +2202,13 @@ onUnmounted(() => {
 /* 模式下拉弹层样式 - 移动到全局样式块 */
 
 
-.model-selector :deep(.el-select__suffix),
-.mode-selector :deep(.el-select__suffix) {
+.cursor-style-selectors :deep(.el-select.model-selector .el-select__suffix),
+.cursor-style-selectors :deep(.el-select.mode-selector .el-select__suffix) {
   color: var(--theme-secondary-foreground, #6a737d);
 }
 
-.model-selector.is-disabled :deep(.el-select__wrapper),
-.mode-selector.is-disabled :deep(.el-select__wrapper) {
+.cursor-style-selectors :deep(.el-select.model-selector.is-disabled .el-select__wrapper),
+.cursor-style-selectors :deep(.el-select.mode-selector.is-disabled .el-select__wrapper) {
   opacity: 0.5;
   cursor: not-allowed;
   background: var(--theme-panel-background, #f6f8fa);
