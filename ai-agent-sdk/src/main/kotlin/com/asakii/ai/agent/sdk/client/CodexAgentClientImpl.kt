@@ -23,6 +23,7 @@ import com.asakii.codex.agent.sdk.ThreadOptions
 import com.asakii.codex.agent.sdk.appserver.AppServerEvent
 import com.asakii.codex.agent.sdk.appserver.McpServerStatus
 import com.asakii.codex.agent.sdk.appserver.PatchChangeKind
+import com.asakii.codex.agent.sdk.appserver.ReasoningSummary
 import com.asakii.codex.agent.sdk.appserver.SandboxPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -137,6 +138,8 @@ internal class CodexAgentClientImpl(
             try {
                 val payload = buildInputPayload(input)
                 val sandboxPolicy = buildSandboxPolicy(threadOptions)
+                val effort = threadOptions.modelReasoningEffort?.wireValue
+                val summary = threadOptions.modelReasoningSummary?.toReasoningSummaryOrNull()
                 val turn = activeClient.startTurn(
                     threadId = activeThreadId,
                     message = payload.text,
@@ -144,7 +147,9 @@ internal class CodexAgentClientImpl(
                     cwd = threadOptions.workingDirectory,
                     model = threadOptions.model,
                     approvalPolicy = threadOptions.approvalPolicy?.wireValue,
-                    sandboxPolicy = sandboxPolicy
+                    sandboxPolicy = sandboxPolicy,
+                    effort = effort,
+                    summary = summary
                 )
                 currentTurnId = turn.id
 
@@ -362,6 +367,14 @@ internal class CodexAgentClientImpl(
             )
             null -> null
         }
+    }
+
+    private fun String.toReasoningSummaryOrNull(): ReasoningSummary? = when (lowercase()) {
+        "auto" -> ReasoningSummary.Auto
+        "concise" -> ReasoningSummary.Concise
+        "detailed" -> ReasoningSummary.Detailed
+        "none" -> ReasoningSummary.None
+        else -> null
     }
 
     private fun persistImage(block: ImageContent): String {

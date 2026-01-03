@@ -106,7 +106,9 @@ export default {
       interruptHint: '打断发送',
       stopHint: '停止生成',
       toggleThinkingHint: '开关思考',
+      toggleReasoningHint: '切换推理强度',
       switchModeHint: '切换模式',
+      switchSandboxHint: '切换沙盒模式（read-only / workspace-write / full access）',
       clearToLineStartHint: '清空到行首'
     },
     connectionStatus: {

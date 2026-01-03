@@ -803,8 +803,16 @@ export function useSessionTab(initialOrder: number = 0) {
                 // 统一协议：传递 provider 参数，后端根据此参数路由到对应的 AI Agent
                 provider: (resolvedOptions as any).provider || backendType.value
             }
-            if (backendType.value === 'codex' && settingsStore.settings.codexSandboxMode) {
-                connectOptions.sandboxMode = settingsStore.settings.codexSandboxMode as any
+            if (backendType.value === 'codex') {
+                if (settingsStore.settings.codexSandboxMode) {
+                    connectOptions.sandboxMode = settingsStore.settings.codexSandboxMode as any
+                }
+                if (settingsStore.settings.codexReasoningEffort) {
+                    connectOptions.codexReasoningEffort = settingsStore.settings.codexReasoningEffort
+                }
+                if (settingsStore.settings.codexReasoningSummary) {
+                    connectOptions.codexReasoningSummary = settingsStore.settings.codexReasoningSummary
+                }
             }
 
             // 连接并获取 sessionId
@@ -1084,8 +1092,16 @@ export function useSessionTab(initialOrder: number = 0) {
                 // 统一协议：传递 provider 参数
                 provider: backendType.value
             }
-            if (backendType.value === 'codex' && settingsStore.settings.codexSandboxMode) {
-                connectOptions.sandboxMode = settingsStore.settings.codexSandboxMode as any
+            if (backendType.value === 'codex') {
+                if (settingsStore.settings.codexSandboxMode) {
+                    connectOptions.sandboxMode = settingsStore.settings.codexSandboxMode as any
+                }
+                if (settingsStore.settings.codexReasoningEffort) {
+                    connectOptions.codexReasoningEffort = settingsStore.settings.codexReasoningEffort
+                }
+                if (settingsStore.settings.codexReasoningSummary) {
+                    connectOptions.codexReasoningSummary = settingsStore.settings.codexReasoningSummary
+                }
             }
 
             // 使用 reconnectSession 复用 WebSocket

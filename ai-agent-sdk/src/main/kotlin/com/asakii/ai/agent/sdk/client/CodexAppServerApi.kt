@@ -7,6 +7,7 @@ import com.asakii.codex.agent.sdk.appserver.CodexAppServerClient
 import com.asakii.codex.agent.sdk.appserver.ListMcpServerStatusResponse
 import com.asakii.codex.agent.sdk.appserver.McpServerOauthLoginResponse
 import com.asakii.codex.agent.sdk.appserver.ModelListResponse
+import com.asakii.codex.agent.sdk.appserver.ReasoningSummary
 import com.asakii.codex.agent.sdk.appserver.SandboxPolicy
 import com.asakii.codex.agent.sdk.appserver.ThreadInfo
 import com.asakii.codex.agent.sdk.appserver.TurnInfo
@@ -34,7 +35,9 @@ internal interface CodexAppServerApi : Closeable {
         cwd: String? = null,
         model: String? = null,
         approvalPolicy: String? = null,
-        sandboxPolicy: SandboxPolicy? = null
+        sandboxPolicy: SandboxPolicy? = null,
+        effort: String? = null,
+        summary: ReasoningSummary? = null
     ): TurnInfo
     suspend fun interruptTurn(threadId: String, turnId: String)
     suspend fun acceptCommand(requestId: String, forSession: Boolean = false)
@@ -74,7 +77,9 @@ internal class DefaultCodexAppServerApi(private val client: CodexAppServerClient
         cwd: String?,
         model: String?,
         approvalPolicy: String?,
-        sandboxPolicy: SandboxPolicy?
+        sandboxPolicy: SandboxPolicy?,
+        effort: String?,
+        summary: ReasoningSummary?
     ): TurnInfo = client.startTurn(
         threadId,
         message,
@@ -82,7 +87,9 @@ internal class DefaultCodexAppServerApi(private val client: CodexAppServerClient
         cwd = cwd,
         model = model,
         approvalPolicy = approvalPolicy,
-        sandboxPolicy = sandboxPolicy
+        sandboxPolicy = sandboxPolicy,
+        effort = effort,
+        summary = summary
     )
 
     override suspend fun interruptTurn(threadId: String, turnId: String) {

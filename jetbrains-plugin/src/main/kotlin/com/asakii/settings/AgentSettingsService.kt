@@ -106,7 +106,13 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var terminalAvailableShells: String = "",      // Terminal 可用 shell 列表（逗号分隔，空 = 全部）
         var terminalReadTimeout: Int = 10,             // TerminalRead 默认超时时间（秒）
         var enableGitMcp: Boolean = false,             // Git MCP（VCS 集成，默认禁用）
-        // MCP 启用的后端（JSON 数组或逗号分隔；all/claude/codex）
+        // MCP 后端启用范围（每个 MCP 单独配置，空 = 使用旧全局配置作为兼容）
+        var userInteractionMcpBackends: String = "",
+        var jetbrainsMcpBackends: String = "",
+        var context7McpBackends: String = "",
+        var terminalMcpBackends: String = "",
+        var gitMcpBackends: String = "",
+        // 旧版全局 MCP 后端配置（兼容）
         var mcpEnabledBackends: String = "all",
 
         // MCP 系统提示词（自定义，空字符串表示使用默认值）
@@ -131,6 +137,9 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var codexPath: String = "",
         var codexWebSearchEnabled: Boolean = false,
         var codexDefaultModelId: String = "gpt-5.2-codex",
+        var codexDefaultReasoningEffort: String = "medium",
+        var codexDefaultReasoningSummary: String = "auto",
+        var codexDefaultSandboxMode: String = "workspace-write",
         var codexCustomModels: String = "[]",
 
         // 默认模型（使用枚举名称存储，如 "OPUS_45"）
@@ -371,6 +380,26 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         get() = state.gitInstructions
         set(value) { state.gitInstructions = value }
 
+    var userInteractionMcpBackends: String
+        get() = state.userInteractionMcpBackends
+        set(value) { state.userInteractionMcpBackends = value }
+
+    var jetbrainsMcpBackends: String
+        get() = state.jetbrainsMcpBackends
+        set(value) { state.jetbrainsMcpBackends = value }
+
+    var context7McpBackends: String
+        get() = state.context7McpBackends
+        set(value) { state.context7McpBackends = value }
+
+    var terminalMcpBackends: String
+        get() = state.terminalMcpBackends
+        set(value) { state.terminalMcpBackends = value }
+
+    var gitMcpBackends: String
+        get() = state.gitMcpBackends
+        set(value) { state.gitMcpBackends = value }
+
     private fun normalizeMcpBackendKeys(keys: Set<String>): Set<String> {
         val normalized = keys.map { it.trim().lowercase() }
             .filter { it.isNotEmpty() }
@@ -381,8 +410,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         return normalized.intersect(setOf(MCP_BACKEND_CLAUDE, MCP_BACKEND_CODEX))
     }
 
-    fun getMcpEnabledBackendKeys(): Set<String> {
-        val raw = state.mcpEnabledBackends.trim()
+    private fun parseBackendKeys(raw: String): Set<String> {
         if (raw.isBlank()) return emptySet()
         val parsed = try {
             json.decodeFromString<List<String>>(raw).toSet()
@@ -390,6 +418,27 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
             raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         }
         return normalizeMcpBackendKeys(parsed)
+    }
+
+    private fun formatBackendKeys(keys: Set<String>): String {
+        val normalized = normalizeMcpBackendKeys(keys)
+        return json.encodeToString(normalized.sorted())
+    }
+
+    private fun resolveBackendKeys(raw: String): Set<String> {
+        if (raw.isNotBlank()) {
+            return parseBackendKeys(raw)
+        }
+        val fallback = getMcpEnabledBackendKeys()
+        return if (fallback.isNotEmpty()) {
+            fallback
+        } else {
+            setOf(MCP_BACKEND_ALL)
+        }
+    }
+
+    fun getMcpEnabledBackendKeys(): Set<String> {
+        return parseBackendKeys(state.mcpEnabledBackends.trim())
     }
 
     fun setMcpEnabledBackendKeys(keys: Set<String>) {
@@ -401,15 +450,70 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         }
     }
 
-    fun getMcpEnabledProviders(): Set<AiAgentProvider> {
-        val keys = getMcpEnabledBackendKeys()
-        if (keys.contains(MCP_BACKEND_ALL)) {
+    fun getUserInteractionMcpBackendKeys(): Set<String> =
+        resolveBackendKeys(state.userInteractionMcpBackends)
+
+    fun setUserInteractionMcpBackendKeys(keys: Set<String>) {
+        state.userInteractionMcpBackends = formatBackendKeys(keys)
+    }
+
+    fun getJetbrainsMcpBackendKeys(): Set<String> =
+        resolveBackendKeys(state.jetbrainsMcpBackends)
+
+    fun setJetbrainsMcpBackendKeys(keys: Set<String>) {
+        state.jetbrainsMcpBackends = formatBackendKeys(keys)
+    }
+
+    fun getContext7McpBackendKeys(): Set<String> =
+        resolveBackendKeys(state.context7McpBackends)
+
+    fun setContext7McpBackendKeys(keys: Set<String>) {
+        state.context7McpBackends = formatBackendKeys(keys)
+    }
+
+    fun getTerminalMcpBackendKeys(): Set<String> =
+        resolveBackendKeys(state.terminalMcpBackends)
+
+    fun setTerminalMcpBackendKeys(keys: Set<String>) {
+        state.terminalMcpBackends = formatBackendKeys(keys)
+    }
+
+    fun getGitMcpBackendKeys(): Set<String> =
+        resolveBackendKeys(state.gitMcpBackends)
+
+    fun setGitMcpBackendKeys(keys: Set<String>) {
+        state.gitMcpBackends = formatBackendKeys(keys)
+    }
+
+    fun toProviders(keys: Set<String>): Set<AiAgentProvider> {
+        val normalized = normalizeMcpBackendKeys(keys)
+        if (normalized.contains(MCP_BACKEND_ALL)) {
             return setOf(AiAgentProvider.CLAUDE, AiAgentProvider.CODEX)
         }
         val providers = mutableSetOf<AiAgentProvider>()
-        if (keys.contains(MCP_BACKEND_CLAUDE)) providers.add(AiAgentProvider.CLAUDE)
-        if (keys.contains(MCP_BACKEND_CODEX)) providers.add(AiAgentProvider.CODEX)
+        if (normalized.contains(MCP_BACKEND_CLAUDE)) providers.add(AiAgentProvider.CLAUDE)
+        if (normalized.contains(MCP_BACKEND_CODEX)) providers.add(AiAgentProvider.CODEX)
         return providers
+    }
+
+    fun getUserInteractionMcpProviders(): Set<AiAgentProvider> =
+        toProviders(getUserInteractionMcpBackendKeys())
+
+    fun getJetbrainsMcpProviders(): Set<AiAgentProvider> =
+        toProviders(getJetbrainsMcpBackendKeys())
+
+    fun getContext7McpProviders(): Set<AiAgentProvider> =
+        toProviders(getContext7McpBackendKeys())
+
+    fun getTerminalMcpProviders(): Set<AiAgentProvider> =
+        toProviders(getTerminalMcpBackendKeys())
+
+    fun getGitMcpProviders(): Set<AiAgentProvider> =
+        toProviders(getGitMcpBackendKeys())
+
+    fun getMcpEnabledProviders(): Set<AiAgentProvider> {
+        val keys = getMcpEnabledBackendKeys()
+        return toProviders(keys)
     }
 
     // Git Generate 配置属性
@@ -525,6 +629,18 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         get() = state.codexDefaultModelId
         set(value) { state.codexDefaultModelId = value }
 
+    var codexDefaultReasoningEffort: String
+        get() = normalizeCodexReasoningEffort(state.codexDefaultReasoningEffort)
+        set(value) { state.codexDefaultReasoningEffort = normalizeCodexReasoningEffort(value) }
+
+    var codexDefaultReasoningSummary: String
+        get() = normalizeCodexReasoningSummary(state.codexDefaultReasoningSummary)
+        set(value) { state.codexDefaultReasoningSummary = normalizeCodexReasoningSummary(value) }
+
+    var codexDefaultSandboxMode: String
+        get() = normalizeCodexSandboxMode(state.codexDefaultSandboxMode)
+        set(value) { state.codexDefaultSandboxMode = normalizeCodexSandboxMode(value) }
+
     var defaultModel: String
         get() = state.defaultModel
         set(value) { state.defaultModel = value }
@@ -552,6 +668,31 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     var codexCustomModelsJson: String
         get() = state.codexCustomModels
         set(value) { state.codexCustomModels = value }
+
+    private fun normalizeCodexReasoningEffort(value: String?): String {
+        val normalized = value?.trim()?.lowercase().orEmpty()
+        return when (normalized) {
+            "minimal", "low", "medium", "high", "xhigh" -> normalized
+            else -> "medium"
+        }
+    }
+
+    private fun normalizeCodexReasoningSummary(value: String?): String {
+        val normalized = value?.trim()?.lowercase().orEmpty()
+        return when (normalized) {
+            "auto", "concise", "detailed", "none" -> normalized
+            else -> "auto"
+        }
+    }
+
+    private fun normalizeCodexSandboxMode(value: String?): String {
+        val normalized = value?.trim()?.lowercase().orEmpty()
+        return when (normalized) {
+            "read-only", "workspace-write", "danger-full-access" -> normalized
+            "full-access" -> "danger-full-access"
+            else -> "workspace-write"
+        }
+    }
 
     /**
      * 获取自定义模型列表

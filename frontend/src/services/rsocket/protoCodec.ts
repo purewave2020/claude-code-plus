@@ -137,6 +137,8 @@ export const ProtoCodec = {
       baseUrl: options.baseUrl,
       apiKey: options.apiKey,
       sandboxMode: options.sandboxMode ? mapSandboxModeToProto(options.sandboxMode) : undefined,
+      codexReasoningEffort: options.codexReasoningEffort,
+      codexReasoningSummary: options.codexReasoningSummary,
       replayUserMessages: options.replayUserMessages
     })
 
@@ -1311,6 +1313,9 @@ export interface SettingsChangedParams {
     enableJetbrainsMcp: boolean
     includePartialMessages: boolean
     codexDefaultModelId?: string
+    codexDefaultReasoningEffort?: string
+    codexDefaultReasoningSummary?: string
+    codexDefaultSandboxMode?: string
     defaultThinkingLevel: string
     defaultThinkingTokens: number
     defaultThinkingLevelId: string
@@ -1344,6 +1349,9 @@ function mapSettingsChangedFromProto(proto: IdeSettingsChangedNotify): SettingsC
       enableJetbrainsMcp: s?.enableJetbrainsMcp ?? true,
       includePartialMessages: s?.includePartialMessages ?? true,
       codexDefaultModelId: s?.codexDefaultModelId || '',
+      codexDefaultReasoningEffort: s?.codexDefaultReasoningEffort || undefined,
+      codexDefaultReasoningSummary: s?.codexDefaultReasoningSummary || undefined,
+      codexDefaultSandboxMode: s?.codexDefaultSandboxMode || undefined,
       defaultThinkingLevel: s?.defaultThinkingLevel || 'ULTRA',
       defaultThinkingTokens: s?.defaultThinkingTokens ?? 8096,
       defaultThinkingLevelId: s?.defaultThinkingLevelId || 'ultra',

@@ -154,7 +154,7 @@ export class CodexSession extends BaseBackendSession {
     supportsSubAgents: false,
     supportsMcp: true,
     supportsSandbox: true,
-    sandboxModes: ['read-only', 'workspace-write', 'full-access'],
+    sandboxModes: ['read-only', 'workspace-write', 'danger-full-access'],
     supportsPromptCaching: true, // Model-dependent
     exposesTokenUsage: false, // Not exposed in current API
     supportedTools: ['bash', 'write', 'edit', 'mcp'],

@@ -15,7 +15,9 @@ import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.awt.*
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
@@ -38,12 +40,6 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
     private var mainPanel: JPanel? = null
     private var table: JBTable? = null
     private var tableModel: McpServerTableModel? = null
-
-    // MCP 启用后端选择
-    private val backendAllCheckbox = JBCheckBox("All")
-    private val backendClaudeCheckbox = JBCheckBox("Claude Code")
-    private val backendCodexCheckbox = JBCheckBox("Codex")
-    private var backendSelectionUpdating = false
 
     // 内置服务器配置存储
     private val builtInServers = mutableListOf<McpServerEntry>()
@@ -87,29 +83,6 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         }
         topPanel.add(noticePanel)
 
-        // 启用后端选择
-        val backendRow = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            add(JBLabel("Enabled in:"))
-            add(Box.createHorizontalStrut(8))
-            add(backendAllCheckbox)
-            add(Box.createHorizontalStrut(8))
-            add(backendClaudeCheckbox)
-            add(Box.createHorizontalStrut(8))
-            add(backendCodexCheckbox)
-        }
-        val backendHint = JBLabel("<html><font color='gray' size='-1'>Select which backends can use MCP. Choosing All clears other selections.</font></html>").apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-        }
-        topPanel.add(Box.createVerticalStrut(6))
-        topPanel.add(backendRow)
-        topPanel.add(backendHint)
-        topPanel.add(Box.createVerticalStrut(6))
-
-        backendAllCheckbox.addActionListener { handleBackendSelection(backendAllCheckbox) }
-        backendClaudeCheckbox.addActionListener { handleBackendSelection(backendClaudeCheckbox) }
-        backendCodexCheckbox.addActionListener { handleBackendSelection(backendCodexCheckbox) }
-
         mainPanel!!.add(topPanel, BorderLayout.NORTH)
 
         // 创建表格
@@ -134,12 +107,19 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
 
             // Configuration 列
             columnModel.getColumn(2).apply {
-                preferredWidth = 350
+                preferredWidth = 300
                 cellRenderer = ConfigurationCellRenderer()
             }
 
-            // Level 列
+            // Backends 列
             columnModel.getColumn(3).apply {
+                preferredWidth = 120
+                maxWidth = 160
+                cellRenderer = BackendCellRenderer()
+            }
+
+            // Level 列
+            columnModel.getColumn(4).apply {
                 preferredWidth = 80
                 maxWidth = 100
                 cellRenderer = LevelCellRenderer()
@@ -267,49 +247,65 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         tableModel?.fireTableDataChanged()
     }
 
-    private fun handleBackendSelection(source: JCheckBox) {
-        if (backendSelectionUpdating) return
-        backendSelectionUpdating = true
-        try {
-            if (source == backendAllCheckbox) {
-                if (backendAllCheckbox.isSelected) {
-                    backendClaudeCheckbox.isSelected = false
-                    backendCodexCheckbox.isSelected = false
-                }
-            } else if (source.isSelected) {
-                backendAllCheckbox.isSelected = false
+    private fun normalizeBackendKeys(keys: Set<String>): Set<String> {
+        val normalized = keys.map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        if (normalized.contains(AgentSettingsService.MCP_BACKEND_ALL)) {
+            return setOf(AgentSettingsService.MCP_BACKEND_ALL)
+        }
+        return normalized.intersect(
+            setOf(
+                AgentSettingsService.MCP_BACKEND_CLAUDE,
+                AgentSettingsService.MCP_BACKEND_CODEX
+            )
+        )
+    }
+
+    private fun parseBackendKeys(
+        element: kotlinx.serialization.json.JsonElement?,
+        fallback: Set<String>
+    ): Set<String> {
+        if (element == null) return fallback
+        return when (element) {
+            is kotlinx.serialization.json.JsonArray -> {
+                val raw = element.mapNotNull { it.jsonPrimitive.contentOrNull }.toSet()
+                normalizeBackendKeys(raw)
             }
-        } finally {
-            backendSelectionUpdating = false
+            is kotlinx.serialization.json.JsonPrimitive -> {
+                val raw = element.contentOrNull ?: ""
+                val parsed = try {
+                    json.decodeFromString<List<String>>(raw).toSet()
+                } catch (_: Exception) {
+                    raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+                }
+                normalizeBackendKeys(parsed)
+            }
+            else -> fallback
         }
     }
 
-    private fun getSelectedBackendKeys(): Set<String> {
-        return if (backendAllCheckbox.isSelected) {
-            setOf(AgentSettingsService.MCP_BACKEND_ALL)
-        } else {
-            val selected = mutableSetOf<String>()
-            if (backendClaudeCheckbox.isSelected) selected.add(AgentSettingsService.MCP_BACKEND_CLAUDE)
-            if (backendCodexCheckbox.isSelected) selected.add(AgentSettingsService.MCP_BACKEND_CODEX)
-            selected
+    private fun formatBackendLabel(keys: Set<String>): String {
+        val normalized = normalizeBackendKeys(keys)
+        if (normalized.isEmpty()) return "-"
+        if (normalized.contains(AgentSettingsService.MCP_BACKEND_ALL)) return "All"
+        val labels = mutableListOf<String>()
+        if (normalized.contains(AgentSettingsService.MCP_BACKEND_CLAUDE)) {
+            labels.add("Claude Code")
         }
+        if (normalized.contains(AgentSettingsService.MCP_BACKEND_CODEX)) {
+            labels.add("Codex")
+        }
+        return if (labels.isEmpty()) "-" else labels.joinToString("/")
     }
 
-    private fun applyBackendSelection(keys: Set<String>) {
-        backendSelectionUpdating = true
-        try {
-            val isAll = keys.contains(AgentSettingsService.MCP_BACKEND_ALL)
-            backendAllCheckbox.isSelected = isAll
-            backendClaudeCheckbox.isSelected = !isAll && keys.contains(AgentSettingsService.MCP_BACKEND_CLAUDE)
-            backendCodexCheckbox.isSelected = !isAll && keys.contains(AgentSettingsService.MCP_BACKEND_CODEX)
-        } finally {
-            backendSelectionUpdating = false
-        }
-    }
 
     override fun isModified(): Boolean {
         val settings = AgentSettingsService.getInstance()
         val mcpSettings = service<McpSettingsService>()
+        val fallbackBackends = settings.getMcpEnabledBackendKeys().ifEmpty {
+            setOf(AgentSettingsService.MCP_BACKEND_ALL)
+        }
 
         // 检查内置服务器配置
         val userInteractionEntry = builtInServers.find { it.name == "User Interaction MCP" }
@@ -323,7 +319,11 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             context7Entry?.enabled != settings.enableContext7Mcp ||
             terminalEntry?.enabled != settings.enableTerminalMcp ||
             gitEntry?.enabled != settings.enableGitMcp ||
-            getSelectedBackendKeys() != settings.getMcpEnabledBackendKeys() ||
+            userInteractionEntry?.enabledBackends != settings.getUserInteractionMcpBackendKeys() ||
+            jetbrainsEntry?.enabledBackends != settings.getJetbrainsMcpBackendKeys() ||
+            context7Entry?.enabledBackends != settings.getContext7McpBackendKeys() ||
+            terminalEntry?.enabledBackends != settings.getTerminalMcpBackendKeys() ||
+            gitEntry?.enabledBackends != settings.getGitMcpBackendKeys() ||
             context7Entry?.apiKey != settings.context7ApiKey ||
             userInteractionEntry?.instructions != settings.userInteractionInstructions ||
             jetbrainsEntry?.instructions != settings.jetbrainsInstructions ||
@@ -338,8 +338,16 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         }
 
         // 检查自定义服务器配置
-        val savedGlobalServers = parseCustomServers(mcpSettings.getGlobalConfig(), McpServerLevel.GLOBAL)
-        val savedProjectServers = parseCustomServers(mcpSettings.getProjectConfig(project), McpServerLevel.PROJECT)
+        val savedGlobalServers = parseCustomServers(
+            mcpSettings.getGlobalConfig(),
+            McpServerLevel.GLOBAL,
+            fallbackBackends
+        )
+        val savedProjectServers = parseCustomServers(
+            mcpSettings.getProjectConfig(project),
+            McpServerLevel.PROJECT,
+            fallbackBackends
+        )
         val savedCustomServers = savedGlobalServers + savedProjectServers
 
         if (customServers.size != savedCustomServers.size) return true
@@ -350,7 +358,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             if (saved == null ||
                 saved.jsonConfig != server.jsonConfig ||
                 saved.enabled != server.enabled ||
-                saved.instructions != server.instructions
+                saved.instructions != server.instructions ||
+                saved.enabledBackends != server.enabledBackends
             ) {
                 return true
             }
@@ -376,7 +385,21 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         settings.enableGitMcp = gitEntry?.enabled ?: false
         settings.gitInstructions = gitEntry?.instructions ?: ""
         settings.enableTerminalMcp = terminalEntry?.enabled ?: false
-        settings.setMcpEnabledBackendKeys(getSelectedBackendKeys())
+        settings.setUserInteractionMcpBackendKeys(
+            userInteractionEntry?.enabledBackends ?: setOf(AgentSettingsService.MCP_BACKEND_ALL)
+        )
+        settings.setJetbrainsMcpBackendKeys(
+            jetbrainsEntry?.enabledBackends ?: setOf(AgentSettingsService.MCP_BACKEND_ALL)
+        )
+        settings.setContext7McpBackendKeys(
+            context7Entry?.enabledBackends ?: setOf(AgentSettingsService.MCP_BACKEND_ALL)
+        )
+        settings.setTerminalMcpBackendKeys(
+            terminalEntry?.enabledBackends ?: setOf(AgentSettingsService.MCP_BACKEND_ALL)
+        )
+        settings.setGitMcpBackendKeys(
+            gitEntry?.enabledBackends ?: setOf(AgentSettingsService.MCP_BACKEND_ALL)
+        )
         settings.context7ApiKey = context7Entry?.apiKey ?: ""
         settings.userInteractionInstructions = userInteractionEntry?.instructions ?: ""
         settings.jetbrainsInstructions = jetbrainsEntry?.instructions ?: ""
@@ -421,12 +444,16 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 // 直接从顶层读取服务器配置
                 for ((serverName, serverConfig) in parsed) {
                     // 构建包含 config + 元数据的完整条目
-                    val entryMap = mutableMapOf<String, kotlinx.serialization.json.JsonElement>()
-                    entryMap["config"] = serverConfig  // 纯净的 MCP 配置
-                    entryMap["enabled"] = kotlinx.serialization.json.JsonPrimitive(server.enabled)
-                    if (server.instructions.isNotBlank()) {
-                        entryMap["instructions"] = kotlinx.serialization.json.JsonPrimitive(server.instructions)
-                    }
+                val entryMap = mutableMapOf<String, kotlinx.serialization.json.JsonElement>()
+                entryMap["config"] = serverConfig  // 纯净的 MCP 配置
+                entryMap["enabled"] = kotlinx.serialization.json.JsonPrimitive(server.enabled)
+                entryMap["enabledBackends"] = kotlinx.serialization.json.JsonArray(
+                    normalizeBackendKeys(server.enabledBackends)
+                        .map { kotlinx.serialization.json.JsonPrimitive(it) }
+                )
+                if (server.instructions.isNotBlank()) {
+                    entryMap["instructions"] = kotlinx.serialization.json.JsonPrimitive(server.instructions)
+                }
                     serversMap[serverName] = JsonObject(entryMap)
                 }
             } catch (_: Exception) {
@@ -443,13 +470,20 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         val settings = AgentSettingsService.getInstance()
         val mcpSettings = service<McpSettingsService>()
 
+        val userInteractionBackends = settings.getUserInteractionMcpBackendKeys()
+        val jetbrainsBackends = settings.getJetbrainsMcpBackendKeys()
+        val context7Backends = settings.getContext7McpBackendKeys()
+        val terminalBackends = settings.getTerminalMcpBackendKeys()
+        val gitBackends = settings.getGitMcpBackendKeys()
+
         // 加载内置服务器
         builtInServers.clear()
         builtInServers.add(McpServerEntry(
             name = "User Interaction MCP",
             enabled = settings.enableUserInteractionMcp,
+            enabledBackends = userInteractionBackends,
             level = McpServerLevel.BUILTIN,
-            configSummary = "Allows Claude to ask questions",
+            configSummary = "Allows the agent to ask questions",
             isBuiltIn = true,
             instructions = settings.userInteractionInstructions,
             defaultInstructions = McpDefaults.USER_INTERACTION_INSTRUCTIONS
@@ -457,6 +491,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         builtInServers.add(McpServerEntry(
             name = "JetBrains IDE MCP",
             enabled = settings.enableJetBrainsMcp,
+            enabledBackends = jetbrainsBackends,
             level = McpServerLevel.BUILTIN,
             configSummary = "Code search, file indexing",
             isBuiltIn = true,
@@ -467,6 +502,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         builtInServers.add(McpServerEntry(
             name = "Context7 MCP",
             enabled = settings.enableContext7Mcp,
+            enabledBackends = context7Backends,
             level = McpServerLevel.BUILTIN,
             configSummary = "Library documentation",
             isBuiltIn = true,
@@ -477,6 +513,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         builtInServers.add(McpServerEntry(
             name = "Terminal MCP",
             enabled = settings.enableTerminalMcp,
+            enabledBackends = terminalBackends,
             level = McpServerLevel.BUILTIN,
             configSummary = "IDEA integrated terminal",
             isBuiltIn = true,
@@ -493,6 +530,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         builtInServers.add(McpServerEntry(
             name = "JetBrains Git MCP",
             enabled = settings.enableGitMcp,
+            enabledBackends = gitBackends,
             level = McpServerLevel.BUILTIN,
             configSummary = "VCS integration and commit message generation",
             isBuiltIn = true,
@@ -501,11 +539,13 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         ))
 
         // 加载自定义服务器
+        val fallbackBackends = settings.getMcpEnabledBackendKeys().ifEmpty {
+            setOf(AgentSettingsService.MCP_BACKEND_ALL)
+        }
         customServers.clear()
-        customServers.addAll(parseCustomServers(mcpSettings.getGlobalConfig(), McpServerLevel.GLOBAL))
-        customServers.addAll(parseCustomServers(mcpSettings.getProjectConfig(project), McpServerLevel.PROJECT))
+        customServers.addAll(parseCustomServers(mcpSettings.getGlobalConfig(), McpServerLevel.GLOBAL, fallbackBackends))
+        customServers.addAll(parseCustomServers(mcpSettings.getProjectConfig(project), McpServerLevel.PROJECT, fallbackBackends))
 
-        applyBackendSelection(settings.getMcpEnabledBackendKeys())
         refreshTable()
     }
 
@@ -521,7 +561,11 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
      *   }
      * }
      */
-    private fun parseCustomServers(jsonStr: String, level: McpServerLevel): List<McpServerEntry> {
+    private fun parseCustomServers(
+        jsonStr: String,
+        level: McpServerLevel,
+        fallbackBackends: Set<String>
+    ): List<McpServerEntry> {
         if (jsonStr.isBlank()) return emptyList()
 
         return try {
@@ -541,6 +585,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 // 读取我们的元数据
                 val enabled = entryObj["enabled"]?.toString()?.toBooleanStrictOrNull() ?: true
                 val instructions = entryObj["instructions"]?.toString()?.trim('"') ?: ""
+                val enabledBackends = parseBackendKeys(entryObj["enabledBackends"], fallbackBackends)
 
                 // 生成配置摘要
                 val summary = if (serverType == "http" || url.isNotBlank()) {
@@ -555,6 +600,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 McpServerEntry(
                     name = name,
                     enabled = enabled,
+                    enabledBackends = enabledBackends,
                     level = level,
                     configSummary = summary,
                     isBuiltIn = false,
@@ -579,7 +625,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
      * MCP 服务器表格模型
      */
     inner class McpServerTableModel : AbstractTableModel() {
-        private val columns = arrayOf("Status", "Name", "Configuration", "Level")
+        private val columns = arrayOf("Status", "Name", "Configuration", "Backends", "Level")
 
         override fun getRowCount(): Int = builtInServers.size + customServers.size
 
@@ -598,7 +644,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 0 -> entry.enabled
                 1 -> entry.name
                 2 -> entry.configSummary
-                3 -> entry.level
+                3 -> formatBackendLabel(entry.enabledBackends)
+                4 -> entry.level
                 else -> ""
             }
         }
@@ -606,7 +653,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         override fun getColumnClass(columnIndex: Int): Class<*> {
             return when (columnIndex) {
                 0 -> java.lang.Boolean::class.java
-                3 -> McpServerLevel::class.java
+                4 -> McpServerLevel::class.java
                 else -> String::class.java
             }
         }
@@ -679,6 +726,26 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
     }
 
     /**
+     * Backends 列渲染器
+     */
+    inner class BackendCellRenderer : DefaultTableCellRenderer() {
+        override fun getTableCellRendererComponent(
+            table: JTable?,
+            value: Any?,
+            isSelected: Boolean,
+            hasFocus: Boolean,
+            row: Int,
+            column: Int
+        ): Component {
+            val component = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
+            if (component is JLabel) {
+                component.foreground = if (isSelected) table?.selectionForeground else JBColor.GRAY
+            }
+            return component
+        }
+    }
+
+    /**
      * Level 列渲染器
      */
     inner class LevelCellRenderer : DefaultTableCellRenderer() {
@@ -716,6 +783,7 @@ enum class McpServerLevel {
 data class McpServerEntry(
     val name: String,
     val enabled: Boolean = true,
+    val enabledBackends: Set<String> = setOf(AgentSettingsService.MCP_BACKEND_ALL),
     val level: McpServerLevel = McpServerLevel.GLOBAL,
     val configSummary: String = "",
     val isBuiltIn: Boolean = false,
@@ -740,6 +808,87 @@ data class McpServerEntry(
     val terminalReadTimeout: Int = 30
 )
 
+private class McpBackendSelection(initialKeys: Set<String>) {
+    private val backendAllCheckbox = JBCheckBox("All")
+    private val backendClaudeCheckbox = JBCheckBox("Claude Code")
+    private val backendCodexCheckbox = JBCheckBox("Codex")
+    private var updating = false
+
+    val panel: JPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+        alignmentX = JPanel.LEFT_ALIGNMENT
+        add(JBLabel("Enabled in:"))
+        add(Box.createHorizontalStrut(8))
+        add(backendAllCheckbox)
+        add(Box.createHorizontalStrut(8))
+        add(backendClaudeCheckbox)
+        add(Box.createHorizontalStrut(8))
+        add(backendCodexCheckbox)
+    }
+
+    val hint: JBLabel = JBLabel(
+        "<html><font color='gray' size='-1'>Select which backends can use this MCP server. Choosing All clears other selections.</font></html>"
+    ).apply {
+        alignmentX = JPanel.LEFT_ALIGNMENT
+    }
+
+    init {
+        applySelection(initialKeys)
+        backendAllCheckbox.addActionListener { handleSelection(backendAllCheckbox) }
+        backendClaudeCheckbox.addActionListener { handleSelection(backendClaudeCheckbox) }
+        backendCodexCheckbox.addActionListener { handleSelection(backendCodexCheckbox) }
+    }
+
+    fun getSelectedKeys(): Set<String> {
+        return if (backendAllCheckbox.isSelected) {
+            setOf(AgentSettingsService.MCP_BACKEND_ALL)
+        } else {
+            val selected = mutableSetOf<String>()
+            if (backendClaudeCheckbox.isSelected) selected.add(AgentSettingsService.MCP_BACKEND_CLAUDE)
+            if (backendCodexCheckbox.isSelected) selected.add(AgentSettingsService.MCP_BACKEND_CODEX)
+            selected
+        }
+    }
+
+    private fun handleSelection(source: JCheckBox) {
+        if (updating) return
+        updating = true
+        try {
+            if (source == backendAllCheckbox) {
+                if (backendAllCheckbox.isSelected) {
+                    backendClaudeCheckbox.isSelected = false
+                    backendCodexCheckbox.isSelected = false
+                }
+            } else if (source.isSelected) {
+                backendAllCheckbox.isSelected = false
+            }
+        } finally {
+            updating = false
+        }
+    }
+
+    private fun applySelection(keys: Set<String>) {
+        updating = true
+        try {
+            val normalized = keys.map { it.trim().lowercase() }.toSet()
+            val isAll = normalized.contains(AgentSettingsService.MCP_BACKEND_ALL)
+            backendAllCheckbox.isSelected = isAll
+            backendClaudeCheckbox.isSelected = !isAll && normalized.contains(AgentSettingsService.MCP_BACKEND_CLAUDE)
+            backendCodexCheckbox.isSelected = !isAll && normalized.contains(AgentSettingsService.MCP_BACKEND_CODEX)
+        } finally {
+            updating = false
+        }
+    }
+}
+
+private fun setEnabledRecursively(component: Component, enabled: Boolean) {
+    component.isEnabled = enabled
+    if (component is Container) {
+        component.components.forEach { child ->
+            setEnabledRecursively(child, enabled)
+        }
+    }
+}
+
 /**
  * 内置 MCP 服务器编辑对话框
  *
@@ -755,6 +904,7 @@ class BuiltInMcpServerDialog(
 ) : DialogWrapper(project) {
 
     private val enableCheckbox = JBCheckBox("Enable", entry.enabled)
+    private val backendSelection = McpBackendSelection(entry.enabledBackends)
     private val instructionsArea = JBTextArea(
         entry.instructions.ifBlank { entry.defaultInstructions },
         10, 50
@@ -1116,6 +1266,7 @@ class BuiltInMcpServerDialog(
 
         return entry.copy(
             enabled = enableCheckbox.isSelected,
+            enabledBackends = backendSelection.getSelectedKeys(),
             instructions = customInstructions,
             apiKey = if (entry.name == "Context7 MCP") apiKeyField.text else entry.apiKey,
             disabledTools = if (defaultDisabledTools.isNotEmpty()) disabledToolsList.toList() else entry.disabledTools,
@@ -1145,6 +1296,9 @@ class McpServerDialog(
 ) : DialogWrapper(project) {
 
     private val enableCheckbox = JBCheckBox("Enable", entry?.enabled ?: true)
+    private val backendSelection = McpBackendSelection(
+        entry?.enabledBackends ?: setOf(AgentSettingsService.MCP_BACKEND_ALL)
+    )
     private val jsonArea = JBTextArea(3, 50).apply {
         font = Font(Font.MONOSPACED, Font.PLAIN, 12)
         text = entry?.jsonConfig ?: ""
@@ -1180,6 +1334,18 @@ class McpServerDialog(
         }
         contentPanel.add(enablePanel)
         contentPanel.add(Box.createVerticalStrut(10))
+
+        contentPanel.add(backendSelection.panel)
+        contentPanel.add(Box.createVerticalStrut(4))
+        contentPanel.add(backendSelection.hint)
+        contentPanel.add(Box.createVerticalStrut(10))
+
+        fun updateBackendSelectionState(enabled: Boolean) {
+            setEnabledRecursively(backendSelection.panel, enabled)
+            backendSelection.hint.isEnabled = enabled
+        }
+        updateBackendSelectionState(enableCheckbox.isSelected)
+        enableCheckbox.addActionListener { updateBackendSelectionState(enableCheckbox.isSelected) }
 
         // JSON 配置区域
         val jsonPanel = JPanel(BorderLayout()).apply {
@@ -1413,6 +1579,7 @@ class McpServerDialog(
         return McpServerEntry(
             name = serverName,
             enabled = enableCheckbox.isSelected,
+            enabledBackends = backendSelection.getSelectedKeys(),
             level = if (projectRadio.isSelected) McpServerLevel.PROJECT else McpServerLevel.GLOBAL,
             configSummary = summary,
             isBuiltIn = false,

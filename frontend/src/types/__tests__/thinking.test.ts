@@ -56,14 +56,7 @@ describe('Preset Lookups', () => {
     it('should return all Codex effort levels as array', () => {
       const levels = getCodexEffortLevels()
       expect(Array.isArray(levels)).toBe(true)
-      expect(levels.length).toBe(6) // OFF, MINIMAL, LOW, MEDIUM, HIGH, XHIGH
-    })
-
-    it('should include OFF level with null id', () => {
-      const levels = getCodexEffortLevels()
-      const off = levels.find(l => l.id === null)
-      expect(off).toBeDefined()
-      expect(off?.label).toBe('Off')
+      expect(levels.length).toBe(5) // MINIMAL, LOW, MEDIUM, HIGH, XHIGH
     })
 
     it('should include MEDIUM as default level', () => {
@@ -116,8 +109,8 @@ describe('Preset Lookups', () => {
 
 describe('Conversion Functions', () => {
   describe('claudeTokensToCodexEffort', () => {
-    it('should return null for 0 tokens', () => {
-      expect(claudeTokensToCodexEffort(0)).toBeNull()
+    it('should return minimal for 0 tokens', () => {
+      expect(claudeTokensToCodexEffort(0)).toBe('minimal')
     })
 
     it('should return minimal for low tokens', () => {
@@ -147,8 +140,8 @@ describe('Conversion Functions', () => {
   })
 
   describe('codexEffortToClaudeTokens', () => {
-    it('should return 0 for null effort', () => {
-      expect(codexEffortToClaudeTokens(null)).toBe(0)
+    it('should return default tokens for null effort', () => {
+      expect(codexEffortToClaudeTokens(null)).toBe(8096)
     })
 
     it('should return correct tokens for each effort level', () => {
@@ -203,13 +196,13 @@ describe('Display Helpers', () => {
       expect(getThinkingDisplayString(config)).toBe('Thinking: High (8K)')
     })
 
-    it('should show "Reasoning: Off" for null Codex effort', () => {
+    it('should show "Reasoning: default" for null Codex effort', () => {
       const config: CodexThinkingConfig = {
         type: 'codex',
         effort: null,
         summary: 'auto',
       }
-      expect(getThinkingDisplayString(config)).toBe('Reasoning: Off')
+      expect(getThinkingDisplayString(config)).toBe('Reasoning: default')
     })
 
     it('should show effort level for enabled Codex config', () => {
@@ -218,12 +211,12 @@ describe('Display Helpers', () => {
         effort: 'medium',
         summary: 'auto',
       }
-      expect(getThinkingDisplayString(config)).toBe('Reasoning: Medium')
+      expect(getThinkingDisplayString(config)).toBe('Reasoning: medium')
     })
   })
 
   describe('getThinkingShortDisplayString', () => {
-    it('should show "Off" for disabled config', () => {
+    it('should show "Off" for disabled Claude and "default" for Codex null', () => {
       const claudeConfig: ClaudeThinkingConfig = {
         type: 'claude',
         enabled: false,
@@ -236,7 +229,7 @@ describe('Display Helpers', () => {
         effort: null,
         summary: 'auto',
       }
-      expect(getThinkingShortDisplayString(codexConfig)).toBe('Off')
+      expect(getThinkingShortDisplayString(codexConfig)).toBe('default')
     })
 
     it('should show token count in K for Claude', () => {
@@ -248,13 +241,13 @@ describe('Display Helpers', () => {
       expect(getThinkingShortDisplayString(config)).toBe('8K')
     })
 
-    it('should show capitalized effort for Codex', () => {
+    it('should show effort for Codex as lowercase', () => {
       const config: CodexThinkingConfig = {
         type: 'codex',
         effort: 'high',
         summary: 'auto',
       }
-      expect(getThinkingShortDisplayString(config)).toBe('High')
+      expect(getThinkingShortDisplayString(config)).toBe('high')
     })
   })
 })
@@ -301,14 +294,15 @@ describe('Type Guards', () => {
       expect(isThinkingEnabled(config)).toBe(true)
     })
 
-    it('should return false for Codex with null effort', () => {
+    it('should return true for Codex with null effort', () => {
       const config: CodexThinkingConfig = {
         type: 'codex',
         effort: null,
         summary: 'auto',
       }
-      expect(isThinkingEnabled(config)).toBe(false)
+      expect(isThinkingEnabled(config)).toBe(true)
     })
+
   })
 
   describe('isClaudeThinking', () => {

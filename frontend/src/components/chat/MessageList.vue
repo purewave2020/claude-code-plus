@@ -25,11 +25,15 @@
           </div>
           <div class="shortcut-item">
             <kbd class="keyboard-key">Tab</kbd>
-            <span class="shortcut-desc">{{ t('chat.welcomeScreen.toggleThinkingHint') }}</span>
+            <span class="shortcut-desc">
+              {{ isCodexBackend ? t('chat.welcomeScreen.toggleReasoningHint') : t('chat.welcomeScreen.toggleThinkingHint') }}
+            </span>
           </div>
           <div class="shortcut-item">
             <kbd class="keyboard-key">Shift</kbd> + <kbd class="keyboard-key">Tab</kbd>
-            <span class="shortcut-desc">{{ t('chat.welcomeScreen.switchModeHint') }}</span>
+            <span class="shortcut-desc">
+              {{ isCodexBackend ? t('chat.welcomeScreen.switchSandboxHint') : t('chat.welcomeScreen.switchModeHint') }}
+            </span>
           </div>
           <div class="shortcut-item">
             <kbd class="keyboard-key">Ctrl</kbd> + <kbd class="keyboard-key">Enter</kbd>
@@ -117,6 +121,7 @@
 import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 import { useSessionStore } from '@/stores/sessionStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import type { Message } from '@/types/message'
@@ -133,6 +138,7 @@ import {
 
 const { t } = useI18n()
 const sessionStore = useSessionStore()
+const settingsStore = useSettingsStore()
 
 interface Props {
   messages?: Message[]  // 保留向后兼容
@@ -640,6 +646,12 @@ watch(
 // 为虚拟列表准备数据源
 // 优先使用 displayItems，如果没有则使用 messages（向后兼容）
 const displayMessages = computed(() => props.displayItems || props.messages || [])
+
+const isCodexBackend = computed(() => {
+  const tabBackend = sessionStore.currentTab?.backendType?.value
+  const globalBackend = settingsStore.currentBackendType
+  return (tabBackend ?? globalBackend) === 'codex'
+})
 
 // 使用新的 DisplayItemRenderer 还是旧的 MessageDisplay
 const messageComponent = computed(() => props.displayItems ? DisplayItemRenderer : MessageDisplay)

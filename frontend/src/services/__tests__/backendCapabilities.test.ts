@@ -298,7 +298,7 @@ describe('Options', () => {
       expect(options.length).toBe(3)
       expect(options.map(o => o.id)).toContain('read-only')
       expect(options.map(o => o.id)).toContain('workspace-write')
-      expect(options.map(o => o.id)).toContain('full-access')
+      expect(options.map(o => o.id)).toContain('danger-full-access')
     })
 
     it('should have labels and descriptions', () => {

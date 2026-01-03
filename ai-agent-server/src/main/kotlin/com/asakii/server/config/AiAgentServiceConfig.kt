@@ -52,6 +52,11 @@ data class ClaudeDefaults(
     val context7ApiKey: String? = null,
     val enableTerminalMcp: Boolean = false,
     val enableGitMcp: Boolean = false,
+    val userInteractionMcpBackends: Set<AiAgentProvider> = setOf(AiAgentProvider.CLAUDE, AiAgentProvider.CODEX),
+    val jetbrainsMcpBackends: Set<AiAgentProvider> = setOf(AiAgentProvider.CLAUDE, AiAgentProvider.CODEX),
+    val context7McpBackends: Set<AiAgentProvider> = setOf(AiAgentProvider.CLAUDE, AiAgentProvider.CODEX),
+    val terminalMcpBackends: Set<AiAgentProvider> = setOf(AiAgentProvider.CLAUDE, AiAgentProvider.CODEX),
+    val gitMcpBackends: Set<AiAgentProvider> = setOf(AiAgentProvider.CLAUDE, AiAgentProvider.CODEX),
     // MCP 服务器配置（从资源文件加载，由 plugin 模块传入）
     val mcpServersConfig: List<McpServerConfig> = emptyList(),
     // MCP 系统提示词（由 plugin 模块加载并传入）
@@ -82,7 +87,9 @@ data class McpServerConfig(
     // 描述
     val description: String? = null,
     // 自定义系统提示词（仅用于自定义 MCP 服务器）
-    val instructions: String? = null
+    val instructions: String? = null,
+    // 允许启用的后端（空集表示对所有后端禁用）
+    val enabledBackends: Set<AiAgentProvider>? = null
 )
 
 /**
@@ -93,6 +100,8 @@ data class CodexDefaults(
     val baseUrl: String? = null,
     val apiKey: String? = null,
     val sandboxMode: String? = null,
+    val defaultReasoningEffort: String? = null,
+    val defaultReasoningSummary: String? = null,
     val webSearchEnabled: Boolean? = null,
     val defaultModelId: String? = null
 )

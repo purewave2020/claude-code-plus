@@ -1,71 +1,13 @@
 <template>
   <div class="codex-toolbar">
-    <!-- 模型选择器 -->
-    <el-select
-      v-model="localModel"
-      class="cursor-selector model-selector"
-      :disabled="disabled"
-      placement="top-start"
-      :teleported="true"
-      popper-class="chat-input-select-dropdown"
-      :popper-options="{
-        modifiers: [
-          { name: 'preventOverflow', options: { boundary: 'viewport' } },
-          { name: 'flip', options: { fallbackPlacements: ['top-start', 'top'] } }
-        ]
-      }"
-      @change="handleModelChange"
-    >
-      <el-option
-        v-for="model in codexModels"
-        :key="model.id"
-        :value="model.id"
-        :label="model.displayName"
-      >
-        <span class="model-option-label">{{ model.displayName }}</span>
-      </el-option>
-    </el-select>
-
-    <!-- 推理深度选择器（始终显示） -->
-    <el-select
-      v-model="localReasoningEffort"
-      class="cursor-selector reasoning-selector"
-      :disabled="disabled"
-      placement="top-start"
-      :teleported="true"
-      popper-class="chat-input-select-dropdown"
-      :popper-options="{
-        modifiers: [
-          { name: 'preventOverflow', options: { boundary: 'viewport' } },
-          { name: 'flip', options: { fallbackPlacements: ['top-start', 'top'] } }
-        ]
-      }"
-      @change="handleReasoningChange"
-    >
-      <template #prefix>
-        <span class="mode-prefix-icon">●</span>
-      </template>
-      <el-option
-        v-for="option in reasoningOptions"
-        :key="option.value"
-        :value="option.value"
-        :label="option.shortLabel"
-      >
-        <span class="mode-option-label">
-          <span class="mode-icon">●</span>
-          <span>{{ option.label }}</span>
-        </span>
-      </el-option>
-    </el-select>
-
-    <!-- 沙盒模式选择器 -->
+    <!-- Sandbox mode -->
     <el-select
       v-model="localSandboxMode"
       class="cursor-selector sandbox-selector"
       :disabled="disabled"
       placement="top-start"
       :teleported="true"
-      popper-class="chat-input-select-dropdown mode-dropdown"
+      popper-class="chat-input-select-dropdown mode-dropdown codex-sandbox-dropdown"
       :popper-options="{
         modifiers: [
           { name: 'preventOverflow', options: { boundary: 'viewport' } },
@@ -85,6 +27,67 @@
       >
         <span class="mode-option-label">
           <span class="mode-icon">{{ option.icon }}</span>
+          <span>{{ option.label }}</span>
+        </span>
+      </el-option>
+    </el-select>
+
+    <!-- Model -->
+    <el-select
+      v-model="localModel"
+      class="cursor-selector model-selector"
+      :disabled="disabled"
+      placement="top-start"
+      :teleported="true"
+      popper-class="chat-input-select-dropdown codex-model-dropdown"
+      :popper-options="{
+        modifiers: [
+          { name: 'preventOverflow', options: { boundary: 'viewport' } },
+          { name: 'flip', options: { fallbackPlacements: ['top-start', 'top'] } }
+        ]
+      }"
+      @change="handleModelChange"
+    >
+      <el-option
+        v-for="model in codexModels"
+        :key="model.id"
+        :value="model.id"
+        :label="formatCodexModelLabel(model)"
+      >
+        <span class="model-option-label">
+          <span class="model-option-check" :class="{ active: model.id === localModel }">✓</span>
+          <span>{{ formatCodexModelLabel(model) }}</span>
+        </span>
+      </el-option>
+    </el-select>
+
+    <!-- Reasoning effort -->
+    <el-select
+      v-model="localReasoningEffort"
+      class="cursor-selector reasoning-selector"
+      :disabled="disabled"
+      placement="top-start"
+      :teleported="true"
+      popper-class="chat-input-select-dropdown codex-reasoning-dropdown"
+      :popper-options="{
+        modifiers: [
+          { name: 'preventOverflow', options: { boundary: 'viewport' } },
+          { name: 'flip', options: { fallbackPlacements: ['top-start', 'top'] } }
+        ]
+      }"
+      @change="handleReasoningChange"
+    >
+      <template #prefix>
+        <span class="mode-prefix-icon">🧠</span>
+      </template>
+      <el-option
+        v-for="option in reasoningOptions"
+        :key="option.value"
+        :value="option.value"
+        :label="option.shortLabel"
+      >
+        <span class="mode-option-label">
+          <span class="mode-icon">🧠</span>
           <span>{{ option.label }}</span>
         </span>
       </el-option>
@@ -158,6 +161,23 @@ function handleModelChange(value: string) {
   emit('update:model', value)
 }
 
+function formatCodexModelLabel(model: { id: string; displayName: string }) {
+  const name = model.displayName || model.id
+  if (!name) return ''
+  const lower = name.toLowerCase()
+  if (name === lower && lower.startsWith('gpt-')) {
+    return lower
+      .split('-')
+      .map(part => {
+        if (part === 'gpt') return 'GPT'
+        if (/^\d/.test(part)) return part
+        return part.charAt(0).toUpperCase() + part.slice(1)
+      })
+      .join('-')
+  }
+  return name
+}
+
 
 function handleSandboxChange(value: CodexSandboxMode) {
   emit('update:sandboxMode', value)
@@ -182,18 +202,15 @@ function handleReasoningChange(value: CodexReasoningEffort) {
 
 .cursor-selector.model-selector {
   width: auto;
-  min-width: 100px;
 }
 
 .cursor-selector.reasoning-selector {
   width: auto;
-  min-width: 60px;
 }
 
 
 .cursor-selector.sandbox-selector {
   width: auto;
-  min-width: 90px;
 }
 
 /* 移除边框和背景，使用纯文字样式（与 ChatInput 一致） */
@@ -259,6 +276,21 @@ function handleReasoningChange(value: CodexReasoningEffort) {
   gap: 4px;
 }
 
+.model-option-check {
+  width: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  opacity: 0;
+  color: var(--theme-secondary-foreground, #6a737d);
+}
+
+.model-option-check.active {
+  opacity: 1;
+  color: var(--theme-accent, #3b82f6);
+}
+
 .mode-option-label {
   display: inline-flex;
   align-items: center;
@@ -270,5 +302,21 @@ function handleReasoningChange(value: CodexReasoningEffort) {
   width: 16px;
   text-align: center;
   color: var(--theme-secondary-foreground, #6a737d);
+}
+</style>
+
+<style>
+.codex-sandbox-dropdown,
+.codex-model-dropdown,
+.codex-reasoning-dropdown {
+  width: max-content !important;
+  min-width: max-content !important;
+  max-width: 80vw;
+}
+
+.codex-sandbox-dropdown .el-select-dropdown__item,
+.codex-model-dropdown .el-select-dropdown__item,
+.codex-reasoning-dropdown .el-select-dropdown__item {
+  white-space: nowrap;
 }
 </style>

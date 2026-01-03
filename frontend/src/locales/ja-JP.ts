@@ -99,7 +99,9 @@ export default {
       interruptHint: '中断して送信',
       stopHint: '生成停止',
       toggleThinkingHint: '思考切替',
+      toggleReasoningHint: '推論強度を切替',
       switchModeHint: 'モード切替',
+      switchSandboxHint: 'サンドボックス切替（read-only / workspace-write / full access）',
       clearToLineStartHint: '行頭まで削除'
     },
     claudeThinking: 'Claudeが考えています...',

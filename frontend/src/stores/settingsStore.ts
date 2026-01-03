@@ -6,6 +6,7 @@ import { PermissionMode } from '@/types/settings'
 import type {
   BackendType,
   CodexReasoningEffort,
+  CodexReasoningSummary,
   SandboxMode,
   ClaudeBackendConfig,
   CodexBackendConfig
@@ -70,7 +71,11 @@ export interface IdeSettings extends BaseIdeSettings {
 
   // === Codex 特定 ===
   codexDefaultModelId?: string
+  codexDefaultReasoningEffort?: CodexReasoningEffort
+  codexDefaultReasoningSummary?: CodexReasoningSummary
+  codexDefaultSandboxMode?: SandboxMode
   codexReasoningEffort?: CodexReasoningEffort
+  codexReasoningSummary?: CodexReasoningSummary
   codexSandboxMode?: SandboxMode
   codexApiKey?: string
 
@@ -97,6 +102,7 @@ interface HttpDefaultSettings {
   // Codex 配置
   codexDefaultModelId?: string
   codexReasoningEffort?: CodexReasoningEffort
+  codexReasoningSummary?: CodexReasoningSummary
   codexSandboxMode?: SandboxMode
 
   // 兼容旧版本
@@ -158,6 +164,12 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   function migrateSettings(rawSettings: any): Settings {
     // 迁移旧的单后端设置到新的多后端结构
+    const rawCodexEffort = rawSettings.codexReasoningEffort
+    const normalizedCodexEffort = rawCodexEffort === 'none' ? null : rawCodexEffort
+    const rawCodexSandboxMode = rawSettings.codexSandboxMode
+    const normalizedCodexSandboxMode = rawCodexSandboxMode === 'full-access'
+      ? 'danger-full-access'
+      : rawCodexSandboxMode
     return {
       ...DEFAULT_SETTINGS,
       ...rawSettings,
@@ -169,9 +181,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
       // 新字段使用默认值（如果没有）
       codexModel: rawSettings.codexModel || DEFAULT_SETTINGS.codexModel,
-      codexReasoningEffort: rawSettings.codexReasoningEffort || DEFAULT_SETTINGS.codexReasoningEffort,
+      codexReasoningEffort: normalizedCodexEffort ?? DEFAULT_SETTINGS.codexReasoningEffort,
       codexReasoningSummary: rawSettings.codexReasoningSummary || DEFAULT_SETTINGS.codexReasoningSummary,
-      codexSandboxMode: rawSettings.codexSandboxMode || DEFAULT_SETTINGS.codexSandboxMode,
+      codexSandboxMode: normalizedCodexSandboxMode || DEFAULT_SETTINGS.codexSandboxMode,
 
       // 保持通用设置
       defaultBackendType: rawSettings.defaultBackendType || 'claude',
@@ -438,15 +450,24 @@ export const useSettingsStore = defineStore('settings', () => {
     }
 
     // 4. 应用 Codex 推理配置
-    if (newIdeSettings.codexReasoningEffort) {
-      updates.codexReasoningEffort = newIdeSettings.codexReasoningEffort
-      console.log('🧠 [IdeSettings] Codex 推理努力级别:', newIdeSettings.codexReasoningEffort)
+    const codexEffort = newIdeSettings.codexDefaultReasoningEffort ?? newIdeSettings.codexReasoningEffort
+    if (codexEffort) {
+      updates.codexReasoningEffort = codexEffort
+      console.log('🧠 [IdeSettings] Codex 推理努力级别:', codexEffort)
+    }
+
+    const codexSummary = newIdeSettings.codexDefaultReasoningSummary ?? newIdeSettings.codexReasoningSummary
+    if (codexSummary) {
+      updates.codexReasoningSummary = codexSummary
+      console.log('🧠 [IdeSettings] Codex 推理总结模式:', codexSummary)
     }
 
     // 5. 应用 Codex 沙盒模式
-    if (newIdeSettings.codexSandboxMode) {
-      updates.codexSandboxMode = newIdeSettings.codexSandboxMode
-      console.log('📦 [IdeSettings] Codex 沙盒模式:', newIdeSettings.codexSandboxMode)
+    const codexSandboxMode = newIdeSettings.codexDefaultSandboxMode ?? newIdeSettings.codexSandboxMode
+    if (codexSandboxMode) {
+      const rawMode = codexSandboxMode
+      updates.codexSandboxMode = rawMode === 'full-access' ? 'danger-full-access' : rawMode
+      console.log('📦 [IdeSettings] Codex 沙盒模式:', updates.codexSandboxMode)
     }
 
     // 6. 应用 Codex API Key
@@ -578,10 +599,16 @@ export const useSettingsStore = defineStore('settings', () => {
           console.log('🧠 [DefaultSettings] Codex 推理努力级别:', httpSettings.codexReasoningEffort)
         }
 
+        if (httpSettings.codexReasoningSummary) {
+          updates.codexReasoningSummary = httpSettings.codexReasoningSummary
+          console.log('🧠 [DefaultSettings] Codex 推理总结模式:', httpSettings.codexReasoningSummary)
+        }
+
         // 5. 应用 Codex 沙盒模式
         if (httpSettings.codexSandboxMode) {
-          updates.codexSandboxMode = httpSettings.codexSandboxMode
-          console.log('📦 [DefaultSettings] Codex 沙盒模式:', httpSettings.codexSandboxMode)
+          const rawMode = httpSettings.codexSandboxMode
+          updates.codexSandboxMode = rawMode === 'full-access' ? 'danger-full-access' : rawMode
+          console.log('📦 [DefaultSettings] Codex 沙盒模式:', updates.codexSandboxMode)
         }
 
         // 6. 应用 ByPass 权限设置
@@ -664,7 +691,7 @@ export const useSettingsStore = defineStore('settings', () => {
     } else {
       // Codex 的思考是通过 reasoningEffort 控制的
       return await saveSettings({
-        codexReasoningEffort: enabled ? 'medium' : null
+        codexReasoningEffort: enabled ? DEFAULT_SETTINGS.codexReasoningEffort : 'minimal'
       })
     }
   }
@@ -785,13 +812,18 @@ export const useSettingsStore = defineStore('settings', () => {
       settings.value.codexModel = config.modelId
     }
     if (config.reasoningEffort !== undefined) {
-      settings.value.codexReasoningEffort = config.reasoningEffort
+      const rawEffort = config.reasoningEffort as any
+      settings.value.codexReasoningEffort = rawEffort === 'none'
+        ? DEFAULT_SETTINGS.codexReasoningEffort
+        : config.reasoningEffort
     }
     if (config.reasoningSummary !== undefined) {
       settings.value.codexReasoningSummary = config.reasoningSummary
     }
     if (config.sandboxMode !== undefined) {
-      settings.value.codexSandboxMode = config.sandboxMode
+      settings.value.codexSandboxMode = config.sandboxMode === 'full-access'
+        ? 'danger-full-access'
+        : config.sandboxMode
     }
     if (config.permissionMode !== undefined) {
       settings.value.permissionMode = config.permissionMode as PermissionMode

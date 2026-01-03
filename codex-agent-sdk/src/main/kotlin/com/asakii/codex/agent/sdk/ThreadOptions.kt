@@ -28,6 +28,7 @@ enum class ModelReasoningEffort(val wireValue: String) {
     LOW("low"),
     MEDIUM("medium"),
     HIGH("high"),
+    XHIGH("xhigh"),
 }
 
 data class ThreadOptions @JvmOverloads constructor(
@@ -36,6 +37,7 @@ data class ThreadOptions @JvmOverloads constructor(
     val workingDirectory: String? = null,
     val skipGitRepoCheck: Boolean = false,
     val modelReasoningEffort: ModelReasoningEffort? = null,
+    val modelReasoningSummary: String? = null,
     val networkAccessEnabled: Boolean? = null,
     val webSearchEnabled: Boolean? = null,
     val approvalPolicy: ApprovalMode? = null,

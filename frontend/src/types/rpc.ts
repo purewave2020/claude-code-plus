@@ -516,6 +516,8 @@ export interface RpcConnectOptions {
   baseUrl?: string
   apiKey?: string
   sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access'
+  codexReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+  codexReasoningSummary?: 'auto' | 'concise' | 'detailed' | 'none'
 
   // === 会话恢复相关配置 ===
   replayUserMessages?: boolean  // 恢复会话时重放用户消息

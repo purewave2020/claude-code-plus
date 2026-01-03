@@ -106,7 +106,9 @@ export default {
       interruptHint: 'interrupt & send',
       stopHint: 'stop generation',
       toggleThinkingHint: 'toggle thinking',
+      toggleReasoningHint: 'cycle reasoning effort',
       switchModeHint: 'switch mode',
+      switchSandboxHint: 'switch sandbox mode (read-only / workspace-write / full access)',
       clearToLineStartHint: 'clear to line start'
     },
     connectionStatus: {

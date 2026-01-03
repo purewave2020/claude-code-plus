@@ -99,7 +99,9 @@ export default {
       interruptHint: '중단 후 보내기',
       stopHint: '생성 중지',
       toggleThinkingHint: '사고 전환',
+      toggleReasoningHint: '추론 강도 전환',
       switchModeHint: '모드 전환',
+      switchSandboxHint: '샌드박스 모드 전환 (read-only / workspace-write / full access)',
       clearToLineStartHint: '줄 시작까지 지우기'
     },
     claudeThinking: 'Claude가 생각 중입니다...',

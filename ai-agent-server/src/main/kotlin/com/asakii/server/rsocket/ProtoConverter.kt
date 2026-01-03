@@ -175,6 +175,8 @@ object ProtoConverter {
         baseUrl = if (hasBaseUrl()) baseUrl else null,
         apiKey = if (hasApiKey()) apiKey else null,
         sandboxMode = if (hasSandboxMode()) sandboxMode.toRpc() else null,
+        codexReasoningEffort = if (hasCodexReasoningEffort()) codexReasoningEffort else null,
+        codexReasoningSummary = if (hasCodexReasoningSummary()) codexReasoningSummary else null,
         replayUserMessages = if (hasReplayUserMessages()) replayUserMessages else null
     )
 

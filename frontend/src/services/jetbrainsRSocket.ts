@@ -237,6 +237,9 @@ function decodeSettingsResponse(data: Uint8Array): IdeSettings | null {
       enableUserInteractionMcp: true,
       enableJetbrainsMcp: true,
       includePartialMessages: true,
+      codexDefaultReasoningEffort: 'medium',
+      codexDefaultReasoningSummary: 'auto',
+      codexDefaultSandboxMode: 'workspace-write',
       defaultThinkingLevel: 'ULTRA',
       defaultThinkingTokens: 8096,
       defaultThinkingLevelId: 'ultra',
@@ -253,6 +256,9 @@ function decodeSettingsResponse(data: Uint8Array): IdeSettings | null {
     enableJetbrainsMcp: s.enableJetbrainsMcp,
     includePartialMessages: s.includePartialMessages,
     codexDefaultModelId: s.codexDefaultModelId || undefined,
+    codexDefaultReasoningEffort: s.codexDefaultReasoningEffort || undefined,
+    codexDefaultReasoningSummary: s.codexDefaultReasoningSummary || undefined,
+    codexDefaultSandboxMode: s.codexDefaultSandboxMode || undefined,
     defaultThinkingLevel: s.defaultThinkingLevel || 'ULTRA',
     defaultThinkingTokens: s.defaultThinkingTokens || 8096,
     defaultThinkingLevelId: s.defaultThinkingLevelId || 'ultra',
@@ -388,6 +394,9 @@ export interface IdeSettings {
   enableJetbrainsMcp: boolean
   includePartialMessages: boolean
   codexDefaultModelId?: string
+  codexDefaultReasoningEffort?: string
+  codexDefaultReasoningSummary?: string
+  codexDefaultSandboxMode?: string
   // 思考配置
   defaultThinkingLevelId: string  // 默认思考级别 ID（如 "off", "think", "ultra", "custom_xxx"）
   defaultThinkingTokens: number   // 默认思考 token 数量
@@ -487,6 +496,9 @@ class JetBrainsRSocketService {
           enableJetbrainsMcp: settingsData.enableJetbrainsMcp ?? true,
           includePartialMessages: settingsData.includePartialMessages ?? true,
           codexDefaultModelId: settingsData.codexDefaultModelId || undefined,
+          codexDefaultReasoningEffort: settingsData.codexDefaultReasoningEffort || undefined,
+          codexDefaultReasoningSummary: settingsData.codexDefaultReasoningSummary || undefined,
+          codexDefaultSandboxMode: settingsData.codexDefaultSandboxMode || undefined,
           defaultThinkingLevel: settingsData.defaultThinkingLevel || 'ULTRA',
           defaultThinkingTokens: settingsData.defaultThinkingTokens ?? 8096,
           defaultThinkingLevelId: settingsData.defaultThinkingLevelId || 'ultra',

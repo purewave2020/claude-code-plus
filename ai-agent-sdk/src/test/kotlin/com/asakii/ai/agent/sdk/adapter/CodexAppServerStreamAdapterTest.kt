@@ -19,7 +19,7 @@ import kotlinx.serialization.json.jsonPrimitive
 class CodexAppServerStreamAdapterTest {
     @Test
     fun `command execution maps to tool use and tool result`() {
-        val adapter = CodexAppServerStreamAdapter { "thread-1" }
+        val adapter = CodexAppServerStreamAdapter(sessionIdProvider = { "thread-1" })
         val startItem = ThreadItem.CommandExecution(
             id = "cmd-1",
             command = "ls",
@@ -53,7 +53,7 @@ class CodexAppServerStreamAdapterTest {
 
     @Test
     fun `file change maps to edit tool input`() {
-        val adapter = CodexAppServerStreamAdapter { "thread-1" }
+        val adapter = CodexAppServerStreamAdapter(sessionIdProvider = { "thread-1" })
         val change = FileUpdateChange(
             path = "src/main.kt",
             kind = PatchChangeKind.Update(),

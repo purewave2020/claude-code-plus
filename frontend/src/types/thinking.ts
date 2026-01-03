@@ -92,7 +92,7 @@ export interface CodexThinkingConfig {
 
   /**
    * Reasoning effort level
-   * null = disabled
+   * null = use model default
    */
   effort: CodexReasoningEffort | null
 
@@ -111,12 +111,11 @@ export type CodexReasoningSummaryMode = 'auto' | 'concise' | 'detailed' | 'none'
  * Codex effort level definitions
  */
 export const CODEX_EFFORT_LEVELS = {
-  OFF: { id: null, label: 'Off', description: 'Disable reasoning' },
-  MINIMAL: { id: 'minimal' as const, label: 'Minimal', description: 'Very brief reasoning' },
-  LOW: { id: 'low' as const, label: 'Low', description: 'Quick reasoning' },
-  MEDIUM: { id: 'medium' as const, label: 'Medium', description: 'Balanced reasoning (default)' },
-  HIGH: { id: 'high' as const, label: 'High', description: 'Detailed reasoning' },
-  XHIGH: { id: 'xhigh' as const, label: 'Extra High', description: 'Most thorough reasoning' },
+  MINIMAL: { id: 'minimal' as const, label: 'minimal', description: 'Minimal reasoning' },
+  LOW: { id: 'low' as const, label: 'low', description: 'Low reasoning' },
+  MEDIUM: { id: 'medium' as const, label: 'medium', description: 'Balanced reasoning (default)' },
+  HIGH: { id: 'high' as const, label: 'high', description: 'High reasoning' },
+  XHIGH: { id: 'xhigh' as const, label: 'xhigh', description: 'Extra high reasoning' },
 } as const
 
 export type CodexEffortLevelKey = keyof typeof CODEX_EFFORT_LEVELS
@@ -161,7 +160,7 @@ export function isThinkingEnabled(config: ThinkingConfig): boolean {
   if (config.type === 'claude') {
     return config.enabled && config.tokenBudget > 0
   } else {
-    return config.effort !== null
+    return true
   }
 }
 
@@ -233,7 +232,7 @@ export function createThinkingConfig(backendType: BackendType): ThinkingConfig {
  * (for migration/comparison purposes)
  */
 export function claudeTokensToCodexEffort(tokens: number): CodexReasoningEffort | null {
-  if (tokens === 0) return null
+  if (tokens === 0) return 'minimal'
   if (tokens <= 1024) return 'minimal'
   if (tokens <= 4096) return 'low'
   if (tokens <= 8096) return 'medium'
@@ -247,7 +246,7 @@ export function claudeTokensToCodexEffort(tokens: number): CodexReasoningEffort 
  */
 export function codexEffortToClaudeTokens(effort: CodexReasoningEffort | null): number {
   switch (effort) {
-    case null: return 0
+    case null: return 8096
     case 'minimal': return 1024
     case 'low': return 4096
     case 'medium': return 8096
@@ -273,9 +272,9 @@ export function getThinkingDisplayString(config: ThinkingConfig): string {
     return `Thinking: ${preset.label}`
   } else {
     if (config.effort === null) {
-      return 'Reasoning: Off'
+      return 'Reasoning: default'
     }
-    const level = CODEX_EFFORT_LEVELS[config.effort.toUpperCase() as CodexEffortLevelKey]
+    const level = getCodexEffortLevels().find(item => item.id === config.effort)
     return `Reasoning: ${level?.label || config.effort}`
   }
 }
@@ -291,8 +290,8 @@ export function getThinkingShortDisplayString(config: ThinkingConfig): string {
     return `${Math.round(config.tokenBudget / 1024)}K`
   } else {
     if (config.effort === null) {
-      return 'Off'
+      return 'default'
     }
-    return config.effort.charAt(0).toUpperCase() + config.effort.slice(1)
+    return config.effort
   }
 }

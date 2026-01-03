@@ -80,6 +80,8 @@ message ConnectOptions {
   optional string base_url = 20;
   optional string api_key = 21;
   optional SandboxMode sandbox_mode = 22;
+  optional string codex_reasoning_effort = 23;
+  optional string codex_reasoning_summary = 24;
 
   // 会话恢复相关配置
   optional bool replay_user_messages = 30;  // 恢复会话时重放用户消息
@@ -724,6 +726,9 @@ message IdeSettings {
   repeated ThinkingLevelConfig thinking_levels = 10;  // 所有可用的思考级别
   string permission_mode = 11;           // 权限模式（default, acceptEdits, plan, bypassPermissions）
   string codex_default_model_id = 12;    // Codex default model id (e.g., "gpt-5.2-codex")
+  string codex_default_reasoning_effort = 13;  // Codex default reasoning effort (minimal/low/medium/high/xhigh)
+  string codex_default_reasoning_summary = 14; // Codex reasoning summary (auto/concise/detailed/none)
+  string codex_default_sandbox_mode = 15;      // Codex sandbox mode (read-only/workspace-write/danger-full-access)
 }
 
 // 思考级别配置

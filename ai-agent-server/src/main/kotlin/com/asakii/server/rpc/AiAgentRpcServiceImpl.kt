@@ -36,6 +36,7 @@ import com.asakii.claude.agent.sdk.types.ToolType
 import com.asakii.claude.agent.sdk.utils.ClaudeSessionScanner
 import com.asakii.codex.agent.sdk.ApprovalMode
 import com.asakii.codex.agent.sdk.CodexClientOptions
+import com.asakii.codex.agent.sdk.ModelReasoningEffort
 import com.asakii.codex.agent.sdk.SandboxMode
 import com.asakii.codex.agent.sdk.ThreadOptions
 import com.asakii.rpc.api.*
@@ -620,7 +621,10 @@ class AiAgentRpcServiceImpl(
     private suspend fun buildConnectOptions(options: RpcConnectOptions): AiAgentConnectOptions {
         // 每次 connect 时调用 provider 获取最新配置
         val serviceConfig = serviceConfigProvider()
-        sdkLog.info("?? [buildConnectOptions] ??????: enableUserInteractionMcp=${serviceConfig.claude.enableUserInteractionMcp}, enableJetBrainsMcp=${serviceConfig.claude.enableJetBrainsMcp}, mcpBackends=${serviceConfig.mcpEnabledBackends.joinToString()}")
+        sdkLog.info(
+            "🔧 [buildConnectOptions] MCP config: enableUserInteractionMcp=${serviceConfig.claude.enableUserInteractionMcp}, " +
+                "enableJetBrainsMcp=${serviceConfig.claude.enableJetBrainsMcp}"
+        )
 
         val provider = options.provider.toSdkProvider(serviceConfig.defaultProvider)
         val model = options.model  // 前端负责发送正确的 API 模型 ID，不做回退
@@ -659,33 +663,30 @@ class AiAgentRpcServiceImpl(
         serviceConfig: AiAgentServiceConfig
     ): McpSessionSetup {
         val defaults = serviceConfig.claude
-        val enabledBackends = serviceConfig.mcpEnabledBackends
-        if (enabledBackends.isEmpty() || !enabledBackends.contains(provider)) {
-            sdkLog.info("?? [MCP] Provider=$provider is not enabled (enabledBackends=${enabledBackends.joinToString()}), skip MCP registration")
-            return McpSessionSetup(
-                claudeServers = emptyMap(),
-                mcpSystemPromptAppendix = "",
-                allowedTools = emptyList(),
-                codexConfigOverrides = emptyMap()
-            )
+        val fallbackBackends = serviceConfig.mcpEnabledBackends
+
+        fun isProviderAllowed(allowed: Set<AiAgentProvider>?): Boolean {
+            val resolved = allowed ?: fallbackBackends
+            if (resolved.isEmpty()) return false
+            return resolved.contains(provider)
         }
         val sessionServers = mutableMapOf<String, McpServer>()
         val globalServers = mutableMapOf<String, McpServer>()
         val claudeServers = mutableMapOf<String, McpServerSpec>()
 
-        if (defaults.enableUserInteractionMcp) {
+        if (defaults.enableUserInteractionMcp && isProviderAllowed(defaults.userInteractionMcpBackends)) {
             sessionServers["user_interaction"] = userInteractionServer
         }
 
-        if (defaults.enableJetBrainsMcp) {
+        if (defaults.enableJetBrainsMcp && isProviderAllowed(defaults.jetbrainsMcpBackends)) {
             jetBrainsMcpServerProvider.getServer()?.let { globalServers["jetbrains"] = it }
         }
 
-        if (defaults.enableTerminalMcp) {
+        if (defaults.enableTerminalMcp && isProviderAllowed(defaults.terminalMcpBackends)) {
             terminalMcpServerProvider.getServerForSession(sessionId)?.let { sessionServers["terminal"] = it }
         }
 
-        if (defaults.enableGitMcp) {
+        if (defaults.enableGitMcp && isProviderAllowed(defaults.gitMcpBackends)) {
             gitMcpServerProvider.getServer()?.let { globalServers["jetbrains_git"] = it }
         }
 
@@ -717,6 +718,7 @@ class AiAgentRpcServiceImpl(
 
         for (mcpConfig in defaults.mcpServersConfig) {
             if (!mcpConfig.enabled) continue
+            if (!isProviderAllowed(mcpConfig.enabledBackends)) continue
 
             val serverConfig: McpServerConfig = when (mcpConfig.type) {
                 "http" -> McpHttpServerConfig(
@@ -750,7 +752,7 @@ class AiAgentRpcServiceImpl(
         }
 
         val customInstructions = defaults.mcpServersConfig
-            .filter { it.enabled && !it.instructions.isNullOrBlank() }
+            .filter { it.enabled && !it.instructions.isNullOrBlank() && isProviderAllowed(it.enabledBackends) }
             .map { it.instructions!! }
         if (customInstructions.isNotEmpty()) {
             val customPrompt = customInstructions.joinToString("\n\n")
@@ -1082,20 +1084,31 @@ class AiAgentRpcServiceImpl(
             else -> ApprovalMode.ON_REQUEST
         }
 
+        val reasoningEffort = parseReasoningEffort(
+            options.codexReasoningEffort ?: codexDefaults.defaultReasoningEffort
+        )
+        val reasoningSummary = normalizeReasoningSummary(
+            options.codexReasoningSummary ?: codexDefaults.defaultReasoningSummary
+        )
+
         val workingDirectory = ideTools.getProjectPath().takeIf { it.isNotBlank() }
         val codexPathLog = codexDefaults.binaryPath?.takeIf { it.isNotBlank() } ?: "auto"
         val apiKeyPresent = !(options.apiKey ?: codexDefaults.apiKey).isNullOrBlank()
         val baseUrlLog = options.baseUrl ?: codexDefaults.baseUrl ?: "default"
         val sandboxLog = sandboxMode?.name ?: "default"
         val approvalLog = approvalPolicy?.name ?: "default"
+        val effortLog = reasoningEffort?.wireValue ?: "default"
+        val summaryLog = reasoningSummary ?: "default"
         val cwdLog = workingDirectory ?: "default"
-        sdkLog.info("[buildCodexOverrides] model=${model ?: "default"}, codexPath=$codexPathLog, baseUrl=$baseUrlLog, apiKeyPresent=$apiKeyPresent, sandbox=$sandboxLog, approval=$approvalLog, cwd=$cwdLog")
+        sdkLog.info("[buildCodexOverrides] model=${model ?: "default"}, codexPath=$codexPathLog, baseUrl=$baseUrlLog, apiKeyPresent=$apiKeyPresent, sandbox=$sandboxLog, approval=$approvalLog, effort=$effortLog, summary=$summaryLog, cwd=$cwdLog")
 
         val threadOptions = ThreadOptions(
             model = model,
             sandboxMode = sandboxMode,
             workingDirectory = workingDirectory,
             skipGitRepoCheck = true,
+            modelReasoningEffort = reasoningEffort,
+            modelReasoningSummary = reasoningSummary,
             approvalPolicy = approvalPolicy,
             developerInstructions = mcpSetup.mcpSystemPromptAppendix.takeIf { it.isNotBlank() }
         )
@@ -1104,6 +1117,19 @@ class AiAgentRpcServiceImpl(
             clientOptions = clientOptions,
             threadOptions = threadOptions
         )
+    }
+
+    private fun parseReasoningEffort(value: String?): ModelReasoningEffort? {
+        val normalized = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return runCatching { ModelReasoningEffort.valueOf(normalized.uppercase()) }.getOrNull()
+    }
+
+    private fun normalizeReasoningSummary(value: String?): String? {
+        val normalized = value?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
+        return when (normalized) {
+            "auto", "concise", "detailed", "none" -> normalized
+            else -> null
+        }
     }
 
     private fun flattenContentBlocks(blocks: List<RpcContentBlock>): String {

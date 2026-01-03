@@ -83,14 +83,14 @@
         <label class="config-label">
           <span>推理强度</span>
           <select
-            :value="codexConfig.effort || 'OFF'"
+            :value="codexConfig.effort ?? 'medium'"
             @change="updateCodexEffort($event)"
             class="config-select"
           >
             <option
               v-for="level in codexEffortLevels"
-              :key="level.id || 'OFF'"
-              :value="level.id || 'OFF'"
+              :key="level.id"
+              :value="level.id"
             >
               {{ level.label }}
             </option>
@@ -101,8 +101,8 @@
         </div>
       </div>
 
-      <!-- Summary Mode Dropdown (only when reasoning is enabled) -->
-      <div v-if="codexConfig.effort !== null" class="config-row">
+      <!-- Summary Mode Dropdown -->
+      <div class="config-row">
         <label class="config-label">
           <span>摘要模式</span>
           <select
@@ -202,7 +202,7 @@ const codexEffortLevels = getCodexEffortLevels()
 const codexSummaryModes = getCodexSummaryModes()
 
 const selectedCodexEffort = computed(() => {
-  const effortValue = codexConfig.value.effort || null
+  const effortValue = codexConfig.value.effort ?? 'medium'
   return codexEffortLevels.find((level) => level.id === effortValue)
 })
 
@@ -269,7 +269,7 @@ function updateClaudeTokenBudgetInput(event: Event) {
 // Update handlers for Codex
 function updateCodexEffort(event: Event) {
   const effortValue = (event.target as HTMLSelectElement).value
-  const effort = effortValue === 'OFF' ? null : (effortValue as any)
+  const effort = effortValue as any
   const updated: CodexThinkingConfig = {
     ...codexConfig.value,
     effort,

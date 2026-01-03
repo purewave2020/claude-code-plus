@@ -115,7 +115,7 @@ export const CODEX_MODELS: BackendModelInfo[] = [
 export const CODEX_SANDBOX_MODES: SandboxMode[] = [
   'read-only',
   'workspace-write',
-  'full-access',
+  'danger-full-access',
 ]
 
 /**
@@ -314,17 +314,17 @@ export function getSandboxOptions(): SandboxOption[] {
   return [
     {
       id: 'read-only',
-      label: 'Read Only',
+      label: 'read-only',
       description: 'Can only read files, no modifications allowed',
     },
     {
       id: 'workspace-write',
-      label: 'Workspace Write',
+      label: 'workspace-write',
       description: 'Can write to workspace directories only',
     },
     {
-      id: 'full-access',
-      label: 'Full Access',
+      id: 'danger-full-access',
+      label: 'full access',
       description: 'Full system access (dangerous)',
     },
   ]

@@ -173,7 +173,7 @@
             :disabled="!enabled"
             placement="top-start"
             :teleported="true"
-            popper-class="chat-input-select-dropdown mode-dropdown"
+            popper-class="chat-input-select-dropdown mode-dropdown claude-mode-dropdown"
             :popper-options="{
               modifiers: [
                 {
@@ -228,7 +228,7 @@
               :disabled="!enabled"
               placement="top-start"
               :teleported="true"
-              popper-class="chat-input-select-dropdown"
+              popper-class="chat-input-select-dropdown claude-model-dropdown"
               :popper-options="{
                 modifiers: [
                   {
@@ -474,7 +474,7 @@ import type { ThinkingConfig } from '@/types/thinking'
 import { isCodexThinking, getCodexEffortLevels } from '@/types/thinking'
 // Codex types
 import type { CodexSandboxMode, CodexReasoningEffort } from '@/types/codex'
-import { DEFAULT_CODEX_CONFIG } from '@/types/codex'
+import { DEFAULT_CODEX_CONFIG, REASONING_EFFORT_OPTIONS, SANDBOX_MODE_OPTIONS } from '@/types/codex'
 
 interface PendingTask {
   id: string
@@ -604,11 +604,16 @@ const codexModel = computed(() => {
 })
 
 const codexSandboxMode = computed(() => {
-  return (settingsStore.settings as any).codexSandboxMode ?? DEFAULT_CODEX_CONFIG.sandboxMode
+  const stored = (settingsStore.settings as any).codexSandboxMode ?? DEFAULT_CODEX_CONFIG.sandboxMode
+  return stored === 'full-access' ? 'danger-full-access' : stored
 })
 
-const codexReasoningEffort = computed(() => {
-  return (settingsStore.settings as any).codexReasoningEffort ?? DEFAULT_CODEX_CONFIG.reasoningEffort
+const codexReasoningEffort = computed<CodexReasoningEffort>(() => {
+  const stored = (settingsStore.settings as any).codexReasoningEffort
+  if (stored === undefined || stored === null || stored === 'none') {
+    return DEFAULT_CODEX_CONFIG.reasoningEffort
+  }
+  return stored
 })
 
 // Codex 事件处理函数
@@ -636,6 +641,23 @@ function handleCodexSandboxModeChange(mode: CodexSandboxMode) {
 function handleCodexReasoningEffortChange(effort: CodexReasoningEffort) {
   console.log(`🔄 [Codex] 切换推理深度: ${effort}`)
   settingsStore.saveSettings({ codexReasoningEffort: effort } as any)
+}
+
+function cycleCodexReasoningEffort() {
+  const options = REASONING_EFFORT_OPTIONS.map(option => option.value)
+  const current = codexReasoningEffort.value
+  const currentIndex = options.indexOf(current)
+  const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % options.length
+  handleCodexReasoningEffortChange(options[nextIndex])
+}
+
+function cycleCodexSandboxMode() {
+  const options = SANDBOX_MODE_OPTIONS.map(option => option.value)
+  const rawCurrent = codexSandboxMode.value as unknown as string
+  const normalizedCurrent = rawCurrent === 'full-access' ? 'danger-full-access' : rawCurrent
+  const currentIndex = options.indexOf(normalizedCurrent as CodexSandboxMode)
+  const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % options.length
+  handleCodexSandboxModeChange(options[nextIndex])
 }
 
 // ========== Multi-Backend Thinking Config ==========
@@ -667,25 +689,25 @@ const currentThinkingConfig = computed<ThinkingConfig>(() => {
 // Codex thinking helpers
 const codexThinkingEnabled = computed(() => {
   if (isCodexThinking(currentThinkingConfig.value)) {
-    return currentThinkingConfig.value.effort !== null
+    return true
   }
   return false
 })
 
 const codexEffortLabel = computed(() => {
-  if (!isCodexThinking(currentThinkingConfig.value)) return 'OFF'
+  if (!isCodexThinking(currentThinkingConfig.value)) return DEFAULT_CODEX_CONFIG.reasoningEffort
   const effort = currentThinkingConfig.value.effort
-  if (effort === null) return 'OFF'
+  if (effort === null) return DEFAULT_CODEX_CONFIG.reasoningEffort
 
   const levels = getCodexEffortLevels()
   const level = levels.find(l => l.id === effort)
-  return level?.label || effort.toUpperCase()
+  return level?.label || effort
 })
 
 const codexThinkingTooltip = computed(() => {
   if (!isCodexThinking(currentThinkingConfig.value)) return '配置推理强度'
   const effort = currentThinkingConfig.value.effort
-  if (effort === null) return '推理已关闭'
+  if (effort === null) return '使用默认推理强度'
 
   const levels = getCodexEffortLevels()
   const level = levels.find(l => l.id === effort)
@@ -1161,7 +1183,11 @@ async function handleKeydown(event: KeyboardEvent) {
     !event.metaKey
   ) {
     event.preventDefault()
-    cyclePermissionMode()
+    if (props.backendType === 'claude') {
+      cyclePermissionMode()
+    } else if (props.backendType === 'codex') {
+      cycleCodexSandboxMode()
+    }
     return
   }
 
@@ -1175,6 +1201,18 @@ async function handleKeydown(event: KeyboardEvent) {
   ) {
     event.preventDefault()
     await toggleThinkingEnabled('keyboard')
+    return
+  }
+  // Tab - 切换推理强度（Codex 后端）
+  if (
+    event.key === 'Tab' &&
+    !event.shiftKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    props.backendType === 'codex'
+  ) {
+    event.preventDefault()
+    cycleCodexReasoningEffort()
     return
   }
   // 如果 @ 符号弹窗显示，键盘事件由弹窗组件处理
@@ -2458,5 +2496,19 @@ onUnmounted(() => {
 .chat-input-select-dropdown .mode-icon {
   font-size: 14px;
   margin-right: 4px;
+}
+</style>
+
+<style>
+.claude-mode-dropdown,
+.claude-model-dropdown {
+  width: max-content !important;
+  min-width: max-content !important;
+  max-width: 80vw;
+}
+
+.claude-mode-dropdown .el-select-dropdown__item,
+.claude-model-dropdown .el-select-dropdown__item {
+  white-space: nowrap;
 }
 </style>

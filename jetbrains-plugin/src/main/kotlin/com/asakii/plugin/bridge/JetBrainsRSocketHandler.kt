@@ -291,6 +291,9 @@ class JetBrainsRSocketHandler(
                 .addAllThinkingLevels(thinkingLevelsProto)
                 .setPermissionMode(settings.permissionMode)
                 .setCodexDefaultModelId(settings.codexDefaultModelId)
+                .setCodexDefaultReasoningEffort(settings.codexDefaultReasoningEffort)
+                .setCodexDefaultReasoningSummary(settings.codexDefaultReasoningSummary)
+                .setCodexDefaultSandboxMode(settings.codexDefaultSandboxMode)
                 .build()
 
             val response = GetIdeSettingsResponse.newBuilder()
@@ -552,6 +555,9 @@ class JetBrainsRSocketHandler(
                 .addAllThinkingLevels(thinkingLevelsProto)
                 .setPermissionMode(settings.permissionMode)
                 .setCodexDefaultModelId(settings.codexDefaultModelId)
+                .setCodexDefaultReasoningEffort(settings.codexDefaultReasoningEffort)
+                .setCodexDefaultReasoningSummary(settings.codexDefaultReasoningSummary)
+                .setCodexDefaultSandboxMode(settings.codexDefaultSandboxMode)
                 .build()
 
             // 构建 IdeSettingsChangedNotify

@@ -114,6 +114,8 @@ data class RpcConnectOptions(
     val baseUrl: String? = null,
     val apiKey: String? = null,
     val sandboxMode: RpcSandboxMode? = null,
+    val codexReasoningEffort: String? = null,
+    val codexReasoningSummary: String? = null,
 
     // === 会话恢复相关配置 ===
     val replayUserMessages: Boolean? = null  // 恢复会话时重放用户消息

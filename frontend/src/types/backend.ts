@@ -70,7 +70,7 @@ export interface BackendCapabilities {
 /**
  * Sandbox mode options (Codex-specific)
  */
-export type SandboxMode = 'read-only' | 'workspace-write' | 'full-access'
+export type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
 
 /**
  * Model information for a specific backend

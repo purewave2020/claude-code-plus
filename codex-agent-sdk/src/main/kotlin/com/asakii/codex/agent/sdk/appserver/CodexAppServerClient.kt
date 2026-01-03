@@ -341,7 +341,9 @@ class CodexAppServerClient private constructor(
         cwd: String? = null,
         model: String? = null,
         approvalPolicy: String? = null,
-        sandboxPolicy: SandboxPolicy? = null
+        sandboxPolicy: SandboxPolicy? = null,
+        effort: String? = null,
+        summary: ReasoningSummary? = null
     ): TurnInfo {
         checkInitialized()
 
@@ -356,7 +358,9 @@ class CodexAppServerClient private constructor(
             cwd = cwd,
             model = model,
             approvalPolicy = approvalPolicy,
-            sandboxPolicy = sandboxPolicy
+            sandboxPolicy = sandboxPolicy,
+            effort = effort,
+            summary = summary
         )
 
         val result: TurnStartResult = rpc.request("turn/start", params)

@@ -180,12 +180,11 @@
               v-model="localCodexConfig.reasoningEffort"
               class="settings-select"
             >
-              <option :value="null">Off</option>
-              <option value="minimal">Minimal</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="xhigh">Extra High</option>
+              <option value="minimal">minimal</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+              <option value="xhigh">xhigh</option>
             </select>
           </div>
 
@@ -285,8 +284,18 @@ watch(
 watch(
   () => props.codexConfig,
   (newConfig) => {
+    const rawEffort = (newConfig as any).reasoningEffort
+    const normalizedEffort = rawEffort && rawEffort !== 'none'
+      ? rawEffort
+      : DEFAULT_CODEX_CONFIG.reasoningEffort
+    const rawSandbox = (newConfig as any).sandboxMode
+    const normalizedSandbox = rawSandbox === 'full-access'
+      ? 'danger-full-access'
+      : (rawSandbox || DEFAULT_CODEX_CONFIG.sandboxMode)
     localCodexConfig.value = {
       ...newConfig,
+      reasoningEffort: normalizedEffort,
+      sandboxMode: normalizedSandbox,
       binaryPath: (newConfig as any).binaryPath || '',
     }
   },
@@ -299,8 +308,18 @@ watch(
   (visible) => {
     if (visible) {
       localClaudeConfig.value = { ...props.claudeConfig }
+      const rawEffort = (props.codexConfig as any).reasoningEffort
+      const normalizedEffort = rawEffort && rawEffort !== 'none'
+        ? rawEffort
+        : DEFAULT_CODEX_CONFIG.reasoningEffort
+      const rawSandbox = (props.codexConfig as any).sandboxMode
+      const normalizedSandbox = rawSandbox === 'full-access'
+        ? 'danger-full-access'
+        : (rawSandbox || DEFAULT_CODEX_CONFIG.sandboxMode)
       localCodexConfig.value = {
         ...props.codexConfig,
+        reasoningEffort: normalizedEffort,
+        sandboxMode: normalizedSandbox,
         binaryPath: (props.codexConfig as any).binaryPath || '',
       }
       validationError.value = null

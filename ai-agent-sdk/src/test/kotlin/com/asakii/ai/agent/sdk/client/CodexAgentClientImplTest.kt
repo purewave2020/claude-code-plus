@@ -9,6 +9,7 @@ import com.asakii.ai.agent.sdk.model.TextContent
 import com.asakii.ai.agent.sdk.model.UiResultMessage
 import com.asakii.ai.agent.sdk.model.UiStreamEvent
 import com.asakii.ai.agent.sdk.model.UiTextDelta
+import com.asakii.codex.agent.sdk.ModelReasoningEffort
 import com.asakii.codex.agent.sdk.ThreadOptions
 import com.asakii.codex.agent.sdk.appserver.AppServerEvent
 import com.asakii.codex.agent.sdk.appserver.ListMcpServerStatusResponse
@@ -18,6 +19,7 @@ import com.asakii.codex.agent.sdk.appserver.McpServerOauthLoginResponse
 import com.asakii.codex.agent.sdk.appserver.ModelListResponse
 import com.asakii.codex.agent.sdk.appserver.FileUpdateChange
 import com.asakii.codex.agent.sdk.appserver.PatchChangeKind
+import com.asakii.codex.agent.sdk.appserver.ReasoningSummary
 import com.asakii.codex.agent.sdk.appserver.ThreadInfo
 import com.asakii.codex.agent.sdk.appserver.ThreadItem
 import com.asakii.codex.agent.sdk.appserver.TurnInfo
@@ -450,6 +452,46 @@ class CodexAgentClientImplTest {
     }
 
     @Test
+    fun `sendMessage includes reasoning effort and summary`() = runTest {
+        val fake = FakeCodexAppServerApi()
+        val client = CodexAgentClientImpl(
+            appServerFactory = CodexAppServerApiFactory { _, _, _ -> fake },
+            scope = this
+        )
+
+        client.connect(
+            AiAgentConnectOptions(
+                provider = AiAgentProvider.CODEX,
+                codex = CodexOverrides(
+                    threadOptions = ThreadOptions(
+                        modelReasoningEffort = ModelReasoningEffort.HIGH,
+                        modelReasoningSummary = "concise"
+                    )
+                )
+            )
+        )
+        advanceUntilIdle()
+
+        val sendJob = launch {
+            client.sendMessage(AgentMessageInput(text = "hello"))
+        }
+
+        yield()
+
+        val turnId = fake.lastStartTurnId ?: "turn-1"
+        val threadId = "thread-1"
+        fake.emit(AppServerEvent.TurnStarted(threadId, TurnInfo(id = turnId, status = TurnStatus.InProgress)))
+        fake.emit(AppServerEvent.TurnCompleted(threadId, TurnInfo(id = turnId, status = TurnStatus.Completed)))
+
+        sendJob.join()
+
+        val last = fake.startTurnCalls.last()
+        assertEquals("high", last.effort)
+        assertEquals(ReasoningSummary.Concise, last.summary)
+        closeClient(client)
+    }
+
+    @Test
     fun `startMcpOauthLogin returns url when auth required`() = runTest {
         val fake = FakeCodexAppServerApi()
         fake.mcpStatuses = listOf(
@@ -598,11 +640,25 @@ class CodexAgentClientImplTest {
             cwd: String?,
             model: String?,
             approvalPolicy: String?,
-            sandboxPolicy: SandboxPolicy?
+            sandboxPolicy: SandboxPolicy?,
+            effort: String?,
+            summary: ReasoningSummary?
         ): TurnInfo {
             val turnId = "turn-${startTurnCalls.size + 1}"
             lastStartTurnId = turnId
-            startTurnCalls.add(StartTurnArgs(threadId, message, images, cwd, model, approvalPolicy, sandboxPolicy))
+            startTurnCalls.add(
+                StartTurnArgs(
+                    threadId,
+                    message,
+                    images,
+                    cwd,
+                    model,
+                    approvalPolicy,
+                    sandboxPolicy,
+                    effort,
+                    summary
+                )
+            )
             return TurnInfo(id = turnId, status = TurnStatus.InProgress)
         }
 
@@ -663,7 +719,9 @@ class CodexAgentClientImplTest {
             val cwd: String?,
             val model: String?,
             val approvalPolicy: String?,
-            val sandboxPolicy: SandboxPolicy?
+            val sandboxPolicy: SandboxPolicy?,
+            val effort: String?,
+            val summary: ReasoningSummary?
         )
     }
 }

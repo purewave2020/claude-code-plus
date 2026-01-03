@@ -33,7 +33,11 @@ class CodexConfigurable : SearchableConfigurable {
     private var mainPanel: JPanel? = null
     private var codexPathField: TextFieldWithBrowseButton? = null
     private var webSearchCheckBox: JBCheckBox? = null
+    private var defaultBypassPermissionsCheckbox: JBCheckBox? = null
     private var defaultModelCombo: ComboBox<ModelInfo>? = null
+    private var defaultReasoningEffortCombo: ComboBox<String>? = null
+    private var defaultReasoningSummaryCombo: ComboBox<String>? = null
+    private var defaultSandboxModeCombo: ComboBox<SandboxOption>? = null
     private var customModelsTable: JBTable? = null
     private var customModelsTableModel: DefaultTableModel? = null
     private var addModelButton: JButton? = null
@@ -50,6 +54,17 @@ class CodexConfigurable : SearchableConfigurable {
         val contentPanel = JPanel()
         contentPanel.layout = BoxLayout(contentPanel, BoxLayout.Y_AXIS)
         contentPanel.border = JBUI.Borders.empty(8, 10, 8, 10)
+
+        contentPanel.add(createSectionTitle("Default Permissions"))
+        contentPanel.add(createDescription("Configure default permission behavior for new sessions."))
+
+        defaultBypassPermissionsCheckbox = JBCheckBox("Default bypass permissions").apply {
+            toolTipText = "When enabled, new sessions will automatically use bypass permissions mode"
+            alignmentX = JPanel.LEFT_ALIGNMENT
+        }
+        contentPanel.add(defaultBypassPermissionsCheckbox)
+        contentPanel.add(createDescription("  Skip confirmation dialogs for file edits and bash commands. Use with caution."))
+        contentPanel.add(Box.createVerticalStrut(8))
 
         contentPanel.add(createSectionTitle("Runtime Settings"))
         contentPanel.add(createDescription("Configure Codex CLI location for the backend."))
@@ -177,6 +192,45 @@ class CodexConfigurable : SearchableConfigurable {
             add(buttonPanel, BorderLayout.SOUTH)
         }
         contentPanel.add(customModelsPanel)
+        contentPanel.add(Box.createVerticalStrut(8))
+
+        contentPanel.add(createSeparator())
+        contentPanel.add(createSectionTitle("Session Defaults"))
+        contentPanel.add(createDescription("Configure reasoning and sandbox defaults for Codex sessions."))
+
+        defaultReasoningEffortCombo = ComboBox(
+            DefaultComboBoxModel(arrayOf("minimal", "low", "medium", "high", "xhigh"))
+        ).apply {
+            toolTipText = "Default reasoning effort for new Codex sessions"
+        }
+        contentPanel.add(createLabeledRow("Reasoning effort:", defaultReasoningEffortCombo!!))
+        contentPanel.add(createDescription("  Controls reasoning depth for Codex responses."))
+        contentPanel.add(Box.createVerticalStrut(8))
+
+        defaultReasoningSummaryCombo = ComboBox(
+            DefaultComboBoxModel(arrayOf("auto", "concise", "detailed", "none"))
+        ).apply {
+            toolTipText = "Default reasoning summary behavior for Codex sessions"
+        }
+        contentPanel.add(createLabeledRow("Reasoning summary:", defaultReasoningSummaryCombo!!))
+        contentPanel.add(createDescription("  Summary style for reasoning output when supported."))
+        contentPanel.add(Box.createVerticalStrut(8))
+
+        defaultSandboxModeCombo = ComboBox(
+            DefaultComboBoxModel(
+                arrayOf(
+                    SandboxOption("read-only", "Chat"),
+                    SandboxOption("workspace-write", "Agent"),
+                    SandboxOption("danger-full-access", "Agent (full access)")
+                )
+            )
+        ).apply {
+            renderer = SandboxOptionRenderer()
+            toolTipText = "Default sandbox mode for new Codex sessions"
+        }
+        contentPanel.add(createLabeledRow("Sandbox mode:", defaultSandboxModeCombo!!))
+        contentPanel.add(createDescription("  Controls file system and network access permissions."))
+        contentPanel.add(Box.createVerticalStrut(8))
         contentPanel.add(Box.createVerticalGlue())
 
         mainPanel!!.add(contentPanel, BorderLayout.NORTH)
@@ -189,7 +243,11 @@ class CodexConfigurable : SearchableConfigurable {
         val settings = AgentSettingsService.getInstance()
         return codexPathField?.text?.trim() != settings.codexPath ||
             (webSearchCheckBox?.isSelected ?: false) != settings.codexWebSearchEnabled ||
+            (defaultBypassPermissionsCheckbox?.isSelected ?: false) != settings.defaultBypassPermissions ||
             (defaultModelCombo?.selectedItem as? ModelInfo)?.id != settings.codexDefaultModelId ||
+            defaultReasoningEffortCombo?.selectedItem != settings.codexDefaultReasoningEffort ||
+            defaultReasoningSummaryCombo?.selectedItem != settings.codexDefaultReasoningSummary ||
+            (defaultSandboxModeCombo?.selectedItem as? SandboxOption)?.id != settings.codexDefaultSandboxMode ||
             getCustomModelsFromTable().map { CustomModelConfig(it.id, it.displayName, it.modelId) } != settings.getCodexCustomModels()
     }
 
@@ -197,8 +255,13 @@ class CodexConfigurable : SearchableConfigurable {
         val settings = AgentSettingsService.getInstance()
         settings.codexPath = codexPathField?.text?.trim() ?: ""
         settings.codexWebSearchEnabled = webSearchCheckBox?.isSelected ?: false
+        settings.defaultBypassPermissions = defaultBypassPermissionsCheckbox?.isSelected ?: false
         val selectedModel = defaultModelCombo?.selectedItem as? ModelInfo
         settings.codexDefaultModelId = selectedModel?.id ?: settings.getCodexBuiltInModels().first().id
+        settings.codexDefaultReasoningEffort = defaultReasoningEffortCombo?.selectedItem as? String ?: "medium"
+        settings.codexDefaultReasoningSummary = defaultReasoningSummaryCombo?.selectedItem as? String ?: "auto"
+        settings.codexDefaultSandboxMode =
+            (defaultSandboxModeCombo?.selectedItem as? SandboxOption)?.id ?: "workspace-write"
         val customModels = getCustomModelsFromTable().map {
             CustomModelConfig(it.id, it.displayName, it.modelId)
         }
@@ -210,6 +273,7 @@ class CodexConfigurable : SearchableConfigurable {
         val settings = AgentSettingsService.getInstance()
         codexPathField?.text = settings.codexPath
         webSearchCheckBox?.isSelected = settings.codexWebSearchEnabled
+        defaultBypassPermissionsCheckbox?.isSelected = settings.defaultBypassPermissions
         customModelsTableModel?.rowCount = 0
         settings.getCodexCustomModels().forEach { model ->
             customModelsTableModel?.addRow(arrayOf(model.displayName, model.modelId))
@@ -223,18 +287,55 @@ class CodexConfigurable : SearchableConfigurable {
         } else {
             defaultModelCombo?.selectedItem = allModels.firstOrNull { it.isBuiltIn }
         }
+        defaultReasoningEffortCombo?.selectedItem = settings.codexDefaultReasoningEffort
+        defaultReasoningSummaryCombo?.selectedItem = settings.codexDefaultReasoningSummary
+        val sandboxMode = settings.codexDefaultSandboxMode
+        val sandboxModel = defaultSandboxModeCombo?.model as? DefaultComboBoxModel<*>
+        val sandboxOptions = sandboxModel?.let { model ->
+            (0 until model.size).mapNotNull { idx ->
+                model.getElementAt(idx) as? SandboxOption
+            }
+        } ?: emptyList()
+        val sandboxSelection = sandboxOptions.find { it.id == sandboxMode } ?: sandboxOptions.firstOrNull()
+        if (sandboxSelection != null) {
+            defaultSandboxModeCombo?.selectedItem = sandboxSelection
+        }
     }
 
     override fun disposeUIResources() {
         codexPathField = null
         webSearchCheckBox = null
+        defaultBypassPermissionsCheckbox = null
         defaultModelCombo = null
+        defaultReasoningEffortCombo = null
+        defaultReasoningSummaryCombo = null
+        defaultSandboxModeCombo = null
         customModelsTable = null
         customModelsTableModel = null
         addModelButton = null
         editModelButton = null
         removeModelButton = null
         mainPanel = null
+    }
+
+    private data class SandboxOption(val id: String, val label: String) {
+        override fun toString(): String = label
+    }
+
+    private class SandboxOptionRenderer : javax.swing.DefaultListCellRenderer() {
+        override fun getListCellRendererComponent(
+            list: javax.swing.JList<*>?,
+            value: Any?,
+            index: Int,
+            isSelected: Boolean,
+            cellHasFocus: Boolean
+        ): java.awt.Component {
+            val component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
+            if (value is SandboxOption) {
+                text = value.label
+            }
+            return component
+        }
     }
 
     private fun createSectionTitle(text: String): JComponent {

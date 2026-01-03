@@ -1,5 +1,6 @@
 package com.asakii.server
 
+import com.asakii.ai.agent.sdk.AiAgentProvider
 import com.asakii.plugin.bridge.JetBrainsApiImpl
 import com.asakii.plugin.bridge.JetBrainsRSocketHandler
 import com.asakii.plugin.hooks.IdeaFileSyncHooks
@@ -19,6 +20,7 @@ import com.asakii.settings.McpDefaults
 import com.asakii.settings.McpSettingsService
 import com.intellij.openapi.components.service
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -168,8 +170,23 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 val codexPath = settings.codexPath
                     .takeIf { it.isNotBlank() }
                     ?: AgentSettingsService.detectCodexPath().takeIf { it.isNotBlank() }
+                val userInteractionBackends = settings.getUserInteractionMcpProviders()
+                val jetbrainsBackends = settings.getJetbrainsMcpProviders()
+                val context7Backends = settings.getContext7McpProviders()
+                val terminalBackends = settings.getTerminalMcpProviders()
+                val gitBackends = settings.getGitMcpProviders()
                 val mcpEnabledBackends = settings.getMcpEnabledProviders()
-                logger.info("📦 Loading agent settings: nodePath=${settings.nodePath.ifBlank { "(system PATH)" }}, model=${settings.defaultModelEnum.displayName}, thinkingLevel=$thinkingLevelName (${settings.defaultThinkingTokens} tokens), permissionMode=${settings.permissionMode}, userInteractionMcp=${settings.enableUserInteractionMcp}, jetbrainsMcp=${settings.enableJetBrainsMcp}, mcpBackends=${mcpEnabledBackends.joinToString()}, defaultBypass=${settings.defaultBypassPermissions}")
+                logger.info(
+                    "📦 Loading agent settings: nodePath=${settings.nodePath.ifBlank { "(system PATH)" }}, " +
+                        "model=${settings.defaultModelEnum.displayName}, thinkingLevel=$thinkingLevelName " +
+                        "(${settings.defaultThinkingTokens} tokens), permissionMode=${settings.permissionMode}, " +
+                        "userInteractionMcp=${settings.enableUserInteractionMcp}(${userInteractionBackends.joinToString()}), " +
+                        "jetbrainsMcp=${settings.enableJetBrainsMcp}(${jetbrainsBackends.joinToString()}), " +
+                        "context7Mcp=${settings.enableContext7Mcp}(${context7Backends.joinToString()}), " +
+                        "terminalMcp=${settings.enableTerminalMcp}(${terminalBackends.joinToString()}), " +
+                        "gitMcp=${settings.enableGitMcp}(${gitBackends.joinToString()}), " +
+                        "defaultBypass=${settings.defaultBypassPermissions}"
+                )
 
                 // 创建 IDEA 文件同步 hooks
                 val fileSyncHooks = IdeaFileSyncHooks.create(project)
@@ -186,6 +203,11 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         context7ApiKey = settings.context7ApiKey.takeIf { it.isNotBlank() },
                         enableTerminalMcp = settings.enableTerminalMcp,
                         enableGitMcp = settings.enableGitMcp,
+                        userInteractionMcpBackends = userInteractionBackends,
+                        jetbrainsMcpBackends = jetbrainsBackends,
+                        context7McpBackends = context7Backends,
+                        terminalMcpBackends = terminalBackends,
+                        gitMcpBackends = gitBackends,
                         mcpServersConfig = loadMcpServersConfig(settings),
                         mcpInstructions = loadMcpInstructions(settings),
                         dangerouslySkipPermissions = settings.defaultBypassPermissions,
@@ -196,7 +218,10 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                     codex = CodexDefaults(
                         binaryPath = codexPath,
                         webSearchEnabled = settings.codexWebSearchEnabled,
-                        defaultModelId = settings.codexDefaultModelId
+                        defaultModelId = settings.codexDefaultModelId,
+                        sandboxMode = settings.codexDefaultSandboxMode,
+                        defaultReasoningEffort = settings.codexDefaultReasoningEffort,
+                        defaultReasoningSummary = settings.codexDefaultReasoningSummary
                     ),
                     mcpEnabledBackends = mcpEnabledBackends,
                     customModels = settings.getCustomModels().map { model ->
@@ -334,15 +359,8 @@ class HttpServerProjectService(private val project: Project) : Disposable {
      * 根据启用的 MCP 服务器加载对应的指令（从设置中获取，支持自定义）
      */
     private fun loadMcpInstructions(settings: AgentSettingsService): String? {
-        val instructions = mutableListOf<String>()
-
-        // Context7 MCP 指令
-        if (settings.enableContext7Mcp) {
-            instructions.add(settings.effectiveContext7Instructions)
-            logger.info("📝 Loaded Context7 MCP instructions")
-        }
-
-        return instructions.takeIf { it.isNotEmpty() }?.joinToString("\n\n")
+        // MCP 指令改为按服务器维度追加（见 loadMcpServersConfig / prepareMcpSession）
+        return null
     }
 
     /**
@@ -364,7 +382,9 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 enabled = true,
                 url = McpDefaults.Context7Server.URL,
                 headers = headers,
-                description = McpDefaults.Context7Server.DESCRIPTION
+                description = McpDefaults.Context7Server.DESCRIPTION,
+                instructions = settings.effectiveContext7Instructions,
+                enabledBackends = settings.getContext7McpProviders()
             ))
             logger.info("✅ Loaded MCP Server config: context7 (type=http)")
         } else {
@@ -398,6 +418,27 @@ class HttpServerProjectService(private val project: Project) : Disposable {
     private fun loadCustomMcpServers(mcpSettings: McpSettingsService): List<McpServerConfig> {
         val configs = mutableListOf<McpServerConfig>()
         val json = Json { ignoreUnknownKeys = true }
+        val settings = AgentSettingsService.getInstance()
+
+        fun parseBackendKeys(raw: String): Set<String> {
+            if (raw.isBlank()) return emptySet()
+            val parsed = try {
+                json.decodeFromString<List<String>>(raw).toSet()
+            } catch (_: Exception) {
+                raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            }
+            return parsed
+        }
+
+        fun parseEnabledBackends(entryObj: kotlinx.serialization.json.JsonObject): Set<AiAgentProvider>? {
+            val element = entryObj["enabledBackends"] ?: return null
+            val rawKeys = when (element) {
+                is kotlinx.serialization.json.JsonArray -> element.mapNotNull { it.jsonPrimitive.contentOrNull }.toSet()
+                is kotlinx.serialization.json.JsonPrimitive -> parseBackendKeys(element.contentOrNull ?: "")
+                else -> return null
+            }
+            return settings.toProviders(rawKeys)
+        }
 
         // 合并两个级别的配置（Global、Project）
         val allConfigs = listOf(
@@ -438,6 +479,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
 
                     // 读取元数据
                     val instructions = entryObj["instructions"]?.jsonPrimitive?.content
+                    val enabledBackends = parseEnabledBackends(entryObj)
 
                     configs.add(McpServerConfig(
                         name = serverName,
@@ -448,7 +490,8 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         env = env,
                         url = url,
                         headers = headers,
-                        instructions = instructions
+                        instructions = instructions,
+                        enabledBackends = enabledBackends
                     ))
                     logger.info("✅ Loaded custom MCP Server: $serverName (type=$serverType)")
                 }
