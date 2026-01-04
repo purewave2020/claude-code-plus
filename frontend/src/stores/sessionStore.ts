@@ -415,7 +415,9 @@ export const useSessionStore = defineStore('session', () => {
     log.info(`[SessionStore] 创建 Tab: ${tab.tabId}, 后端: ${backendType}`)
 
     // 获取连接设置（根据后端类型）
-    const connectOptions: TabConnectOptions = options || getConnectOptionsForBackend(backendType, settingsStore)
+    const baseConnectOptions = getConnectOptionsForBackend(backendType, settingsStore)
+    const { backendType: _ignoredBackendType, ...connectOverrides } = options ?? {}
+    const connectOptions: TabConnectOptions = { ...baseConnectOptions, ...connectOverrides }
 
     log.info(`[SessionStore] 新 Tab 使用设置:`, connectOptions)
 

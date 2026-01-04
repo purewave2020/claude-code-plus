@@ -313,7 +313,7 @@ async function startNewSessionWithBackend(backendType: BackendType) {
 
   // 如果正在生成或连接中，创建新的 Tab
   if (isGenerating || isConnecting) {
-    await sessionStore.createTab({ backendType })
+    await sessionStore.createTab(undefined, { backendType })
     return
   }
 
