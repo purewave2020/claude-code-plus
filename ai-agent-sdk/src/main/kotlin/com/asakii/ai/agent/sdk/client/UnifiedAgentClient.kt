@@ -47,6 +47,15 @@ interface UnifiedAgentClient {
      */
     fun getCapabilities(): AgentCapabilities
 
+    /**
+     * 获取当前 provider 的“真实会话 ID”：
+     * - Claude：Claude CLI 的 session id（一般在 system_init 后才可用）
+     * - Codex：threadId（connect 后可用）
+     *
+     * 默认返回 null，表示该 provider/实现无法在当前阶段提供会话 ID。
+     */
+    fun getProviderSessionId(): String? = null
+
     // ==================== 可选方法（根据 capabilities 决定是否可用）====================
 
     /**

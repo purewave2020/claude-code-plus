@@ -227,12 +227,15 @@ class AiAgentRpcServiceImpl(
         sdkLog.info("[connect] client connected: isConnected=${newClient.isConnected()}")
 
         val rpcProvider = currentProvider.toRpcProvider()
+        val providerSessionId = newClient.getProviderSessionId()?.takeIf { it.isNotBlank() }
         val resolvedSystemPrompt = (connectOptions.systemPrompt as? String?) ?: normalizedOptions.systemPrompt
         lastConnectOptions = normalizedOptions.copy(
             provider = rpcProvider,
             model = connectOptions.model,
             systemPrompt = resolvedSystemPrompt,
-            metadata = connectOptions.metadata
+            metadata = connectOptions.metadata,
+            // Codex connect 后已拿到 threadId，这里顺手记住，方便后续无参数 connect/reconnect 也能续上。
+            resumeSessionId = providerSessionId ?: normalizedOptions.resumeSessionId
         )
 
         sdkLog.info("✅ [SDK] 已连接: provider=${connectOptions.provider}, model=${connectOptions.model ?: "default"}")
@@ -246,7 +249,8 @@ class AiAgentRpcServiceImpl(
         val projectCwd = ideTools.getProjectPath().takeIf { it.isNotBlank() }
 
         return RpcConnectResult(
-            sessionId = sessionId,
+            // 对外暴露 provider 的真实会话 ID（Codex=threadId）；Claude 仍沿用内部 sessionId，后续靠 system_init 覆盖。
+            sessionId = providerSessionId ?: sessionId,
             provider = rpcProvider,
             model = connectOptions.model,
             status = RpcSessionStatus.CONNECTED,

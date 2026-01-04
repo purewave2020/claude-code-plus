@@ -210,6 +210,8 @@ internal class CodexAgentClientImpl(
         return client != null && threadId != null
     }
 
+    override fun getProviderSessionId(): String? = threadId
+
     override fun getCapabilities(): AgentCapabilities = CodexCapabilities
 
     override suspend fun setModel(model: String): String? {
