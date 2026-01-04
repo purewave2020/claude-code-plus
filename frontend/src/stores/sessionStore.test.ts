@@ -72,6 +72,7 @@ describe('sessionStore.createTab', () => {
     const sessionStore = useSessionStore()
     const tab: any = await sessionStore.createTab(undefined, { backendType: 'codex' })
 
+    expect(sessionStore.currentBackendType).toBe('codex')
     expect(tab.backendType.value).toBe('codex')
     expect(tab.modelId.value).toBe('gpt-5.2')
     expect(tab.__initialConnectOptions?.continueConversation).toBeUndefined()
@@ -89,10 +90,10 @@ describe('sessionStore.createTab', () => {
       resumeSessionId: 'thread_test_123',
     })
 
+    expect(sessionStore.currentBackendType).toBe('codex')
     expect(tab.backendType.value).toBe('codex')
     expect(tab.modelId.value).toBe('gpt-5.2-codex')
     expect(tab.__initialConnectOptions?.continueConversation).toBe(true)
     expect(tab.__initialConnectOptions?.resumeSessionId).toBe('thread_test_123')
   })
 })
-

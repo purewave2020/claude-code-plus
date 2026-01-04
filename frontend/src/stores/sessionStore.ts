@@ -411,6 +411,7 @@ export const useSessionStore = defineStore('session', () => {
     // 切换到新 Tab
     currentTab.value = tab
     currentConnectionState.value = ConnectionStatus.DISCONNECTED
+    currentBackendState.value = backendType
 
     log.info(`[SessionStore] 创建 Tab: ${tab.tabId}, 后端: ${backendType}`)
 
