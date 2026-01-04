@@ -519,7 +519,7 @@ export const useSessionStore = defineStore('session', () => {
       aiAgentService.getHistoryMetadata({
         sessionId: externalSessionId,
         projectPath
-      }).then(metadata => {
+      }, resolvedBackendType).then(metadata => {
         if (metadata.customTitle) {
           tab.rename(metadata.customTitle)
           log.info(`[SessionStore] 使用 customTitle 作为 tab 名称: ${metadata.customTitle}`)

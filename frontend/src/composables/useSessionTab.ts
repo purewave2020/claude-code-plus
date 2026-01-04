@@ -976,7 +976,8 @@ export function useSessionTab(initialOrder: number = 0) {
         try {
             // 调用非流式 API，一次性获取结果
             const result = await aiAgentService.loadHistory(
-                {...params, offset, limit}
+                {...params, offset, limit},
+                backendType.value
             )
 
             log.info(`[Tab ${tabId}] 📜 历史加载完成: offset=${offset}, count=${result.count}, availableCount=${result.availableCount}, mode=${insertMode}`)
@@ -1022,7 +1023,7 @@ export function useSessionTab(initialOrder: number = 0) {
      */
     async function probeHistoryTotal(params: { sessionId?: string; projectPath?: string }): Promise<number | null> {
         try {
-            const metadata = await aiAgentService.getHistoryMetadata(params)
+            const metadata = await aiAgentService.getHistoryMetadata(params, backendType.value)
             return metadata.totalLines
         } catch (error) {
             log.warn(`[Tab ${tabId}] 获取历史元数据失败:`, error)

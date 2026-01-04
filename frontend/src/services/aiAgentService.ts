@@ -68,12 +68,14 @@ export class AiAgentService {
      * 加载历史消息（非流式，一次性返回结果）
      */
     async loadHistory(
-        params: { sessionId?: string; projectPath?: string; offset?: number; limit?: number }
+        params: { sessionId?: string; projectPath?: string; offset?: number; limit?: number },
+        provider?: string
     ): Promise<{ messages: RpcMessage[]; offset: number; count: number; availableCount: number }> {
         console.log('📜 [AiAgentService] 加载历史 (HTTP protobuf):', params)
 
         const baseUrl = resolveServerHttpUrl()
-        const url = `${baseUrl}/api/history/load.pb`
+        const providerQuery = provider ? `?provider=${encodeURIComponent(provider)}` : ''
+        const url = `${baseUrl}/api/history/load.pb${providerQuery}`
 
         const body = ProtoCodec.encodeLoadHistoryRequest({
             sessionId: params.sessionId,
@@ -163,12 +165,14 @@ export class AiAgentService {
      * @returns 历史文件元数据
      */
     async getHistoryMetadata(
-        params: { sessionId?: string; projectPath?: string }
+        params: { sessionId?: string; projectPath?: string },
+        provider?: string
     ): Promise<HistoryMetadata> {
         console.log('📊 [AiAgentService] 获取历史元数据 (HTTP protobuf):', params)
 
         const baseUrl = resolveServerHttpUrl()
-        const url = `${baseUrl}/api/history/metadata.pb`
+        const providerQuery = provider ? `?provider=${encodeURIComponent(provider)}` : ''
+        const url = `${baseUrl}/api/history/metadata.pb${providerQuery}`
 
         const body = ProtoCodec.encodeGetHistoryMetadataRequest({
             sessionId: params.sessionId,

@@ -73,7 +73,7 @@
                     <div class="session-meta">
                       <span>{{ formatRelativeTime(session.timestamp) }}</span>
                       <span>·</span>
-                      <span>{{ session.messageCount }} {{ $t('session.messages') }}</span>
+                      <span>{{ formatMessageCount(session.messageCount) }} {{ $t('session.messages') }}</span>
                     </div>
                   </div>
                 </button>
@@ -108,7 +108,7 @@
                       <div class="session-meta">
                         <span>{{ formatRelativeTime(session.timestamp) }}</span>
                         <span>·</span>
-                        <span>{{ session.messageCount }} {{ $t('session.messages') }}</span>
+                        <span>{{ formatMessageCount(session.messageCount) }} {{ $t('session.messages') }}</span>
                       </div>
                     </div>
                   </button>
@@ -241,6 +241,11 @@ function formatRelativeTime(timestamp: number): string {
     month: 'short',
     day: 'numeric'
   })
+}
+
+function formatMessageCount(messageCount: number): string {
+  if (messageCount < 0) return '—'
+  return String(messageCount)
 }
 
 function handleKeydown(e: KeyboardEvent) {

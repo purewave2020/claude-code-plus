@@ -50,7 +50,7 @@
           </div>
           <div class="session-meta">
             <span class="session-time">{{ formatTime(session.timestamp) }}</span>
-            <span class="session-count">{{ session.messageCount || 0 }} messages</span>
+            <span class="session-count">{{ formatMessageCount(session.messageCount) }} messages</span>
           </div>
         </div>
 
@@ -167,6 +167,12 @@ function formatTime(timestamp: number): string {
     month: 'short',
     day: 'numeric'
   })
+}
+
+function formatMessageCount(messageCount?: number): string {
+  if (messageCount == null) return '—'
+  if (messageCount < 0) return '—'
+  return String(messageCount)
 }
 
 async function startRename(session: Session) {

@@ -34,9 +34,12 @@ import io.ktor.server.websocket.*
 import com.asakii.rpc.proto.GetHistoryMetadataRequest
 import com.asakii.rpc.proto.LoadHistoryRequest
 import com.asakii.server.history.HistoryJsonlLoader
+import com.asakii.server.history.CodexHistoryMapper
 import com.asakii.server.rpc.AiAgentRpcServiceImpl
 import com.asakii.codex.agent.sdk.appserver.CodexAppServerClient
 import com.asakii.rpc.api.RpcHistorySession
+import com.asakii.rpc.api.RpcHistoryMetadata
+import com.asakii.rpc.api.RpcHistoryResult
 import com.asakii.rpc.api.RpcHistorySessionsResult
 import com.asakii.server.mcp.JetBrainsMcpServerProvider
 import com.asakii.server.mcp.DefaultJetBrainsMcpServerProvider
@@ -818,19 +821,29 @@ class HttpApiServer(
                     // 历史元数据（protobuf，HTTP 直读 JSONL）
                     post("/history/metadata.pb") {
                         try {
+                            val provider = call.request.queryParameters["provider"]?.lowercase()?.trim()
                             val body = call.receive<ByteArray>()
                             val req = GetHistoryMetadataRequest.parseFrom(body)
                             val sessionId = req.sessionId
                             val projectPath = req.projectPath
 
-                            val rpcService = AiAgentRpcServiceImpl(
-                                ideTools = ideTools,
-                                clientCaller = null,
-                                jetBrainsMcpServerProvider = jetBrainsMcpServerProvider,
-                                terminalMcpServerProvider = terminalMcpServerProvider,
-                                gitMcpServerProvider = gitMcpServerProvider
-                            )
-                            val meta = rpcService.getHistoryMetadata(sessionId, projectPath).toProto()
+                            val meta = if (provider == "codex") {
+                                val threadId = sessionId.takeIf { it.isNotBlank() }
+                                    ?: return@post call.respond(
+                                        HttpStatusCode.BadRequest,
+                                        mapOf("error" to "Missing sessionId")
+                                    )
+                                getCodexHistoryMetadata(threadId, projectPath.takeIf { it.isNotBlank() }).toProto()
+                            } else {
+                                val rpcService = AiAgentRpcServiceImpl(
+                                    ideTools = ideTools,
+                                    clientCaller = null,
+                                    jetBrainsMcpServerProvider = jetBrainsMcpServerProvider,
+                                    terminalMcpServerProvider = terminalMcpServerProvider,
+                                    gitMcpServerProvider = gitMcpServerProvider
+                                )
+                                rpcService.getHistoryMetadata(sessionId, projectPath).toProto()
+                            }
 
                             call.respondBytes(
                                 bytes = meta.toByteArray(),
@@ -848,21 +861,36 @@ class HttpApiServer(
                     // 历史内容加载（protobuf，HTTP 直读 JSONL）
                     post("/history/load.pb") {
                         try {
+                            val provider = call.request.queryParameters["provider"]?.lowercase()?.trim()
                             val body = call.receive<ByteArray>()
                             val req = LoadHistoryRequest.parseFrom(body)
-                            val rpcService = AiAgentRpcServiceImpl(
-                                ideTools = ideTools,
-                                clientCaller = null,
-                                jetBrainsMcpServerProvider = jetBrainsMcpServerProvider,
-                                terminalMcpServerProvider = terminalMcpServerProvider,
-                                gitMcpServerProvider = gitMcpServerProvider
-                            )
-                            val result = rpcService.loadHistory(
-                                req.sessionId,
-                                req.projectPath,
-                                req.offset,
-                                req.limit
-                            ).toProto()
+                            val result = if (provider == "codex") {
+                                val threadId = req.sessionId.takeIf { it.isNotBlank() }
+                                    ?: return@post call.respond(
+                                        HttpStatusCode.BadRequest,
+                                        mapOf("error" to "Missing sessionId")
+                                    )
+                                loadCodexHistory(
+                                    threadId = threadId,
+                                    fallbackProjectPath = req.projectPath.takeIf { it.isNotBlank() },
+                                    offset = req.offset,
+                                    limit = req.limit
+                                ).toProto()
+                            } else {
+                                val rpcService = AiAgentRpcServiceImpl(
+                                    ideTools = ideTools,
+                                    clientCaller = null,
+                                    jetBrainsMcpServerProvider = jetBrainsMcpServerProvider,
+                                    terminalMcpServerProvider = terminalMcpServerProvider,
+                                    gitMcpServerProvider = gitMcpServerProvider
+                                )
+                                rpcService.loadHistory(
+                                    req.sessionId,
+                                    req.projectPath,
+                                    req.offset,
+                                    req.limit
+                                ).toProto()
+                            }
 
                             call.respondBytes(
                                 bytes = result.toByteArray(),
@@ -1451,12 +1479,19 @@ class HttpApiServer(
             val fallbackProjectPath = ideTools.getProjectPath()
             RpcHistorySessionsResult(
                 sessions = threads.map { thread ->
-                    val cwd = thread.cwd.takeIf { it.isNotBlank() } ?: fallbackProjectPath
+                    val resumedThread = try {
+                        client.resumeThread(thread.id)
+                    } catch (e: Exception) {
+                        logger.warn(e) { "⚠️ [HTTP] Failed to resume Codex thread for messageCount: ${thread.id}" }
+                        null
+                    }
+                    val messageCount = resumedThread?.let { CodexHistoryMapper.countMessages(it) } ?: -1
+                    val cwd = (resumedThread?.cwd ?: thread.cwd).takeIf { it.isNotBlank() } ?: fallbackProjectPath
                     RpcHistorySession(
                         sessionId = thread.id,
                         firstUserMessage = thread.preview,
                         timestamp = thread.createdAt,
-                        messageCount = 0,
+                        messageCount = messageCount,
                         projectPath = cwd,
                         customTitle = null
                     )
@@ -1467,6 +1502,72 @@ class HttpApiServer(
         }
     }
 
+    private suspend fun getCodexHistoryMetadata(
+        threadId: String,
+        fallbackProjectPath: String?
+    ): RpcHistoryMetadata {
+        val config = serviceConfigProvider()
+        val codexPath = config.codex.binaryPath?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
+        val workingDirectory = (fallbackProjectPath ?: ideTools.getProjectPath())
+            .takeIf { it.isNotBlank() }
+            ?.let { Path.of(it) }
+        val configOverrides = buildCodexConfigOverrides(config.codex)
+
+        val client = CodexAppServerClient.create(
+            codexPath = codexPath,
+            workingDirectory = workingDirectory,
+            configOverrides = configOverrides,
+            scope = scope
+        )
+
+        return try {
+            client.initialize(
+                clientName = "claude-code-plus",
+                clientTitle = "Claude Code Plus",
+                clientVersion = "1.0.0"
+            )
+
+            val thread = client.resumeThread(threadId)
+            val fallback = fallbackProjectPath ?: ideTools.getProjectPath()
+            CodexHistoryMapper.buildMetadata(thread, fallback)
+        } finally {
+            client.close()
+        }
+    }
+
+    private suspend fun loadCodexHistory(
+        threadId: String,
+        fallbackProjectPath: String?,
+        offset: Int,
+        limit: Int
+    ): RpcHistoryResult {
+        val config = serviceConfigProvider()
+        val codexPath = config.codex.binaryPath?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
+        val workingDirectory = (fallbackProjectPath ?: ideTools.getProjectPath())
+            .takeIf { it.isNotBlank() }
+            ?.let { Path.of(it) }
+        val configOverrides = buildCodexConfigOverrides(config.codex)
+
+        val client = CodexAppServerClient.create(
+            codexPath = codexPath,
+            workingDirectory = workingDirectory,
+            configOverrides = configOverrides,
+            scope = scope
+        )
+
+        return try {
+            client.initialize(
+                clientName = "claude-code-plus",
+                clientTitle = "Claude Code Plus",
+                clientVersion = "1.0.0"
+            )
+
+            val thread = client.resumeThread(threadId)
+            CodexHistoryMapper.buildHistoryResult(thread, offset, limit)
+        } finally {
+            client.close()
+        }
+    }
 
     private suspend fun archiveCodexHistorySession(threadId: String): Boolean {
         val config = serviceConfigProvider()
