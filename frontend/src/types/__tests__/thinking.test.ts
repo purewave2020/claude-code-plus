@@ -56,7 +56,7 @@ describe('Preset Lookups', () => {
     it('should return all Codex effort levels as array', () => {
       const levels = getCodexEffortLevels()
       expect(Array.isArray(levels)).toBe(true)
-      expect(levels.length).toBe(5) // MINIMAL, LOW, MEDIUM, HIGH, XHIGH
+      expect(levels.length).toBe(6) // NONE, MINIMAL, LOW, MEDIUM, HIGH, XHIGH
     })
 
     it('should include MEDIUM as default level', () => {
@@ -109,8 +109,8 @@ describe('Preset Lookups', () => {
 
 describe('Conversion Functions', () => {
   describe('claudeTokensToCodexEffort', () => {
-    it('should return minimal for 0 tokens', () => {
-      expect(claudeTokensToCodexEffort(0)).toBe('minimal')
+    it('should return none for 0 tokens', () => {
+      expect(claudeTokensToCodexEffort(0)).toBe('none')
     })
 
     it('should return minimal for low tokens', () => {
@@ -145,6 +145,7 @@ describe('Conversion Functions', () => {
     })
 
     it('should return correct tokens for each effort level', () => {
+      expect(codexEffortToClaudeTokens('none')).toBe(0)
       expect(codexEffortToClaudeTokens('minimal')).toBe(1024)
       expect(codexEffortToClaudeTokens('low')).toBe(4096)
       expect(codexEffortToClaudeTokens('medium')).toBe(8096)
@@ -301,6 +302,15 @@ describe('Type Guards', () => {
         summary: 'auto',
       }
       expect(isThinkingEnabled(config)).toBe(true)
+    })
+
+    it('should return false for Codex with none effort', () => {
+      const config: CodexThinkingConfig = {
+        type: 'codex',
+        effort: 'none',
+        summary: 'auto',
+      }
+      expect(isThinkingEnabled(config)).toBe(false)
     })
 
   })

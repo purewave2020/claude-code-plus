@@ -172,7 +172,7 @@ export interface CodexBackendConfig extends BaseBackendConfig {
 /**
  * Codex reasoning effort levels
  */
-export type CodexReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+export type CodexReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
 
 /**
  * Codex reasoning summary modes

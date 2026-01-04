@@ -610,7 +610,7 @@ const codexSandboxMode = computed(() => {
 
 const codexReasoningEffort = computed<CodexReasoningEffort>(() => {
   const stored = (settingsStore.settings as any).codexReasoningEffort
-  if (stored === undefined || stored === null || stored === 'none') {
+  if (stored === undefined || stored === null) {
     return DEFAULT_CODEX_CONFIG.reasoningEffort
   }
   return stored

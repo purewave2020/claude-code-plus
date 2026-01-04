@@ -6,7 +6,7 @@ export type CodexApprovalMode = 'untrusted' | 'on-failure' | 'on-request' | 'nev
 
 export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
 
-export type CodexReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+export type CodexReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
 
 export interface CodexModelInfo {
   id: string
@@ -99,6 +99,12 @@ export const REASONING_EFFORT_OPTIONS: Array<{
   description: string
   shortLabel: string
 }> = [
+  {
+    value: 'none',
+    label: 'none',
+    description: 'Disable reasoning (fastest).',
+    shortLabel: 'none',
+  },
   {
     value: 'minimal',
     label: 'minimal',

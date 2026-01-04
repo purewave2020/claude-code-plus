@@ -165,7 +165,9 @@ export const useSettingsStore = defineStore('settings', () => {
   function migrateSettings(rawSettings: any): Settings {
     // 迁移旧的单后端设置到新的多后端结构
     const rawCodexEffort = rawSettings.codexReasoningEffort
-    const normalizedCodexEffort = rawCodexEffort === 'none' ? null : rawCodexEffort
+    const normalizedCodexEffort = rawCodexEffort === undefined
+      ? DEFAULT_SETTINGS.codexReasoningEffort
+      : rawCodexEffort
     const rawCodexSandboxMode = rawSettings.codexSandboxMode
     const normalizedCodexSandboxMode = rawCodexSandboxMode === 'full-access'
       ? 'danger-full-access'
@@ -181,7 +183,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
       // 新字段使用默认值（如果没有）
       codexModel: rawSettings.codexModel || DEFAULT_SETTINGS.codexModel,
-      codexReasoningEffort: normalizedCodexEffort ?? DEFAULT_SETTINGS.codexReasoningEffort,
+      codexReasoningEffort: normalizedCodexEffort,
       codexReasoningSummary: rawSettings.codexReasoningSummary || DEFAULT_SETTINGS.codexReasoningSummary,
       codexSandboxMode: normalizedCodexSandboxMode || DEFAULT_SETTINGS.codexSandboxMode,
 
@@ -812,10 +814,7 @@ export const useSettingsStore = defineStore('settings', () => {
       settings.value.codexModel = config.modelId
     }
     if (config.reasoningEffort !== undefined) {
-      const rawEffort = config.reasoningEffort as any
-      settings.value.codexReasoningEffort = rawEffort === 'none'
-        ? DEFAULT_SETTINGS.codexReasoningEffort
-        : config.reasoningEffort
+      settings.value.codexReasoningEffort = config.reasoningEffort
     }
     if (config.reasoningSummary !== undefined) {
       settings.value.codexReasoningSummary = config.reasoningSummary

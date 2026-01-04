@@ -24,6 +24,7 @@ enum class SandboxMode(val wireValue: String) {
 }
 
 enum class ModelReasoningEffort(val wireValue: String) {
+    NONE("none"),
     MINIMAL("minimal"),
     LOW("low"),
     MEDIUM("medium"),
