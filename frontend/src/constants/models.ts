@@ -95,9 +95,9 @@ export function canToggleThinking(model: BaseModel): boolean {
  */
 const _allModels = ref<ModelInfo[]>([
   // 默认内置模型
-  { id: 'OPUS_45', displayName: 'Opus 4.5', modelId: 'claude-opus-4-5-20250929', isBuiltIn: true },
+  { id: 'OPUS_45', displayName: 'Opus 4.5', modelId: 'claude-opus-4-5-20251101', isBuiltIn: true },
   { id: 'SONNET_45', displayName: 'Sonnet 4.5', modelId: 'claude-sonnet-4-5-20250929', isBuiltIn: true },
-  { id: 'HAIKU_45', displayName: 'Haiku 4.5', modelId: 'claude-haiku-4-5-20250929', isBuiltIn: true },
+  { id: 'HAIKU_45', displayName: 'Haiku 4.5', modelId: 'claude-haiku-4-5-20251001', isBuiltIn: true },
 ])
 
 /**

@@ -159,6 +159,22 @@ export const useSettingsStore = defineStore('settings', () => {
   const claudeModels = ref<BackendModelInfo[]>(CLAUDE_MODELS)
   const codexModels = ref<BackendModelInfo[]>(CODEX_MODELS)
 
+  const CLAUDE_MODEL_ID_ALIASES: Record<string, string> = {
+    OPUS_45: 'claude-opus-4-5-20251101',
+    SONNET_45: 'claude-sonnet-4-5-20250929',
+    HAIKU_45: 'claude-haiku-4-5-20251001',
+    'claude-opus-4-5-20250929': 'claude-opus-4-5-20251101',
+    'claude-haiku-4-5-20250929': 'claude-haiku-4-5-20251001',
+  }
+
+  function normalizeClaudeModelId(modelId?: string): string {
+    if (!modelId) {
+      return DEFAULT_SETTINGS.claudeModel
+    }
+    return CLAUDE_MODEL_ID_ALIASES[modelId] ?? modelId
+  }
+
+
   /**
    * 迁移旧设置到新格式
    */
@@ -177,7 +193,9 @@ export const useSettingsStore = defineStore('settings', () => {
       ...rawSettings,
 
       // 迁移旧字段到 Claude 特定字段
-      claudeModel: rawSettings.claudeModel || rawSettings.model || DEFAULT_SETTINGS.claudeModel,
+      claudeModel: normalizeClaudeModelId(
+        rawSettings.claudeModel || rawSettings.model || DEFAULT_SETTINGS.claudeModel
+      ),
       claudeThinkingEnabled: rawSettings.claudeThinkingEnabled ?? rawSettings.thinkingEnabled ?? true,
       claudeThinkingTokens: rawSettings.claudeThinkingTokens ?? rawSettings.maxThinkingTokens ?? 8096,
 
@@ -217,7 +235,7 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   function setModelForBackend(backendType: BackendType, modelId: string) {
     if (backendType === 'claude') {
-      settings.value.claudeModel = modelId
+      settings.value.claudeModel = normalizeClaudeModelId(modelId)
     } else {
       settings.value.codexModel = modelId
     }
