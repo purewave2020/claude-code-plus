@@ -76,6 +76,17 @@ interface AiAgentRpcService {
     suspend fun setPermissionMode(mode: RpcPermissionMode): RpcSetPermissionModeResult
 
     /**
+     * 设置沙箱模式（仅 Codex 支持，无需重连）
+     *
+     * Codex 的 turn/start API 支持每轮设置 sandboxPolicy，因此可以实时切换。
+     * 下一次 query 时会使用新的沙箱模式。
+     *
+     * @param mode 沙箱模式枚举
+     * @return 切换结果
+     */
+    suspend fun setSandboxMode(mode: RpcSandboxMode): RpcSetSandboxModeResult
+
+    /**
      * 获取历史消息
      * @return 消息列表
      */

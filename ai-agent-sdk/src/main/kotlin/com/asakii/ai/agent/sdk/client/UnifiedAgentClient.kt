@@ -6,6 +6,7 @@ import com.asakii.ai.agent.sdk.capabilities.AiPermissionMode
 import com.asakii.ai.agent.sdk.connect.AiAgentConnectOptions
 import com.asakii.ai.agent.sdk.model.UiStreamEvent
 import com.asakii.ai.agent.sdk.model.UnifiedContentBlock
+import com.asakii.codex.agent.sdk.SandboxMode
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -86,6 +87,24 @@ interface UnifiedAgentClient {
      * @throws IllegalArgumentException if mode not in capabilities.supportedPermissionModes
      */
     suspend fun setPermissionMode(mode: AiPermissionMode)
+
+    /**
+     * 切换沙箱模式（仅 Codex 支持，无需重连）。
+     * Codex 的 turn/start API 支持每轮设置 sandboxPolicy，因此可以实时切换。
+     * @param mode 目标沙箱模式
+     * @throws UnsupportedOperationException 如果不支持此操作
+     */
+    suspend fun setSandboxMode(mode: SandboxMode) {
+        throw UnsupportedOperationException(
+            "setSandboxMode is not supported by ${provider.name}"
+        )
+    }
+
+    /**
+     * 获取当前沙箱模式（仅 Codex 支持）。
+     * @return 当前沙箱模式，如果不支持则返回 null
+     */
+    fun getCurrentSandboxMode(): SandboxMode? = null
 
     /**
      * 动态设置思考 token 上限（无需重连）。

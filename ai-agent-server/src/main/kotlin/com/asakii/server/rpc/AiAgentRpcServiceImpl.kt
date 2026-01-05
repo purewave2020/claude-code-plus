@@ -192,8 +192,17 @@ class AiAgentRpcServiceImpl(
 
     override suspend fun connect(options: RpcConnectOptions?): RpcConnectResult {
         sdkLog.info("🔌 [SDK] 建立会话: sessionId=$sessionId")
-        val normalizedOptions = options ?: lastConnectOptions ?: RpcConnectOptions()
+        var normalizedOptions = options ?: lastConnectOptions ?: RpcConnectOptions()
         sdkLog.debug("🔌 [SDK] 连接选项: provider=${normalizedOptions.provider}, model=${normalizedOptions.model}, permissionMode=${normalizedOptions.permissionMode}")
+
+        // Codex sandbox 模式变更检测：如果 sandbox 模式改变，需要创建新线程而不是恢复旧线程
+        // 因为 Codex 的 sandbox 参数只在 thread/start 时设置，resumeThread 不支持修改
+        val lastSandbox = lastConnectOptions?.sandboxMode
+        val newSandbox = normalizedOptions.sandboxMode
+        if (lastSandbox != null && newSandbox != null && lastSandbox != newSandbox) {
+            sdkLog.info("🔄 [SDK] Codex sandbox 模式变更: $lastSandbox -> $newSandbox，清除 resumeSessionId 以创建新线程")
+            normalizedOptions = normalizedOptions.copy(resumeSessionId = null)
+        }
 
         disconnectInternal()
 
@@ -350,6 +359,21 @@ class AiAgentRpcServiceImpl(
 
         sdkLog.info("鉁?[AI-Agent] 鏉冮檺妯″紡宸插垏鎹负: $mode")
         return RpcSetPermissionModeResult(mode = mode)
+    }
+
+    override suspend fun setSandboxMode(mode: RpcSandboxMode): RpcSetSandboxModeResult {
+        sdkLog.info("🔒 [AI-Agent] 切换沙箱模式 -> $mode")
+        val activeClient = client ?: error("AI Agent 尚未连接，请先调用 connect()")
+
+        // 将 RPC 沙箱模式转换为 SDK 沙箱模式
+        val sdkMode = mode.toSdkSandboxMode()
+        activeClient.setSandboxMode(sdkMode)
+
+        // 同步更新 lastConnectOptions
+        lastConnectOptions = lastConnectOptions?.copy(sandboxMode = mode)
+
+        sdkLog.info("✅ [AI-Agent] 沙箱模式已切换为: $mode")
+        return RpcSetSandboxModeResult(mode = mode)
     }
 
     override suspend fun getHistory(): RpcHistory =

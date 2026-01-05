@@ -234,6 +234,15 @@ internal class CodexAgentClientImpl(
         currentThreadOptions = options.copy(approvalPolicy = mappedPolicy)
     }
 
+    override suspend fun setSandboxMode(mode: SandboxMode) {
+        val options = currentThreadOptions ?: ThreadOptions()
+        currentThreadOptions = options.copy(sandboxMode = mode)
+    }
+
+    override fun getCurrentSandboxMode(): SandboxMode? {
+        return currentThreadOptions?.sandboxMode
+    }
+
     override suspend fun setMaxThinkingTokens(maxThinkingTokens: Int?) {
         throw UnsupportedOperationException(
             "setMaxThinkingTokens is not supported by ${provider.name}"

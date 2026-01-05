@@ -378,6 +378,26 @@ export class RSocketSession {
     }
 
     /**
+     * 设置沙箱模式（仅 Codex 支持，无需重连）
+     *
+     * Codex 的 turn/start API 支持每轮设置 sandboxPolicy，因此可以实时切换。
+     * 下一次 query 时会使用新的沙箱模式。
+     */
+    async setSandboxMode(mode: string): Promise<{ mode: string; success: boolean }> {
+        if (!this._isConnected || !this.client) {
+            throw new Error('Session not connected')
+        }
+
+        console.log('[RSocket] ← agent.setSandboxMode 发送:', JSON.stringify({mode}, null, 2))
+        const data = ProtoCodec.encodeSetSandboxModeRequest(mode)
+        const responseData = await this.client.requestResponse('agent.setSandboxMode', data)
+        const result = ProtoCodec.decodeSetSandboxModeResult(responseData)
+        console.log('[RSocket] → agent.setSandboxMode 结果:', JSON.stringify(result, null, 2))
+
+        return result
+    }
+
+    /**
      * 获取历史消息
      */
     async getHistory(): Promise<AgentStreamEvent[]> {

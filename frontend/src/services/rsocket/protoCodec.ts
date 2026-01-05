@@ -448,6 +448,84 @@ export const ProtoCodec = {
   },
 
   /**
+   * 编码 SetSandboxModeRequest（手写轻量编码）
+   *
+   * Proto 定义:
+   * message SetSandboxModeRequest {
+   *   SandboxMode mode = 1;
+   * }
+   *
+   * SandboxMode 枚举:
+   *   READ_ONLY = 0
+   *   WORKSPACE_WRITE = 1
+   *   DANGER_FULL_ACCESS = 2
+   */
+  encodeSetSandboxModeRequest(mode: string): Uint8Array {
+    const protoMode = mapSandboxModeToProto(mode)
+    // 手写 protobuf 编码: field 1 (tag=8), varint
+    const buffer: number[] = []
+    const writeVarint = (value: number) => {
+      let v = value >>> 0
+      while (v > 0x7f) {
+        buffer.push((v & 0x7f) | 0x80)
+        v >>>= 7
+      }
+      buffer.push(v)
+    }
+    // Field 1, wire type 0 (varint): tag = (1 << 3) | 0 = 8
+    buffer.push(8)
+    writeVarint(protoMode)
+    return new Uint8Array(buffer)
+  },
+
+  /**
+   * 解码 SetSandboxModeResult（手写轻量解码）
+   *
+   * Proto 定义:
+   * message SetSandboxModeResult {
+   *   SandboxMode mode = 1;
+   *   bool success = 2;
+   * }
+   */
+  decodeSetSandboxModeResult(data: Uint8Array): { mode: string; success: boolean } {
+    let mode = 'read-only'
+    let success = true
+
+    // 手写 protobuf 解码
+    let offset = 0
+    while (offset < data.length) {
+      const tag = data[offset++]
+      const fieldNumber = tag >> 3
+      const wireType = tag & 0x07
+
+      if (wireType === 0) { // varint
+        let value = 0
+        let shift = 0
+        while (offset < data.length) {
+          const byte = data[offset++]
+          value |= (byte & 0x7f) << shift
+          if ((byte & 0x80) === 0) break
+          shift += 7
+        }
+
+        if (fieldNumber === 1) {
+          // mode enum
+          switch (value) {
+            case 0: mode = 'read-only'; break
+            case 1: mode = 'workspace-write'; break
+            case 2: mode = 'danger-full-access'; break
+          }
+        } else if (fieldNumber === 2) {
+          // success bool
+          success = value !== 0
+        }
+      }
+    }
+
+    return { mode, success }
+  },
+
+  /**
    * 解码 History
    * 返回的消息数组中每个元素都是 RpcMessage 类实例，支持 instanceof 判断
    */

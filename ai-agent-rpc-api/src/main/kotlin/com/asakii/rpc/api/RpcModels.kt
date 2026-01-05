@@ -160,6 +160,15 @@ data class RpcSetPermissionModeResult(
 )
 
 /**
+ * 切换沙箱模式结果（仅 Codex 支持）
+ */
+@Serializable
+data class RpcSetSandboxModeResult(
+    val mode: RpcSandboxMode,
+    val success: Boolean = true
+)
+
+/**
  * 通用状态返回（interrupt / disconnect）
  */
 @Serializable

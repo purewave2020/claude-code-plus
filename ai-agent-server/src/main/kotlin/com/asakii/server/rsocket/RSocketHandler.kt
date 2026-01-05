@@ -118,6 +118,7 @@ class RSocketHandler(
                     "agent.disconnect" -> handleDisconnect(rpcService)
                     "agent.setModel" -> handleSetModel(dataBytes, rpcService)
                     "agent.setPermissionMode" -> handleSetPermissionMode(dataBytes, rpcService)
+                    "agent.setSandboxMode" -> handleSetSandboxMode(dataBytes, rpcService)
                     "agent.getHistory" -> handleGetHistory(rpcService)
                     "agent.truncateHistory" -> handleTruncateHistory(dataBytes, rpcService)
                     "agent.hasIdeEnvironment" -> handleHasIdeEnvironment()
@@ -228,6 +229,14 @@ class RSocketHandler(
         wsLog.info("📥 [RSocket] setPermissionMode request: mode=${req.mode}")
         val result = rpcService.setPermissionMode(req.mode.toRpc())
         wsLog.info("📤 [RSocket] setPermissionMode result: mode=${result.mode}")
+        return buildPayload { data(result.toProto().toByteArray()) }
+    }
+
+    private suspend fun handleSetSandboxMode(dataBytes: ByteArray, rpcService: AiAgentRpcService): Payload {
+        val req = SetSandboxModeRequest.parseFrom(dataBytes)
+        wsLog.info("📥 [RSocket] setSandboxMode request: mode=${req.mode}")
+        val result = rpcService.setSandboxMode(req.mode.toRpc())
+        wsLog.info("📤 [RSocket] setSandboxMode result: mode=${result.mode}")
         return buildPayload { data(result.toProto().toByteArray()) }
     }
 

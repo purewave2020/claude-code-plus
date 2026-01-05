@@ -508,6 +508,17 @@ message SetPermissionModeRequest {
   PermissionMode mode = 1;
 }
 
+// 设置沙箱模式请求（仅 Codex 支持）
+message SetSandboxModeRequest {
+  SandboxMode mode = 1;
+}
+
+// 设置沙箱模式响应
+message SetSandboxModeResult {
+  SandboxMode mode = 1;
+  bool success = 2;
+}
+
 // 设置思考 token 上限请求
 message SetMaxThinkingTokensRequest {
   optional int32 max_thinking_tokens = 1;  // null = 禁用, 0 = 禁用, 正数 = 设置上限
