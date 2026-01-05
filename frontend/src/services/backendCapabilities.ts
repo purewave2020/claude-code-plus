@@ -30,21 +30,21 @@ import {
  */
 export const CLAUDE_MODELS: BackendModelInfo[] = [
   {
-    id: 'claude-opus-4-5-20251101',
+    modelId: 'claude-opus-4-5-20251101',
     displayName: 'Claude Opus 4.5',
     description: 'Most capable model for complex tasks',
     supportsThinking: true,
     isDefault: true,
   },
   {
-    id: 'claude-sonnet-4-5-20250929',
+    modelId: 'claude-sonnet-4-5-20250929',
     displayName: 'Claude Sonnet 4.5',
     description: 'Balanced performance and cost',
     supportsThinking: true,
     isDefault: false,
   },
   {
-    id: 'claude-haiku-4-5-20251001',
+    modelId: 'claude-haiku-4-5-20251001',
     displayName: 'Claude Haiku 4.5',
     description: 'Fast and efficient for simple tasks',
     supportsThinking: true,
@@ -94,14 +94,14 @@ export const CLAUDE_CAPABILITIES: BackendCapabilities = {
  */
 export const CODEX_MODELS: BackendModelInfo[] = [
   {
-    id: 'gpt-5.2-codex',
+    modelId: 'gpt-5.2-codex',
     displayName: 'gpt-5.2-codex',
     description: 'Default Codex model',
     supportsThinking: true,
     isDefault: true,
   },
   {
-    id: 'gpt-5.2',
+    modelId: 'gpt-5.2',
     displayName: 'gpt-5.2',
     description: 'General Codex model',
     supportsThinking: true,
@@ -185,8 +185,8 @@ export function getDefaultModel(type: BackendType): BackendModelInfo | undefined
 /**
  * Get model by ID for a backend type
  */
-export function getModelById(type: BackendType, modelId: string): BackendModelInfo | undefined {
-  return getModels(type).find(m => m.id === modelId)
+export function getModelByModelId(type: BackendType, modelId: string): BackendModelInfo | undefined {
+  return getModels(type).find(m => m.modelId === modelId)
 }
 
 // ============================================================================
@@ -393,5 +393,5 @@ export function isValidThinkingConfig(type: BackendType, config: ThinkingConfig)
  * Validate model ID for a backend type
  */
 export function isValidModel(type: BackendType, modelId: string): boolean {
-  return getModels(type).some(m => m.id === modelId)
+  return getModels(type).some(m => m.modelId === modelId)
 }

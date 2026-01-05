@@ -548,7 +548,6 @@ class HttpApiServer(
                                             "codexReasoningEffort" to JsonPrimitive(config.codex.defaultReasoningEffort ?: "medium"),
                                             "codexReasoningSummary" to JsonPrimitive(config.codex.defaultReasoningSummary ?: "auto"),
                                             "codexSandboxMode" to JsonPrimitive(config.codex.sandboxMode ?: "workspace-write"),
-                                            "defaultModelId" to JsonPrimitive(config.defaultModel ?: ""),
                                             "defaultBypassPermissions" to JsonPrimitive(config.claude.dangerouslySkipPermissions),
                                             "includePartialMessages" to JsonPrimitive(config.claude.includePartialMessages),
                                             "defaultThinkingLevel" to JsonPrimitive(config.claude.defaultThinkingLevel),
@@ -564,19 +563,16 @@ class HttpApiServer(
                                     // 内置模型列表
                                     val builtInClaudeModels = listOf(
                                         mapOf(
-                                            "id" to JsonPrimitive("OPUS_45"),
                                             "displayName" to JsonPrimitive("Opus 4.5"),
                                             "modelId" to JsonPrimitive("claude-opus-4-5-20251101"),
                                             "isBuiltIn" to JsonPrimitive(true)
                                         ),
                                         mapOf(
-                                            "id" to JsonPrimitive("SONNET_45"),
                                             "displayName" to JsonPrimitive("Sonnet 4.5"),
                                             "modelId" to JsonPrimitive("claude-sonnet-4-5-20250929"),
                                             "isBuiltIn" to JsonPrimitive(true)
                                         ),
                                         mapOf(
-                                            "id" to JsonPrimitive("HAIKU_45"),
                                             "displayName" to JsonPrimitive("Haiku 4.5"),
                                             "modelId" to JsonPrimitive("claude-haiku-4-5-20251001"),
                                             "isBuiltIn" to JsonPrimitive(true)
@@ -586,7 +582,6 @@ class HttpApiServer(
                                     // 自定义模型列表
                                     val claudeCustomModels = config.customModels.map { model ->
                                         mapOf(
-                                            "id" to JsonPrimitive(model.id),
                                             "displayName" to JsonPrimitive(model.displayName),
                                             "modelId" to JsonPrimitive(model.modelId),
                                             "isBuiltIn" to JsonPrimitive(false)
@@ -595,14 +590,12 @@ class HttpApiServer(
 
                                     val builtInCodexModels = listOf(
                                         mapOf(
-                                            "id" to JsonPrimitive("gpt-5.2-codex"),
                                             "displayName" to JsonPrimitive("gpt-5.2-codex"),
                                             "modelId" to JsonPrimitive("gpt-5.2-codex"),
                                             "isBuiltIn" to JsonPrimitive(true),
                                             "supportsThinking" to JsonPrimitive(true)
                                         ),
                                         mapOf(
-                                            "id" to JsonPrimitive("gpt-5.2"),
                                             "displayName" to JsonPrimitive("gpt-5.2"),
                                             "modelId" to JsonPrimitive("gpt-5.2"),
                                             "isBuiltIn" to JsonPrimitive(true),
@@ -612,7 +605,6 @@ class HttpApiServer(
 
                                     val codexCustomModels = config.codexCustomModels.map { model ->
                                         mapOf(
-                                            "id" to JsonPrimitive(model.modelId),
                                             "displayName" to JsonPrimitive(model.displayName),
                                             "modelId" to JsonPrimitive(model.modelId),
                                             "isBuiltIn" to JsonPrimitive(false),

@@ -48,8 +48,8 @@
             >
               <option
                 v-for="model in claudeModels"
-                :key="model.id"
-                :value="model.id"
+                :key="model.modelId"
+                :value="model.modelId"
               >
                 {{ model.displayName }}
               </option>
@@ -144,8 +144,8 @@
             >
               <option
                 v-for="model in codexModels"
-                :key="model.id"
-                :value="model.id"
+                :key="model.modelId"
+                :value="model.modelId"
               >
                 {{ model.displayName }}
               </option>
@@ -336,10 +336,10 @@ const sandboxOptions = computed(() => getSandboxOptions())
 
 // Selected items
 const selectedClaudeModel = computed(() =>
-  claudeModels.value.find((m) => m.id === localClaudeConfig.value.modelId)
+  claudeModels.value.find((m) => m.modelId === localClaudeConfig.value.modelId)
 )
 const selectedCodexModel = computed(() =>
-  codexModels.value.find((m) => m.id === localCodexConfig.value.modelId)
+  codexModels.value.find((m) => m.modelId === localCodexConfig.value.modelId)
 )
 const selectedSandboxOption = computed(() =>
   sandboxOptions.value.find((o) => o.id === localCodexConfig.value.sandboxMode)

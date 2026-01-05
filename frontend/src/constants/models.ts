@@ -1,34 +1,23 @@
-import { AiModel } from '@/types/enhancedMessage'
 import { ref } from 'vue'
 
-// ==================== 新架构：BaseModel + ThinkingMode ====================
+// ==================== 模型信息与能力 ====================
 
 /**
  * 思考模式
- * - always: 强制开启，不可切换（如未来的高级推理模型）
- * - never: 强制关闭，不可切换（如不支持思考的轻量模型）
+ * - always: 强制开启，不可切换
+ * - never: 强制关闭，不可切换
  * - optional: 可选，用户可自由切换
  */
 export type ThinkingMode = 'always' | 'never' | 'optional'
 
 /**
- * 模型信息（从后端获取，包含内置和自定义模型）
+ * 模型信息（来自后端，包含内置和自定义模型）
  */
 export interface ModelInfo {
-  id: string           // 唯一标识：内置模型用枚举名（如 "OPUS_45"），自定义用 "custom_xxx"
+  modelId: string      // 实际模型 ID（如 "claude-opus-4-5-20251101"）
   displayName: string  // 显示名称
-  modelId: string      // 实际模型 ID（如 "claude-opus-4-5-20250929"）
   isBuiltIn: boolean   // 是否为内置模型
-}
-
-/**
- * 基础模型枚举（简化版，不再区分思考/非思考）
- * 注意：这只包含内置模型，自定义模型通过 ModelInfo 表示
- */
-export enum BaseModel {
-  OPUS_45 = 'OPUS_45',
-  SONNET_45 = 'SONNET_45',
-  HAIKU_45 = 'HAIKU_45',
+  description?: string
 }
 
 /**
@@ -52,24 +41,24 @@ export interface ModelCapability {
 }
 
 /**
- * 模型能力映射表
+ * 内置模型能力映射（以 modelId 作为唯一键）
  */
-export const MODEL_CAPABILITIES: Record<BaseModel, ModelCapability> = {
-  [BaseModel.OPUS_45]: {
+const MODEL_CAPABILITIES: Record<string, ModelCapability> = {
+  'claude-opus-4-5-20251101': {
     modelId: 'claude-opus-4-5-20251101',
     displayName: 'Opus 4.5',
     thinkingMode: 'optional',
     defaultThinkingEnabled: true,
     description: 'Most powerful model for complex tasks',
   },
-  [BaseModel.SONNET_45]: {
+  'claude-sonnet-4-5-20250929': {
     modelId: 'claude-sonnet-4-5-20250929',
     displayName: 'Sonnet 4.5',
     thinkingMode: 'optional',
     defaultThinkingEnabled: true,
     description: 'Balanced performance and cost',
   },
-  [BaseModel.HAIKU_45]: {
+  'claude-haiku-4-5-20251001': {
     modelId: 'claude-haiku-4-5-20251001',
     displayName: 'Haiku 4.5',
     thinkingMode: 'optional',
@@ -78,32 +67,22 @@ export const MODEL_CAPABILITIES: Record<BaseModel, ModelCapability> = {
   },
 }
 
-/**
- * 检查模型是否支持切换思考
- * @deprecated 建议使用 getModelCapability(modelId).thinkingMode === 'optional'
- */
-export function canToggleThinking(model: BaseModel): boolean {
-  return MODEL_CAPABILITIES[model].thinkingMode === 'optional'
-}
-
 // ==================== 动态模型列表支持 ====================
 
 /**
- * 所有可用模型列表（包含内置和自定义模型）
+ * 所有可用模型列表（包含内置和自定义）
  * 通过 updateAllModels() 从后端刷新
- * 使用响应式 ref 确保 UI 能够追踪变化
  */
 const _allModels = ref<ModelInfo[]>([
-  // 默认内置模型
-  { id: 'OPUS_45', displayName: 'Opus 4.5', modelId: 'claude-opus-4-5-20251101', isBuiltIn: true },
-  { id: 'SONNET_45', displayName: 'Sonnet 4.5', modelId: 'claude-sonnet-4-5-20250929', isBuiltIn: true },
-  { id: 'HAIKU_45', displayName: 'Haiku 4.5', modelId: 'claude-haiku-4-5-20251001', isBuiltIn: true },
+  { modelId: 'claude-opus-4-5-20251101', displayName: 'Opus 4.5', isBuiltIn: true },
+  { modelId: 'claude-sonnet-4-5-20250929', displayName: 'Sonnet 4.5', isBuiltIn: true },
+  { modelId: 'claude-haiku-4-5-20251001', displayName: 'Haiku 4.5', isBuiltIn: true },
 ])
 
 /**
  * 当前默认模型 ID
  */
-const _defaultModelId = ref<string>('OPUS_45')
+const _defaultModelId = ref<string>('claude-opus-4-5-20251101')
 
 /**
  * 模型列表变化回调列表
@@ -157,94 +136,67 @@ export function onModelListChange(callback: (models: ModelInfo[], defaultModelId
 }
 
 /**
- * 根据模型 ID 获取模型信息
- */
-export function getModelById(id: string): ModelInfo | undefined {
-  return _allModels.value.find(m => m.id === id)
-}
-
-/**
- * 验证模型 ID（通过 modelId）是否有效，如果无效返回回退的模型
- * @param modelId 实际的模型 ID（如 "claude-opus-4-5-20251101"）
- * @returns 有效的模型信息，如果原模型无效则返回回退模型
- */
-export function validateAndFallbackModel(modelId: string): ModelInfo {
-  const models = _allModels.value
-  const defaultId = _defaultModelId.value
-
-  // 检查模型是否存在
-  const existingModel = models.find(m => m.modelId === modelId)
-  if (existingModel) {
-    return existingModel
-  }
-
-  // 模型不存在，尝试回退到默认模型
-  console.warn(`[models] Model "${modelId}" not found, falling back...`)
-  const defaultModel = models.find(m => m.id === defaultId)
-  if (defaultModel) {
-    console.log(`[models] Falling back to default model: ${defaultModel.displayName}`)
-    return defaultModel
-  }
-
-  // 默认模型也不存在，回退到第一个可用模型
-  if (models.length > 0) {
-    console.log(`[models] Falling back to first available model: ${models[0].displayName}`)
-    return models[0]
-  }
-
-  // 没有任何可用模型，返回硬编码的内置模型
-  console.warn('[models] No models available, using hardcoded fallback')
-  return {
-    id: 'OPUS_45',
-    displayName: 'Opus 4.5',
-    modelId: 'claude-opus-4-5-20251101',
-    isBuiltIn: true
-  }
-}
-
-/**
- * 根据实际 modelId 获取模型信息
+ * 根据 modelId 获取模型信息
  */
 export function getModelByModelId(modelId: string): ModelInfo | undefined {
   return _allModels.value.find(m => m.modelId === modelId)
 }
 
 /**
- * 判断模型 ID 是否为内置模型
+ * 验证模型 ID 是否有效，如无效返回默认模型
  */
-export function isBuiltInModel(id: string): boolean {
-  const model = getModelById(id)
-  return model?.isBuiltIn ?? false
-}
+export function validateAndFallbackModel(modelId: string): ModelInfo {
+  const models = _allModels.value
+  const defaultId = _defaultModelId.value
 
-/**
- * 获取模型的显示名称
- */
-export function getModelDisplayName(id: string): string {
-  const model = getModelById(id)
-  return model?.displayName ?? id
-}
-
-/**
- * 获取模型的能力配置（仅适用于内置模型）
- * 自定义模型返回默认能力
- */
-export function getModelCapability(id: string): ModelCapability {
-  if (id in BaseModel) {
-    return MODEL_CAPABILITIES[id as BaseModel]
+  // 模型存在，直接返回
+  const existingModel = models.find(m => m.modelId === modelId)
+  if (existingModel) {
+    return existingModel
   }
-  // 自定义模型：返回默认能力（optional thinking）
-  const model = getModelById(id)
+
+  // 回退到当前默认模型
+  const defaultModel = models.find(m => m.modelId === defaultId)
+  if (defaultModel) {
+    return defaultModel
+  }
+
+  // 回退到第一个可用模型
+  if (models.length > 0) {
+    return models[0]
+  }
+
+  // 无可用模型时，返回原值占位
   return {
-    modelId: model?.modelId ?? id,
-    displayName: model?.displayName ?? id,
+    modelId,
+    displayName: modelId,
+    isBuiltIn: false
+  }
+}
+
+/**
+ * 获取模型显示名称
+ */
+export function getModelDisplayName(modelId: string): string {
+  const model = getModelByModelId(modelId)
+  return model?.displayName ?? modelId
+}
+
+/**
+ * 获取模型能力配置（内置模型返回真实能力，自定义模型返回默认能力）
+ */
+export function getModelCapability(modelId: string): ModelCapability {
+  const builtIn = MODEL_CAPABILITIES[modelId]
+  if (builtIn) {
+    return builtIn
+  }
+
+  const model = getModelByModelId(modelId)
+  return {
+    modelId,
+    displayName: model?.displayName ?? modelId,
     thinkingMode: 'optional',
     defaultThinkingEnabled: true,
     description: model?.isBuiltIn ? undefined : 'Custom model'
   }
 }
-
-
-
-
-

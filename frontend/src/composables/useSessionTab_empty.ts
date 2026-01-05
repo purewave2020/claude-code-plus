@@ -384,7 +384,7 @@ export function useSessionTab(initialOrder: number = 0, initialBackendType: Back
 
             const session = createSession(currentBackendType, {
                 type: currentBackendType,
-                modelId: modelId.value || resolvedOptions.model || defaultModel?.id,
+                modelId: modelId.value || resolvedOptions.model || defaultModel?.modelId,
                 thinkingConfig: thinkingConfig.value,
                 permissionMode: permissionMode.value,
             })

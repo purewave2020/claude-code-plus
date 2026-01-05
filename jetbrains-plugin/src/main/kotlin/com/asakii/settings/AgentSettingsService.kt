@@ -8,25 +8,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
- * 默认模型枚举
- */
-enum class DefaultModel(val modelId: String, val displayName: String) {
-    OPUS_45("claude-opus-4-5-20251101", "Opus 4.5"),
-    SONNET_45("claude-sonnet-4-5-20250929", "Sonnet 4.5"),
-    HAIKU_45("claude-haiku-4-5-20251001", "Haiku 4.5");
-
-    companion object {
-        fun fromModelId(modelId: String?): DefaultModel? {
-            return entries.find { it.modelId == modelId }
-        }
-
-        fun fromName(name: String?): DefaultModel? {
-            return entries.find { it.name == name }
-        }
-    }
-}
-
-/**
  * 默认思考等级枚举
  *
  * 简化为三个核心级别：Off、Think、Ultra
@@ -74,9 +55,8 @@ data class CustomModelConfig(
  * 用于统一表示内置模型和自定义模型
  */
 data class ModelInfo(
-    val id: String,           // 内置模型用枚举名（如 "OPUS_45"），自定义用 "custom_xxx"
-    val displayName: String,  // 显示名称
     val modelId: String,      // 实际模型 ID
+    val displayName: String,  // 显示名称
     val isBuiltIn: Boolean    // 是否为内置模型
 )
 
@@ -142,8 +122,8 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var codexDefaultSandboxMode: String = "workspace-write",
         var codexCustomModels: String = "[]",
 
-        // 默认模型（使用枚举名称存储，如 "OPUS_45"）
-        var defaultModel: String = DefaultModel.OPUS_45.name,
+        // 默认模型（使用实际 modelId 存储）
+        var defaultModel: String = "claude-opus-4-5-20251101",
 
         // 默认思考等级 ID（如 "off", "think", "ultra", "custom_xxx"）
         var defaultThinkingLevelId: String = "ultra",
@@ -170,6 +150,50 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
 
     private var state = State()
 
+    private val builtInClaudeModels = listOf(
+        ModelInfo(
+            modelId = "claude-opus-4-5-20251101",
+            displayName = "Opus 4.5",
+            isBuiltIn = true
+        ),
+        ModelInfo(
+            modelId = "claude-sonnet-4-5-20250929",
+            displayName = "Sonnet 4.5",
+            isBuiltIn = true
+        ),
+        ModelInfo(
+            modelId = "claude-haiku-4-5-20251001",
+            displayName = "Haiku 4.5",
+            isBuiltIn = true
+        )
+    )
+
+    private val legacyClaudeModelAliases = mapOf(
+        "OPUS_45" to "claude-opus-4-5-20251101",
+        "SONNET_45" to "claude-sonnet-4-5-20250929",
+        "HAIKU_45" to "claude-haiku-4-5-20251001",
+        "claude-opus-4-5-20250929" to "claude-opus-4-5-20251101",
+        "claude-haiku-4-5-20250929" to "claude-haiku-4-5-20251001"
+    )
+
+    private fun normalizeClaudeModelId(rawModelId: String): String {
+        return legacyClaudeModelAliases[rawModelId] ?: rawModelId
+    }
+
+    private fun migrateLegacyModelIds() {
+        val normalizedDefault = normalizeClaudeModelId(state.defaultModel)
+        if (normalizedDefault != state.defaultModel) {
+            state.defaultModel = normalizedDefault
+        }
+
+        if (state.gitGenerateModel.isNotBlank()) {
+            val normalizedGitModel = normalizeClaudeModelId(state.gitGenerateModel)
+            if (normalizedGitModel != state.gitGenerateModel) {
+                state.gitGenerateModel = normalizedGitModel
+            }
+        }
+    }
+
     // 设置变更监听器
     private val changeListeners = mutableListOf<(AgentSettingsService) -> Unit>()
 
@@ -177,6 +201,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
 
     override fun loadState(state: State) {
         XmlSerializerUtil.copyBean(state, this.state)
+        migrateLegacyModelIds()
     }
 
     // ==================== 监听器管理 ====================
@@ -575,8 +600,8 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
                 return effectiveDefaultModelId  // 使用全局默认模型
             }
             // 检查模型是否存在
-            val modelInfo = getModelById(configuredModelId)
-            return modelInfo?.modelId ?: DefaultModel.entries.first().modelId  // fallback 到第一个内置模型
+            val modelInfo = getModelById(normalizeClaudeModelId(configuredModelId))
+            return modelInfo?.modelId ?: builtInClaudeModels.first().modelId  // fallback 到第一个内置模型
         }
 
     /** Git Generate 是否保存会话到历史 */
@@ -644,14 +669,6 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     var defaultModel: String
         get() = state.defaultModel
         set(value) { state.defaultModel = value }
-
-    /** 获取默认模型枚举 */
-    val defaultModelEnum: DefaultModel
-        get() = DefaultModel.fromName(state.defaultModel) ?: DefaultModel.OPUS_45
-
-    /** 获取默认模型的实际 modelId */
-    val defaultModelId: String
-        get() = defaultModelEnum.modelId
 
     var permissionMode: String
         get() = state.permissionMode
@@ -762,11 +779,12 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
      */
     fun removeCustomModel(id: String) {
         val models = getCustomModels().toMutableList()
+        val removedModel = models.firstOrNull { it.id == id }
         models.removeIf { it.id == id }
         setCustomModels(models)
-        // 如果删除的是当前默认模型，切换到 OPUS_45
-        if (state.defaultModel == id) {
-            state.defaultModel = DefaultModel.OPUS_45.name
+        // 如果删除的是当前默认模型，切换到第一个内置模型
+        if (removedModel != null && state.defaultModel == removedModel.modelId) {
+            state.defaultModel = builtInClaudeModels.first().modelId
         }
     }
 
@@ -776,13 +794,14 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
      * 返回统一的模型信息列表，包含 id, displayName, modelId
      */
     fun getAllAvailableModels(): List<ModelInfo> {
-        val builtIn = DefaultModel.entries.map {
-            ModelInfo(it.name, it.displayName, it.modelId, isBuiltIn = true)
-        }
         val custom = getCustomModels().map {
-            ModelInfo(it.id, it.displayName, it.modelId, isBuiltIn = false)
+            ModelInfo(
+                modelId = it.modelId,
+                displayName = it.displayName,
+                isBuiltIn = false
+            )
         }
-        return builtIn + custom
+        return builtInClaudeModels + custom
     }
 
     /**
@@ -790,8 +809,16 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
      */
     fun getCodexBuiltInModels(): List<ModelInfo> {
         return listOf(
-            ModelInfo("gpt-5.2-codex", "gpt-5.2-codex", "gpt-5.2-codex", isBuiltIn = true),
-            ModelInfo("gpt-5.2", "gpt-5.2", "gpt-5.2", isBuiltIn = true)
+            ModelInfo(
+                modelId = "gpt-5.2-codex",
+                displayName = "gpt-5.2-codex",
+                isBuiltIn = true
+            ),
+            ModelInfo(
+                modelId = "gpt-5.2",
+                displayName = "gpt-5.2",
+                isBuiltIn = true
+            )
         )
     }
 
@@ -801,7 +828,11 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     fun getAllCodexModels(): List<ModelInfo> {
         val builtIn = getCodexBuiltInModels()
         val custom = getCodexCustomModels().map {
-            ModelInfo(it.modelId, it.displayName, it.modelId, isBuiltIn = false)
+            ModelInfo(
+                modelId = it.modelId,
+                displayName = it.displayName,
+                isBuiltIn = false
+            )
         }
         return builtIn + custom
     }
@@ -809,25 +840,31 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     /**
      * 根据 ID 获取模型信息
      */
-    fun getModelById(id: String): ModelInfo? {
-        // 先检查内置模型
-        DefaultModel.fromName(id)?.let {
-            return ModelInfo(it.name, it.displayName, it.modelId, isBuiltIn = true)
-        }
-        // 再检查自定义模型
-        getCustomModels().find { it.id == id }?.let {
-            return ModelInfo(it.id, it.displayName, it.modelId, isBuiltIn = false)
-        }
-        return null
+    fun getModelById(modelId: String): ModelInfo? {
+        val normalizedModelId = normalizeClaudeModelId(modelId)
+        builtInClaudeModels.find { it.modelId == normalizedModelId }?.let { return it }
+        return getCustomModels()
+            .find { it.modelId == normalizedModelId }
+            ?.let {
+                ModelInfo(
+                    modelId = it.modelId,
+                    displayName = it.displayName,
+                    isBuiltIn = false
+                )
+            }
     }
 
     /**
      * 根据 ID 获取 Codex 模型信息
      */
-    fun getCodexModelById(id: String): ModelInfo? {
-        getCodexBuiltInModels().find { it.id == id }?.let { return it }
-        return getCodexCustomModels().find { it.modelId == id }?.let {
-            ModelInfo(it.modelId, it.displayName, it.modelId, isBuiltIn = false)
+    fun getCodexModelById(modelId: String): ModelInfo? {
+        getCodexBuiltInModels().find { it.modelId == modelId }?.let { return it }
+        return getCodexCustomModels().find { it.modelId == modelId }?.let {
+            ModelInfo(
+                modelId = it.modelId,
+                displayName = it.displayName,
+                isBuiltIn = false
+            )
         }
     }
 
@@ -835,7 +872,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
      * 获取当前默认模型的实际 modelId（支持自定义模型）
      */
     val effectiveDefaultModelId: String
-        get() = getModelById(state.defaultModel)?.modelId ?: DefaultModel.OPUS_45.modelId
+        get() = getModelById(state.defaultModel)?.modelId ?: builtInClaudeModels.first().modelId
 
     /**
      * 获取当前 Codex 默认模型的 modelId

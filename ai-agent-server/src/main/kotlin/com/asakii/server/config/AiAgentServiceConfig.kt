@@ -8,7 +8,6 @@ import com.asakii.claude.agent.sdk.types.HookMatcher
  * 自定义模型配置（服务端传输用）
  */
 data class CustomModelInfo(
-    val id: String,        // 唯一标识（如 "custom_xxx"）
     val displayName: String,  // 显示名称
     val modelId: String       // 实际模型 ID
 )
@@ -20,7 +19,7 @@ data class CustomModelInfo(
  */
 data class AiAgentServiceConfig(
     val defaultProvider: AiAgentProvider = AiAgentProvider.CLAUDE,
-    val defaultModel: String = "OPUS_45",  // ???? ID????????
+    val defaultModel: String = "claude-opus-4-5-20251101",
     val defaultSystemPrompt: String? = null,
     val claude: ClaudeDefaults = ClaudeDefaults(),
     val codex: CodexDefaults = CodexDefaults(),

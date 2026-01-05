@@ -305,7 +305,7 @@ class GitGenerateConfigurable : SearchableConfigurable {
 
         // 检查模型是否修改
         val selectedModel = modelCombo?.selectedItem as? ModelInfo
-        val currentModelId = selectedModel?.id ?: ""
+        val currentModelId = selectedModel?.modelId ?: ""
         val savedModelId = settings.gitGenerateModel
 
         return systemPromptArea?.text != effectiveSystemPrompt ||
@@ -334,7 +334,7 @@ class GitGenerateConfigurable : SearchableConfigurable {
 
         // 保存模型设置
         val selectedModel = modelCombo?.selectedItem as? ModelInfo
-        settings.gitGenerateModel = selectedModel?.id ?: ""
+        settings.gitGenerateModel = selectedModel?.modelId ?: ""
 
         // 保存 Save Session 设置
         settings.gitGenerateSaveSession = saveSessionCheckbox?.isSelected ?: false
@@ -353,7 +353,7 @@ class GitGenerateConfigurable : SearchableConfigurable {
         // 重置模型选择器
         val savedModelId = settings.gitGenerateModel
         val allModels = settings.getAllAvailableModels()
-        val selectedModel = allModels.find { it.id == savedModelId }
+        val selectedModel = allModels.find { it.modelId == savedModelId }
             ?: allModels.firstOrNull { it.isBuiltIn }  // fallback 到第一个内置模型
         modelCombo?.selectedItem = selectedModel
     }

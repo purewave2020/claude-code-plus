@@ -14,7 +14,7 @@ import {
   getAvailableBackends,
   getModels,
   getDefaultModel,
-  getModelById,
+  getModelByModelId,
   supportsFeature,
   supportsTool,
   getThinkingOptions,
@@ -83,21 +83,21 @@ describe('Capability Lookups', () => {
     })
   })
 
-  describe('getModelById', () => {
+  describe('getModelByModelId', () => {
     it('should find Claude model by ID', () => {
-      const model = getModelById('claude', 'claude-sonnet-4-5-20251101')
+      const model = getModelByModelId('claude', 'claude-sonnet-4-5-20250929')
       expect(model).toBeDefined()
       expect(model?.displayName).toBe('Claude Sonnet 4.5')
     })
 
     it('should find Codex model by ID', () => {
-      const model = getModelById('codex', 'gpt-5.2')
+      const model = getModelByModelId('codex', 'gpt-5.2')
       expect(model).toBeDefined()
       expect(model?.displayName).toBe('gpt-5.2')
     })
 
     it('should return undefined for non-existent model', () => {
-      const model = getModelById('claude', 'non-existent-model')
+      const model = getModelByModelId('claude', 'non-existent-model')
       expect(model).toBeUndefined()
     })
   })
@@ -224,7 +224,7 @@ describe('Feature Checks', () => {
 describe('Model Validation', () => {
   describe('isValidModel', () => {
     it('should return true for valid Claude model', () => {
-      expect(isValidModel('claude', 'claude-sonnet-4-5-20251101')).toBe(true)
+      expect(isValidModel('claude', 'claude-sonnet-4-5-20250929')).toBe(true)
     })
 
     it('should return true for valid Codex model', () => {
@@ -233,7 +233,7 @@ describe('Model Validation', () => {
 
     it('should return false for invalid model', () => {
       expect(isValidModel('claude', 'gpt-5.2')).toBe(false)
-      expect(isValidModel('codex', 'claude-sonnet-4-5-20251101')).toBe(false)
+      expect(isValidModel('codex', 'claude-sonnet-4-5-20250929')).toBe(false)
     })
 
     it('should return false for non-existent model', () => {

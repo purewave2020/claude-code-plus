@@ -9,6 +9,7 @@ import com.asakii.ai.agent.sdk.model.TextContent
 import com.asakii.ai.agent.sdk.model.UiResultMessage
 import com.asakii.ai.agent.sdk.model.UiStreamEvent
 import com.asakii.ai.agent.sdk.model.UiTextDelta
+import com.asakii.codex.agent.sdk.CodexClientOptions
 import com.asakii.codex.agent.sdk.ModelReasoningEffort
 import com.asakii.codex.agent.sdk.ThreadOptions
 import com.asakii.codex.agent.sdk.appserver.AppServerEvent
@@ -42,6 +43,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -89,6 +91,44 @@ class CodexAgentClientImplTest {
         )
 
         assertEquals("mcp instructions", fake.lastStartThreadArgs?.developerInstructions)
+        closeClient(client)
+    }
+
+    @Test
+    fun `connect passes codex client options to app server factory`() = runTest {
+        val fake = FakeCodexAppServerApi()
+        var capturedOptions: CodexClientOptions? = null
+        var capturedThreadOptions: ThreadOptions? = null
+        val factory = CodexAppServerApiFactory { options, threadOptions, _ ->
+            capturedOptions = options
+            capturedThreadOptions = threadOptions
+            fake
+        }
+
+        val overrides = mapOf(
+            "mcp_servers.user_interaction.url" to "\"http://127.0.0.1:1234/mcp\"",
+            "features.web_search_request" to "true"
+        )
+        val clientOptions = CodexClientOptions(
+            codexPathOverride = Paths.get("C:/tmp/codex.cmd"),
+            configOverrides = overrides
+        )
+        val threadOptions = ThreadOptions(model = "gpt-5.2-codex")
+
+        val client = CodexAgentClientImpl(appServerFactory = factory, scope = this)
+        client.connect(
+            AiAgentConnectOptions(
+                provider = AiAgentProvider.CODEX,
+                codex = CodexOverrides(
+                    clientOptions = clientOptions,
+                    threadOptions = threadOptions
+                )
+            )
+        )
+
+        assertEquals(overrides, capturedOptions?.configOverrides)
+        assertEquals(clientOptions.codexPathOverride, capturedOptions?.codexPathOverride)
+        assertEquals("gpt-5.2-codex", capturedThreadOptions?.model)
         closeClient(client)
     }
 

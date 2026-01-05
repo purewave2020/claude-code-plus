@@ -49,11 +49,11 @@
               }"
               @change="handleModelChange"
             >
-              <el-option
-                v-for="(label, model) in MODEL_LABELS"
-                :key="model"
-                :value="model"
-                :label="label"
+            <el-option
+                v-for="model in claudeModels"
+                :key="model.modelId"
+                :value="model.modelId"
+                :label="model.displayName"
               />
             </el-select>
             <p class="setting-description">
@@ -264,10 +264,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useSettingsStore } from '@/stores/settingsStore'
 import {
-  MODEL_LABELS,
   PERMISSION_MODE_LABELS,
   PERMISSION_MODE_DESCRIPTIONS,
   type Settings
@@ -286,13 +285,20 @@ defineProps<Props>()
 
 const emit = defineEmits<Emits>()
 const settingsStore = useSettingsStore()
+const claudeModels = computed(() => settingsStore.getModelsForBackend('claude'))
 
 // 本地设置副本(用于编辑,不立即保存)
-const localSettings = ref<Settings>({ ...settingsStore.settings })
+const localSettings = ref<Settings>({
+  ...(settingsStore.settings as unknown as Settings),
+  model: settingsStore.settings.claudeModel
+})
 
 // 监听 store 设置变化,同步到本地副本
 watch(() => settingsStore.settings, (newSettings) => {
-  localSettings.value = { ...newSettings }
+  localSettings.value = {
+    ...(newSettings as unknown as Settings),
+    model: (newSettings as any).claudeModel
+  }
 }, { deep: true })
 
 // 自动保存的处理函数

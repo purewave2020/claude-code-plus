@@ -9,9 +9,7 @@
 import { ref, computed } from 'vue'
 import type { PermissionMode } from '@/types/enhancedMessage'
 import {
-  BaseModel,
   getAllModels,
-  getModelById,
   getModelCapability,
   getModelDisplayName,
   type ModelInfo
@@ -91,12 +89,9 @@ export function useModelSelection(options: UseModelSelectionOptions = {}) {
 
     // Claude 后端
     if (!modelId) {
-      return BaseModel.OPUS_45
+      return settingsStore.settings.claudeModel
     }
-    // 从 modelId 反查模型 ID（支持内置和自定义）
-    const allModels = getAllModels()
-    const found = allModels.find(m => m.modelId === modelId)
-    return found?.id ?? BaseModel.OPUS_45
+    return modelId
   })
 
   // 当前思考级别（直接绑定到 Tab 状态）
@@ -139,10 +134,10 @@ export function useModelSelection(options: UseModelSelectionOptions = {}) {
   // Codex 模型列表（始终返回 Codex 模型）
   const codexModelOptions = computed((): ModelInfo[] => {
     return settingsStore.getModelsForBackend('codex').map(m => ({
-      id: m.id,
+      modelId: m.modelId,
       displayName: m.displayName,
-      modelId: m.id,
-      isBuiltIn: true
+      isBuiltIn: true,
+      description: m.description
     }))
   })
 

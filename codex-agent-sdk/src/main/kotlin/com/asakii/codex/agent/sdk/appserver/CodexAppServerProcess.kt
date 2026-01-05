@@ -82,6 +82,9 @@ class CodexAppServerProcess private constructor(
             )
 
             val command = mutableListOf(executablePath)
+            if (configOverrides.isNotEmpty()) {
+                logger.info("codex app-server configOverrides keys (${configOverrides.size}): ${configOverrides.keys.sorted().joinToString()}")
+            }
             configOverrides.forEach { (key, value) ->
                 command.add("--config")
                 command.add("$key=$value")
@@ -134,43 +137,62 @@ class CodexAppServerProcess private constructor(
          */
         private fun findCodexExecutable(): String {
             val isWindows = System.getProperty("os.name").lowercase().contains("windows")
-            val binaryName = if (isWindows) "codex.exe" else "codex"
+            val binaryCandidates = if (isWindows) {
+                listOf("codex.exe", "codex.cmd", "codex.bat", "codex")
+            } else {
+                listOf("codex")
+            }
+            fun isRunnable(file: File): Boolean {
+                return if (isWindows) file.exists() else file.exists() && file.canExecute()
+            }
 
             // 1. 检查环境变量 CODEX_BIN
             System.getenv("CODEX_BIN")?.let { path ->
-                if (File(path).exists()) return path
+                val direct = File(path)
+                if (isRunnable(direct)) return direct.absolutePath
+                if (isWindows && !direct.name.contains('.')) {
+                    val parent = direct.parentFile
+                    listOf("exe", "cmd", "bat").forEach { ext ->
+                        val expanded = if (parent != null) {
+                            File(parent, "${direct.name}.$ext")
+                        } else {
+                            File("${direct.path}.$ext")
+                        }
+                        if (isRunnable(expanded)) return expanded.absolutePath
+                    }
+                }
             }
 
             // 2. 检查 PATH 中的 codex
             val pathEnv = System.getenv("PATH") ?: ""
             val pathSeparator = if (isWindows) ";" else ":"
             for (dir in pathEnv.split(pathSeparator)) {
-                val file = File(dir, binaryName)
-                if (file.exists() && file.canExecute()) {
-                    return file.absolutePath
+                binaryCandidates.forEach { candidate ->
+                    val file = File(dir, candidate)
+                    if (isRunnable(file)) return file.absolutePath
                 }
             }
 
             // 3. 检查常见位置
             val commonPaths = if (isWindows) {
                 listOf(
-                    System.getenv("LOCALAPPDATA")?.let { "$it\\Programs\\codex\\$binaryName" },
-                    System.getenv("APPDATA")?.let { "$it\\codex\\$binaryName" },
-                    "C:\\Program Files\\codex\\$binaryName"
+                    System.getenv("LOCALAPPDATA")?.let { "$it\\Programs\\codex\\codex.exe" },
+                    System.getenv("APPDATA")?.let { "$it\\codex\\codex.exe" },
+                    System.getenv("APPDATA")?.let { "$it\\npm\\codex.cmd" },
+                    System.getenv("APPDATA")?.let { "$it\\npm\\codex.exe" },
+                    "C:\\Program Files\\codex\\codex.exe"
                 )
             } else {
                 listOf(
-                    System.getenv("HOME")?.let { "$it/.local/bin/$binaryName" },
-                    "/usr/local/bin/$binaryName",
-                    "/usr/bin/$binaryName"
+                    System.getenv("HOME")?.let { "$it/.local/bin/codex" },
+                    "/usr/local/bin/codex",
+                    "/usr/bin/codex"
                 )
             }
 
             for (path in commonPaths.filterNotNull()) {
                 val file = File(path)
-                if (file.exists() && file.canExecute()) {
-                    return file.absolutePath
-                }
+                if (isRunnable(file)) return file.absolutePath
             }
 
             throw CodexAppServerException(

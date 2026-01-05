@@ -19,6 +19,7 @@ import {
 import type { ThinkingConfig } from '@/types/thinking'
 import { createClaudeThinkingConfig, createCodexThinkingConfig } from '@/types/thinking'
 import { CLAUDE_MODELS, CODEX_MODELS, type BackendModelInfo } from '@/services/backendCapabilities'
+import { updateAllModels, type ModelInfo as ClaudeModelInfo } from '@/constants/models'
 
 /**
  * 多后端设置接口
@@ -104,9 +105,6 @@ interface HttpDefaultSettings {
   codexReasoningEffort?: CodexReasoningEffort
   codexReasoningSummary?: CodexReasoningSummary
   codexSandboxMode?: SandboxMode
-
-  // 兼容旧版本
-  defaultModelId?: string
   defaultThinkingLevel?: string
   defaultThinkingTokens?: number
 }
@@ -159,21 +157,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const claudeModels = ref<BackendModelInfo[]>(CLAUDE_MODELS)
   const codexModels = ref<BackendModelInfo[]>(CODEX_MODELS)
 
-  const CLAUDE_MODEL_ID_ALIASES: Record<string, string> = {
-    OPUS_45: 'claude-opus-4-5-20251101',
-    SONNET_45: 'claude-sonnet-4-5-20250929',
-    HAIKU_45: 'claude-haiku-4-5-20251001',
-    'claude-opus-4-5-20250929': 'claude-opus-4-5-20251101',
-    'claude-haiku-4-5-20250929': 'claude-haiku-4-5-20251001',
-  }
-
-  function normalizeClaudeModelId(modelId?: string): string {
-    if (!modelId) {
-      return DEFAULT_SETTINGS.claudeModel
-    }
-    return CLAUDE_MODEL_ID_ALIASES[modelId] ?? modelId
-  }
-
 
   /**
    * 迁移旧设置到新格式
@@ -193,9 +176,7 @@ export const useSettingsStore = defineStore('settings', () => {
       ...rawSettings,
 
       // 迁移旧字段到 Claude 特定字段
-      claudeModel: normalizeClaudeModelId(
-        rawSettings.claudeModel || rawSettings.model || DEFAULT_SETTINGS.claudeModel
-      ),
+      claudeModel: rawSettings.claudeModel || rawSettings.model || DEFAULT_SETTINGS.claudeModel,
       claudeThinkingEnabled: rawSettings.claudeThinkingEnabled ?? rawSettings.thinkingEnabled ?? true,
       claudeThinkingTokens: rawSettings.claudeThinkingTokens ?? rawSettings.maxThinkingTokens ?? 8096,
 
@@ -235,7 +216,7 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   function setModelForBackend(backendType: BackendType, modelId: string) {
     if (backendType === 'claude') {
-      settings.value.claudeModel = normalizeClaudeModelId(modelId)
+      settings.value.claudeModel = modelId
     } else {
       settings.value.codexModel = modelId
     }
@@ -381,6 +362,15 @@ export const useSettingsStore = defineStore('settings', () => {
         claudeModels.value = claudeList
         codexModels.value = codexList
 
+        // ?? Claude ????????????? UI ???
+        const mappedClaudeModels: ClaudeModelInfo[] = claudeList.map(model => ({
+          modelId: model.modelId,
+          displayName: model.displayName,
+          isBuiltIn: model.isBuiltIn ?? false,
+          description: model.description
+        }))
+        updateAllModels(mappedClaudeModels, defaultClaudeModelId)
+
         console.log('✅ Available models loaded:', {
           claude: claudeList.length,
           codex: codexList.length,
@@ -391,14 +381,14 @@ export const useSettingsStore = defineStore('settings', () => {
 
         // 检查当前选中的模型是否仍存在，如果被删除则切换到默认模型
         const currentClaudeModel = settings.value.claudeModel
-        const claudeModelExists = claudeList.some(m => m.id === currentClaudeModel)
+        const claudeModelExists = claudeList.some(m => m.modelId === currentClaudeModel)
         if (!claudeModelExists && currentClaudeModel) {
           console.log('⚠️ Current Claude model not found, switching to default:', defaultClaudeModelId)
           settings.value.claudeModel = defaultClaudeModelId
         }
 
         const currentCodexModel = settings.value.codexModel
-        const codexModelExists = codexList.some(m => m.id === currentCodexModel)
+        const codexModelExists = codexList.some(m => m.modelId === currentCodexModel)
         if (!codexModelExists && currentCodexModel) {
           console.log('⚠️ Current Codex model not found, switching to default:', defaultCodexModelId)
           settings.value.codexModel = defaultCodexModelId
@@ -430,18 +420,18 @@ export const useSettingsStore = defineStore('settings', () => {
 
     // 1. 应用 Claude 默认模型设置
     if (newIdeSettings.claudeDefaultModelId) {
-      const modelInfo = claudeModels.value.find(m => m.id === newIdeSettings.claudeDefaultModelId)
+      const modelInfo = claudeModels.value.find(m => m.modelId === newIdeSettings.claudeDefaultModelId)
       if (modelInfo) {
-        updates.claudeModel = modelInfo.id
-        console.log('🎯 [IdeSettings] Claude 默认模型:', modelInfo.displayName, `(${modelInfo.id})`)
+        updates.claudeModel = modelInfo.modelId
+        console.log('🎯 [IdeSettings] Claude 默认模型:', modelInfo.displayName, `(${modelInfo.modelId})`)
       } else {
         console.warn('⚠️ [IdeSettings] 未知的 Claude 模型 ID:', newIdeSettings.claudeDefaultModelId)
       }
     } else if (newIdeSettings.defaultModelId) {
-      // 兼容旧版本：如果只有 defaultModelId，应用到 Claude
-      const modelInfo = claudeModels.value.find(m => m.id === newIdeSettings.defaultModelId)
+      // IDE settings default_model_id (Claude)
+      const modelInfo = claudeModels.value.find(m => m.modelId === newIdeSettings.defaultModelId)
       if (modelInfo) {
-        updates.claudeModel = modelInfo.id
+        updates.claudeModel = modelInfo.modelId
         console.log('🎯 [IdeSettings] Claude 默认模型 (兼容):', modelInfo.displayName)
       }
     }
@@ -460,10 +450,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
     // 3. 应用 Codex 默认模型设置
     if (newIdeSettings.codexDefaultModelId) {
-      const modelInfo = codexModels.value.find(m => m.id === newIdeSettings.codexDefaultModelId)
+      const modelInfo = codexModels.value.find(m => m.modelId === newIdeSettings.codexDefaultModelId)
       if (modelInfo) {
-        updates.codexModel = modelInfo.id
-        console.log('🎯 [IdeSettings] Codex 默认模型:', modelInfo.displayName, `(${modelInfo.id})`)
+        updates.codexModel = modelInfo.modelId
+        console.log('🎯 [IdeSettings] Codex 默认模型:', modelInfo.displayName, `(${modelInfo.modelId})`)
       } else {
         console.warn('⚠️ [IdeSettings] 未知的 Codex 模型 ID:', newIdeSettings.codexDefaultModelId)
       }
@@ -579,17 +569,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
         // 1. 应用 Claude 默认模型设置
         if (httpSettings.claudeDefaultModelId) {
-          const modelInfo = claudeModels.value.find(m => m.id === httpSettings.claudeDefaultModelId)
+          const modelInfo = claudeModels.value.find(m => m.modelId === httpSettings.claudeDefaultModelId)
           if (modelInfo) {
-            updates.claudeModel = modelInfo.id
-            console.log('🎯 [DefaultSettings] Claude 默认模型:', modelInfo.displayName, `(${modelInfo.id})`)
-          }
-        } else if (httpSettings.defaultModelId) {
-          // 兼容旧版本
-          const modelInfo = claudeModels.value.find(m => m.id === httpSettings.defaultModelId)
-          if (modelInfo) {
-            updates.claudeModel = modelInfo.id
-            console.log('🎯 [DefaultSettings] Claude 默认模型 (兼容):', modelInfo.displayName)
+            updates.claudeModel = modelInfo.modelId
+            console.log('🎯 [DefaultSettings] Claude 默认模型:', modelInfo.displayName, `(${modelInfo.modelId})`)
           }
         }
 
@@ -606,10 +589,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
         // 3. 应用 Codex 默认模型设置
         if (httpSettings.codexDefaultModelId) {
-          const modelInfo = codexModels.value.find(m => m.id === httpSettings.codexDefaultModelId)
+          const modelInfo = codexModels.value.find(m => m.modelId === httpSettings.codexDefaultModelId)
           if (modelInfo) {
-            updates.codexModel = modelInfo.id
-            console.log('🎯 [DefaultSettings] Codex 默认模型:', modelInfo.displayName, `(${modelInfo.id})`)
+            updates.codexModel = modelInfo.modelId
+            console.log('🎯 [DefaultSettings] Codex 默认模型:', modelInfo.displayName, `(${modelInfo.modelId})`)
           }
         }
 

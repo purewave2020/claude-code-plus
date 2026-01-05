@@ -77,10 +77,13 @@ export type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
  */
 export interface BackendModelInfo {
   /** Model ID used in API calls */
-  id: string
+  modelId: string
 
   /** Display name for UI */
   displayName: string
+
+  /** Whether this is a built-in model */
+  isBuiltIn?: boolean
 
   /** Whether this is the default model */
   isDefault?: boolean

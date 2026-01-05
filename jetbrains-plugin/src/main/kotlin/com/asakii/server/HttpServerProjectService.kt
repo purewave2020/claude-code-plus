@@ -84,6 +84,14 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             // 检测是否在 IDEA 插件环境中（Logback 被排除）
             if (StandaloneLogging.isIdeaPluginEnvironment()) {
                 logger.info("📝 Using IDEA's built-in logging system, logs will be written to idea.log")
+                // Ensure java.util.logging (JUL) is bridged to SLF4J so Codex SDK logs are visible in idea.log
+                val projectBasePath = project.basePath
+                val logDir = if (projectBasePath != null) {
+                    java.nio.file.Path.of(projectBasePath, ".log")
+                } else {
+                    java.nio.file.Path.of(System.getProperty("user.dir"), ".log")
+                }
+                StandaloneLogging.configureWithDir(logDir)
                 return
             }
 
@@ -176,9 +184,11 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 val terminalBackends = settings.getTerminalMcpProviders()
                 val gitBackends = settings.getGitMcpProviders()
                 val mcpEnabledBackends = settings.getMcpEnabledProviders()
+                val defaultModelInfo = settings.getModelById(settings.defaultModel)
+                val defaultModelLabel = defaultModelInfo?.displayName ?: settings.defaultModel
                 logger.info(
                     "📦 Loading agent settings: nodePath=${settings.nodePath.ifBlank { "(system PATH)" }}, " +
-                        "model=${settings.defaultModelEnum.displayName}, thinkingLevel=$thinkingLevelName " +
+                        "model=$defaultModelLabel, thinkingLevel=$thinkingLevelName " +
                         "(${settings.defaultThinkingTokens} tokens), permissionMode=${settings.permissionMode}, " +
                         "userInteractionMcp=${settings.enableUserInteractionMcp}(${userInteractionBackends.joinToString()}), " +
                         "jetbrainsMcp=${settings.enableJetBrainsMcp}(${jetbrainsBackends.joinToString()}), " +
@@ -226,14 +236,12 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                     mcpEnabledBackends = mcpEnabledBackends,
                     customModels = settings.getCustomModels().map { model ->
                         CustomModelInfo(
-                            id = model.id,
                             displayName = model.displayName,
                             modelId = model.modelId
                         )
                     },
                     codexCustomModels = settings.getCodexCustomModels().map { model ->
                         CustomModelInfo(
-                            id = model.modelId,
                             displayName = model.displayName,
                             modelId = model.modelId
                         )

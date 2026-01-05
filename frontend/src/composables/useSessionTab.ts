@@ -794,8 +794,9 @@ export function useSessionTab(initialOrder: number = 0) {
                 // 连接时只传递 boolean（是否启用思考），具体级别在连接后设置
                 thinkingEnabled: thinkingLevel.value > 0,
                 permissionMode: permissionMode.value,
-                // 从前端设置读取（已从 IDEA 同步）
-                dangerouslySkipPermissions: settingsStore.settings.skipPermissions,
+                // 始终为 false，让权限检查走前端 RequestPermission 处理器
+                // 这样前端的 skipPermissions 动态切换才能生效
+                dangerouslySkipPermissions: false,
                 continueConversation: resolvedOptions.continueConversation,
                 resumeSessionId: resolvedOptions.resumeSessionId,
                 // 固定开启重放用户消息
@@ -1086,8 +1087,9 @@ export function useSessionTab(initialOrder: number = 0) {
                 // 连接时只传递 boolean（是否启用思考），具体级别在连接后设置
                 thinkingEnabled: thinkingLevel.value > 0,
                 permissionMode: permissionMode.value,
-                // 从前端设置读取（已从 IDEA 同步）
-                dangerouslySkipPermissions: settingsStore.settings.skipPermissions,
+                // 始终为 false，让权限检查走前端 RequestPermission 处理器
+                // 这样前端的 skipPermissions 动态切换才能生效
+                dangerouslySkipPermissions: false,
                 continueConversation: options?.continueConversation,
                 resumeSessionId: options?.resumeSessionId,
                 // 统一协议：传递 provider 参数

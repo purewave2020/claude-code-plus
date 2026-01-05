@@ -710,7 +710,6 @@ data class RpcMcpToolsResult(
  */
 @Serializable
 data class RpcModelInfo(
-    val id: String,           // 唯一标识：内置模型用枚举名（如 "OPUS_45"），自定义用 "custom_xxx"
     val displayName: String,  // 显示名称
     val modelId: String,      // 实际模型 ID（如 "claude-opus-4-5-20250929"）
     val isBuiltIn: Boolean    // 是否为内置模型

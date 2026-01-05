@@ -315,7 +315,8 @@ export class ClaudeSession extends BaseBackendSession implements BackendSession 
       model: this.config.modelId,
       systemPrompt: this.config.systemPrompt || undefined,
       permissionMode: this.config.permissionMode as any,
-      dangerouslySkipPermissions: this.config.skipPermissions,
+      // 始终为 false，让权限检查走前端 RequestPermission 处理器
+      dangerouslySkipPermissions: false,
       includePartialMessages: this.config.includePartialMessages,
       continueConversation: options.continueConversation,
       resumeSessionId: options.resumeSessionId,

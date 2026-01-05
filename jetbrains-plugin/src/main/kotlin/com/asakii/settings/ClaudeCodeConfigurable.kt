@@ -120,9 +120,6 @@ class ModelInfoRenderer : DefaultListCellRenderer() {
                 }
                 toolTipText = value.modelId
             }
-            is DefaultModel -> {
-                text = value.displayName
-            }
         }
         return component
     }
@@ -772,15 +769,8 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
     private fun refreshModelCombo() {
         val currentSelection = defaultModelCombo?.selectedItem as? ModelInfo
 
-        // 获取内置模型
-        val builtInModels = DefaultModel.entries.map { model ->
-            ModelInfo(
-                id = model.name,
-                displayName = model.displayName,
-                modelId = model.modelId,
-                isBuiltIn = true
-            )
-        }
+        val settings = AgentSettingsService.getInstance()
+        val builtInModels = settings.getAllAvailableModels().filter { it.isBuiltIn }
 
         // 获取表格中的自定义模型
         val customModels = getCustomModelsFromTable()
@@ -790,7 +780,7 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
 
         // 恢复之前的选择
         if (currentSelection != null) {
-            val matchingModel = allModels.find { it.id == currentSelection.id }
+            val matchingModel = allModels.find { it.modelId == currentSelection.modelId }
             if (matchingModel != null) {
                 defaultModelCombo?.selectedItem = matchingModel
             }
@@ -807,7 +797,6 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
             val displayName = tableModel.getValueAt(i, 0) as? String ?: continue
             val modelId = tableModel.getValueAt(i, 1) as? String ?: continue
             result.add(ModelInfo(
-                id = "custom_${modelId.hashCode().toUInt()}",
                 displayName = displayName,
                 modelId = modelId,
                 isBuiltIn = false
@@ -945,13 +934,11 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         val selectedModel = defaultModelCombo?.selectedItem as? ModelInfo
         val savedDefaultModel = settings.defaultModel
         // 检查选中的模型 ID 是否与保存的一致
-        val modelModified = selectedModel?.id != savedDefaultModel
+        val modelModified = selectedModel?.modelId != savedDefaultModel
 
         // 检查自定义模型列表是否修改
-        val tableCustomModels = getCustomModelsFromTable().map {
-            CustomModelConfig(it.id, it.displayName, it.modelId)
-        }
-        val savedCustomModels = settings.getCustomModels()
+        val tableCustomModels = getCustomModelsFromTable().map { it.displayName to it.modelId }
+        val savedCustomModels = settings.getCustomModels().map { it.displayName to it.modelId }
         val customModelsModified = tableCustomModels != savedCustomModels
 
         // General Tab
@@ -998,11 +985,18 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
 
         // 保存选中的模型（使用 ModelInfo 的 id）
         val selectedModel = defaultModelCombo?.selectedItem as? ModelInfo
-        settings.defaultModel = selectedModel?.id ?: DefaultModel.OPUS_45.name
+        val fallbackModelId = settings.getAllAvailableModels()
+            .firstOrNull { it.isBuiltIn }
+            ?.modelId
+            ?: "claude-opus-4-5-20251101"
+        settings.defaultModel = selectedModel?.modelId ?: fallbackModelId
 
         // 保存自定义模型列表
-        val customModels = getCustomModelsFromTable().map {
-            CustomModelConfig(it.id, it.displayName, it.modelId)
+        val existingModels = settings.getCustomModels().associateBy { it.modelId }
+        val customModels = getCustomModelsFromTable().map { model ->
+            val existing = existingModels[model.modelId]
+            val id = existing?.id ?: "custom_${System.currentTimeMillis()}_${model.modelId.hashCode().toUInt()}"
+            CustomModelConfig(id, model.displayName, model.modelId)
         }
         settings.setCustomModels(customModels)
 
@@ -1044,7 +1038,7 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         refreshModelCombo()
         val savedDefaultModel = settings.defaultModel
         val allModels = settings.getAllAvailableModels()
-        val matchingModel = allModels.find { it.id == savedDefaultModel }
+        val matchingModel = allModels.find { it.modelId == savedDefaultModel }
         if (matchingModel != null) {
             defaultModelCombo?.selectedItem = matchingModel
         } else {

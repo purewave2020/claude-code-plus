@@ -12,7 +12,7 @@ export enum PermissionMode {
   BYPASS_PERMISSIONS = 'bypass'  // 绕过权限检查
 }
 
-import { BaseModel, getDefaultModelId } from '@/constants/models'
+import { getDefaultModelId } from '@/constants/models'
 
 /**
  * 设置配置
@@ -90,17 +90,6 @@ export const PERMISSION_MODE_LABELS: Record<PermissionMode, string> = {
   [PermissionMode.ACCEPT_EDITS]: '自动接受编辑',
   [PermissionMode.PLAN]: '计划模式',
   [PermissionMode.BYPASS_PERMISSIONS]: '绕过权限检查'
-}
-
-/**
- * @deprecated 不再使用静态的模型标签映射
- * 请使用 getModelDisplayName(modelId) 获取模型显示名称
- * 这样可以支持动态加载的自定义模型
- */
-export const MODEL_LABELS: Record<BaseModel, string> = {
-  [BaseModel.OPUS_45]: 'Opus 4.5',
-  [BaseModel.SONNET_45]: 'Sonnet 4.5',
-  [BaseModel.HAIKU_45]: 'Haiku 4.5',
 }
 
 /**

@@ -244,11 +244,11 @@ class CodexConfigurable : SearchableConfigurable {
         return codexPathField?.text?.trim() != settings.codexPath ||
             (webSearchCheckBox?.isSelected ?: false) != settings.codexWebSearchEnabled ||
             (defaultBypassPermissionsCheckbox?.isSelected ?: false) != settings.defaultBypassPermissions ||
-            (defaultModelCombo?.selectedItem as? ModelInfo)?.id != settings.codexDefaultModelId ||
+            (defaultModelCombo?.selectedItem as? ModelInfo)?.modelId != settings.codexDefaultModelId ||
             defaultReasoningEffortCombo?.selectedItem != settings.codexDefaultReasoningEffort ||
             defaultReasoningSummaryCombo?.selectedItem != settings.codexDefaultReasoningSummary ||
             (defaultSandboxModeCombo?.selectedItem as? SandboxOption)?.id != settings.codexDefaultSandboxMode ||
-            getCustomModelsFromTable().map { CustomModelConfig(it.id, it.displayName, it.modelId) } != settings.getCodexCustomModels()
+            getCustomModelsFromTable().map { it.displayName to it.modelId } != settings.getCodexCustomModels().map { it.displayName to it.modelId }
     }
 
     override fun apply() {
@@ -257,13 +257,16 @@ class CodexConfigurable : SearchableConfigurable {
         settings.codexWebSearchEnabled = webSearchCheckBox?.isSelected ?: false
         settings.defaultBypassPermissions = defaultBypassPermissionsCheckbox?.isSelected ?: false
         val selectedModel = defaultModelCombo?.selectedItem as? ModelInfo
-        settings.codexDefaultModelId = selectedModel?.id ?: settings.getCodexBuiltInModels().first().id
+        settings.codexDefaultModelId = selectedModel?.modelId ?: settings.getCodexBuiltInModels().first().modelId
         settings.codexDefaultReasoningEffort = defaultReasoningEffortCombo?.selectedItem as? String ?: "medium"
         settings.codexDefaultReasoningSummary = defaultReasoningSummaryCombo?.selectedItem as? String ?: "auto"
         settings.codexDefaultSandboxMode =
             (defaultSandboxModeCombo?.selectedItem as? SandboxOption)?.id ?: "workspace-write"
-        val customModels = getCustomModelsFromTable().map {
-            CustomModelConfig(it.id, it.displayName, it.modelId)
+        val existingModels = settings.getCodexCustomModels().associateBy { it.modelId }
+        val customModels = getCustomModelsFromTable().map { model ->
+            val existing = existingModels[model.modelId]
+            val id = existing?.id ?: "custom_${System.currentTimeMillis()}_${model.modelId.hashCode().toUInt()}"
+            CustomModelConfig(id, model.displayName, model.modelId)
         }
         settings.setCodexCustomModels(customModels)
         settings.notifyChange()
@@ -281,7 +284,7 @@ class CodexConfigurable : SearchableConfigurable {
         refreshModelCombo()
         val savedDefaultModelId = settings.codexDefaultModelId
         val allModels = settings.getAllCodexModels()
-        val matchingModel = allModels.find { it.id == savedDefaultModelId }
+        val matchingModel = allModels.find { it.modelId == savedDefaultModelId }
         if (matchingModel != null) {
             defaultModelCombo?.selectedItem = matchingModel
         } else {
@@ -373,7 +376,7 @@ class CodexConfigurable : SearchableConfigurable {
         defaultModelCombo?.model = DefaultComboBoxModel(allModels.toTypedArray())
 
         if (currentSelection != null) {
-            val matchingModel = allModels.find { it.id == currentSelection.id }
+            val matchingModel = allModels.find { it.modelId == currentSelection.modelId }
             if (matchingModel != null) {
                 defaultModelCombo?.selectedItem = matchingModel
             }
@@ -387,7 +390,7 @@ class CodexConfigurable : SearchableConfigurable {
             val displayName = tableModel.getValueAt(i, 0) as? String ?: continue
             val modelId = tableModel.getValueAt(i, 1) as? String ?: continue
             if (displayName.isBlank() || modelId.isBlank()) continue
-            result.add(ModelInfo(modelId, displayName, modelId, isBuiltIn = false))
+            result.add(ModelInfo(modelId = modelId, displayName = displayName, isBuiltIn = false))
         }
         return result
     }

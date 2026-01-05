@@ -50,12 +50,12 @@
     >
       <el-option
         v-for="model in codexModels"
-        :key="model.id"
-        :value="model.id"
+        :key="model.modelId"
+        :value="model.modelId"
         :label="formatCodexModelLabel(model)"
       >
         <span class="model-option-label">
-          <span class="model-option-check" :class="{ active: model.id === localModel }">✓</span>
+          <span class="model-option-check" :class="{ active: model.modelId === localModel }">✓</span>
           <span>{{ formatCodexModelLabel(model) }}</span>
         </span>
       </el-option>
@@ -136,12 +136,12 @@ const settingsStore = useSettingsStore()
 const codexModels = computed(() => {
   const models = settingsStore.getModelsForBackend('codex') || []
   const currentModelId = props.model
-  if (!currentModelId || models.some(model => model.id === currentModelId)) {
+  if (!currentModelId || models.some(model => model.modelId === currentModelId)) {
     return models
   }
   return [
     {
-      id: currentModelId,
+      modelId: currentModelId,
       displayName: currentModelId,
       description: 'Custom model',
       supportsThinking: true,
@@ -162,8 +162,8 @@ function handleModelChange(value: string) {
   emit('update:model', value)
 }
 
-function formatCodexModelLabel(model: { id: string; displayName: string }) {
-  const name = model.displayName || model.id
+function formatCodexModelLabel(model: { modelId: string; displayName: string }) {
+  const name = model.displayName || model.modelId
   if (!name) return ''
   const lower = name.toLowerCase()
   if (name === lower && lower.startsWith('gpt-')) {

@@ -21,8 +21,8 @@
         >
           <option
             v-for="model in group.models"
-            :key="model.id"
-            :value="model.id"
+            :key="model.modelId"
+            :value="model.modelId"
             :disabled="model.unavailable"
           >
             {{ model.displayName }}
@@ -79,7 +79,7 @@ import { useI18n } from 'vue-i18n'
 import type { BackendType, BackendModelInfo } from '@/types/backend'
 import {
   getModels,
-  getModelById,
+  getModelByModelId,
   getBackendDisplayName,
   isValidModel,
 } from '@/services/backendCapabilities'
@@ -195,7 +195,7 @@ const currentModel = computed<BackendModelInfo | undefined>(() => {
   if (!props.backendType || !props.modelValue) {
     return undefined
   }
-  return getModelById(props.backendType, props.modelValue)
+  return getModelByModelId(props.backendType, props.modelValue)
 })
 
 /**
@@ -268,9 +268,9 @@ watch(
 
       if (defaultModel) {
         console.warn(
-          `[ModelSelector] 后端切换: ${props.modelValue} 在 ${newBackendType} 中不可用，切换到默认模型 ${defaultModel.id}`
+          `[ModelSelector] 后端切换: ${props.modelValue} 在 ${newBackendType} 中不可用，切换到默认模型 ${defaultModel.modelId}`
         )
-        emit('update:modelValue', defaultModel.id)
+        emit('update:modelValue', defaultModel.modelId)
       }
     }
   },

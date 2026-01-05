@@ -151,6 +151,7 @@ object McpHttpGateway {
 
     private suspend fun registerTools(syncServer: McpSyncServer, server: SdkMcpServer) {
         val tools = server.listTools()
+        logger.info { "[MCP] Registering ${tools.size} tool(s) for server '${server.name}': ${tools.joinToString { it.name }}" }
         tools.forEach { toolDef ->
             val schemaJson = json.encodeToString(JsonObject.serializer(), toolDef.inputSchema)
             val tool = McpSchema.Tool.builder()

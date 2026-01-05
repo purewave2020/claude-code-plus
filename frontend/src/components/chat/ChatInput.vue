@@ -247,8 +247,8 @@
             >
               <el-option
                 v-for="model in claudeModelOptions"
-                :key="model.id"
-                :value="model.id"
+                :key="model.modelId"
+                :value="model.modelId"
                 :label="model.displayName"
               >
                 <span class="model-option-label">

@@ -9,14 +9,14 @@ export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-ac
 export type CodexReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
 
 export interface CodexModelInfo {
-  id: string
+  modelId: string
   displayName: string
   supportsReasoning: boolean
 }
 
 export const CODEX_MODELS: CodexModelInfo[] = [
-  { id: 'gpt-5.2-codex', displayName: 'GPT-5.2-Codex', supportsReasoning: true },
-  { id: 'gpt-5.2', displayName: 'GPT-5.2', supportsReasoning: true },
+  { modelId: 'gpt-5.2-codex', displayName: 'GPT-5.2-Codex', supportsReasoning: true },
+  { modelId: 'gpt-5.2', displayName: 'GPT-5.2', supportsReasoning: true },
 ]
 
 export interface CodexSessionConfig {
@@ -138,7 +138,7 @@ export const REASONING_EFFORT_OPTIONS: Array<{
 ]
 
 export function modelSupportsReasoning(modelId: string): boolean {
-  const model = CODEX_MODELS.find(m => m.id === modelId)
+  const model = CODEX_MODELS.find(m => m.modelId === modelId)
   return model?.supportsReasoning ?? false
 }
 

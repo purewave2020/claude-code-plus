@@ -11,7 +11,6 @@ import ch.qos.logback.core.rolling.RollingFileAppender
 import ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy
 import ch.qos.logback.core.util.FileSize
 import org.slf4j.LoggerFactory
-import org.slf4j.bridge.SLF4JBridgeHandler
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -85,6 +84,9 @@ object StandaloneLogging {
     if (isIdeaPluginEnvironment()) {
       println("📝 [StandaloneLogging] Running in IDEA plugin environment, using IDEA's built-in SLF4J implementation")
       println("📝 [StandaloneLogging] Logs will be written to idea.log")
+      // Bridge java.util.logging -> SLF4J if the bridge is available in the IDE classpath
+      bridgeJulToSlf4jIfAvailable()
+
       configured = true
       return
     }
@@ -99,16 +101,8 @@ object StandaloneLogging {
             return
         }
 
-    // Bridge java.util.logging → SLF4J/logback so SDK CLI 输出也会写入 server.log
-    try {
-      if (!SLF4JBridgeHandler.isInstalled()) {
-        SLF4JBridgeHandler.removeHandlersForRootLogger()
-        SLF4JBridgeHandler.install()
-        println("📝 [StandaloneLogging] JUL bridged to SLF4J")
-      }
-    } catch (e: Exception) {
-      println("⚠️ [StandaloneLogging] Failed to bridge JUL: ${e.message}")
-    }
+    // Bridge java.util.logging -> SLF4J/logback so SDK CLI output also goes to server.log
+    bridgeJulToSlf4jIfAvailable()
 
     // 0. 配置 server.log（所有日志的汇总）- 使用异步 Appender
     val serverLogFile = logDir!!.resolve("server.log").toAbsolutePath().toString()
@@ -236,5 +230,24 @@ object StandaloneLogging {
 
     asyncAppender.start()
     return asyncAppender
+  }
+
+  private fun bridgeJulToSlf4jIfAvailable() {
+    try {
+      val bridgeClass = Class.forName("org.slf4j.bridge.SLF4JBridgeHandler")
+      val isInstalled = bridgeClass.getMethod("isInstalled")
+      val removeHandlers = bridgeClass.getMethod("removeHandlersForRootLogger")
+      val install = bridgeClass.getMethod("install")
+      val installed = (isInstalled.invoke(null) as? Boolean) ?: false
+      if (!installed) {
+        removeHandlers.invoke(null)
+        install.invoke(null)
+        println("[StandaloneLogging] JUL bridged to SLF4J")
+      }
+    } catch (e: ClassNotFoundException) {
+      println("[StandaloneLogging] SLF4JBridgeHandler not found, skip JUL bridge")
+    } catch (e: Throwable) {
+      println("[StandaloneLogging] Failed to bridge JUL: ${e.message}")
+    }
   }
 }

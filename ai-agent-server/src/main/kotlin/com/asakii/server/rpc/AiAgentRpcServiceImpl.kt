@@ -226,6 +226,19 @@ class AiAgentRpcServiceImpl(
         client = newClient
         sdkLog.info("[connect] client connected: isConnected=${newClient.isConnected()}")
 
+        if (connectOptions.provider == AiAgentProvider.CODEX) {
+            scope.launch {
+                runCatching {
+                    withTimeout(10_000L) { newClient.getMcpStatus() }
+                }.onSuccess { statusList ->
+                    val summary = statusList.joinToString { info -> "${info.name}:${info.status}" }
+                    sdkLog.info("[MCP] Codex status auto-check: ${statusList.size} server(s) -> $summary")
+                }.onFailure { e ->
+                    sdkLog.warn("[MCP] Codex status auto-check failed: ${e.message}")
+                }
+            }
+        }
+
         val rpcProvider = currentProvider.toRpcProvider()
         val providerSessionId = newClient.getProviderSessionId()?.takeIf { it.isNotBlank() }
         val resolvedSystemPrompt = (connectOptions.systemPrompt as? String?) ?: normalizedOptions.systemPrompt
@@ -668,6 +681,15 @@ class AiAgentRpcServiceImpl(
     ): McpSessionSetup {
         val defaults = serviceConfig.claude
         val fallbackBackends = serviceConfig.mcpEnabledBackends
+        sdkLog.info(
+            "[MCP] prepareMcpSession: provider=$provider, sessionId=$sessionId, fallbackBackends=${fallbackBackends.joinToString()}"
+        )
+        sdkLog.info(
+            "[MCP] builtins enabled: userInteraction=${defaults.enableUserInteractionMcp} backends=${defaults.userInteractionMcpBackends.joinToString()}," +
+                " jetbrains=${defaults.enableJetBrainsMcp} backends=${defaults.jetbrainsMcpBackends.joinToString()}," +
+                " terminal=${defaults.enableTerminalMcp} backends=${defaults.terminalMcpBackends.joinToString()}," +
+                " git=${defaults.enableGitMcp} backends=${defaults.gitMcpBackends.joinToString()}"
+        )
 
         fun isProviderAllowed(allowed: Set<AiAgentProvider>?): Boolean {
             val resolved = allowed ?: fallbackBackends
@@ -770,6 +792,9 @@ class AiAgentRpcServiceImpl(
 
         val allowedTools = buildMcpAllowedTools(internalServers)
         val codexConfigOverrides = buildCodexMcpConfigOverrides(claudeServers)
+        if (codexConfigOverrides.isNotEmpty()) {
+            sdkLog.info("[MCP] Codex config overrides keys: ${codexConfigOverrides.keys.sorted().joinToString()}")
+        }
         if (claudeServers.isNotEmpty()) {
             sdkLog.info("?? [MCP] Registered servers: ${claudeServers.keys.joinToString()}")
         }
@@ -1066,6 +1091,9 @@ class AiAgentRpcServiceImpl(
             codexDefaults.webSearchEnabled?.let { enabled ->
                 put("features.web_search_request", enabled.toString())
             }
+        }
+        if (configOverrides.isNotEmpty()) {
+            sdkLog.info("[buildCodexOverrides] configOverrides keys: ${configOverrides.keys.sorted().joinToString()}")
         }
 
         val clientOptions = CodexClientOptions(
@@ -1576,7 +1604,9 @@ class AiAgentRpcServiceImpl(
     override suspend fun getMcpStatus(): RpcMcpStatusResult {
         val currentClient = client ?: return RpcMcpStatusResult(servers = emptyList())
 
+        sdkLog.info("[MCP] getMcpStatus: provider=$currentProvider")
         val statusList = currentClient.getMcpStatus()
+        sdkLog.info("[MCP] getMcpStatus: ${statusList.size} server(s) -> ${statusList.map { it.name }.joinToString()}")
         return RpcMcpStatusResult(
             servers = statusList.map { info ->
                 RpcMcpServerStatus(
@@ -1641,8 +1671,10 @@ class AiAgentRpcServiceImpl(
             count = 0
         )
 
+        sdkLog.info("[MCP] getMcpTools: provider=$currentProvider, serverName=${serverName ?: "(all)"}")
         return try {
             val result = currentClient.getMcpTools(serverName)
+            sdkLog.info("[MCP] getMcpTools: returned ${result.count} tool(s) (serverName=${result.serverName ?: "(all)"})")
             RpcMcpToolsResult(
                 serverName = result.serverName,
                 tools = result.tools.map { tool ->
@@ -1673,21 +1705,18 @@ class AiAgentRpcServiceImpl(
         // 内置模型
         val builtInModels = listOf(
             RpcModelInfo(
-                id = "OPUS_45",
                 displayName = "Opus 4.5",
-                modelId = "claude-opus-4-5-20250929",
+                modelId = "claude-opus-4-5-20251101",
                 isBuiltIn = true
             ),
             RpcModelInfo(
-                id = "SONNET_45",
                 displayName = "Sonnet 4.5",
                 modelId = "claude-sonnet-4-5-20250929",
                 isBuiltIn = true
             ),
             RpcModelInfo(
-                id = "HAIKU_45",
                 displayName = "Haiku 4.5",
-                modelId = "claude-haiku-4-5-20250929",
+                modelId = "claude-haiku-4-5-20251001",
                 isBuiltIn = true
             )
         )
@@ -1695,7 +1724,6 @@ class AiAgentRpcServiceImpl(
         // 自定义模型
         val customModels = config.customModels.map { model ->
             RpcModelInfo(
-                id = model.id,
                 displayName = model.displayName,
                 modelId = model.modelId,
                 isBuiltIn = false
