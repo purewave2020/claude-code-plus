@@ -34,6 +34,7 @@ class CodexJsonRpcClient(
     internal val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = false
+        isLenient = true  // Allow non-quoted primitives (Codex sends id as integer)
     }
 
     private val writer = BufferedWriter(OutputStreamWriter(stdin, Charsets.UTF_8))
