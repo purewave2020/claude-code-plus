@@ -152,6 +152,7 @@ class CodexAppServerClient private constructor(
                 val cached = itemCache[request.params.itemId] as? ThreadItem.CommandExecution
                 AppServerEvent.CommandApprovalRequired(
                     requestId = request.requestId,
+                    rawId = request.rawId,
                     itemId = request.params.itemId,
                     threadId = request.params.threadId,
                     turnId = request.params.turnId,
@@ -165,6 +166,7 @@ class CodexAppServerClient private constructor(
                 val cached = itemCache[request.params.itemId] as? ThreadItem.FileChange
                 AppServerEvent.FileChangeApprovalRequired(
                     requestId = request.requestId,
+                    rawId = request.rawId,
                     itemId = request.params.itemId,
                     threadId = request.params.threadId,
                     turnId = request.params.turnId,
@@ -386,38 +388,38 @@ class CodexAppServerClient private constructor(
     /**
      * 鎺ュ彈鍛戒护鎵ц
      */
-    suspend fun acceptCommand(requestId: String, forSession: Boolean = false) {
+    suspend fun acceptCommand(rawId: JsonElement, forSession: Boolean = false) {
         val decision = if (forSession) {
             ApprovalDecision.AcceptForSession
         } else {
             ApprovalDecision.Accept
         }
         val response = CommandExecutionRequestApprovalResponse(decision = decision)
-        rpc.respondToServerRequest(requestId, response)
+        rpc.respondToServerRequest(rawId, response)
     }
 
     /**
      * 拒绝命令执行
      */
-    suspend fun declineCommand(requestId: String) {
+    suspend fun declineCommand(rawId: JsonElement) {
         val response = CommandExecutionRequestApprovalResponse(decision = ApprovalDecision.Decline)
-        rpc.respondToServerRequest(requestId, response)
+        rpc.respondToServerRequest(rawId, response)
     }
 
     /**
      * 接受文件修改
      */
-    suspend fun acceptFileChange(requestId: String) {
+    suspend fun acceptFileChange(rawId: JsonElement) {
         val response = FileChangeRequestApprovalResponse(decision = ApprovalDecision.Accept)
-        rpc.respondToServerRequest(requestId, response)
+        rpc.respondToServerRequest(rawId, response)
     }
 
     /**
      * 拒绝文件修改
      */
-    suspend fun declineFileChange(requestId: String) {
+    suspend fun declineFileChange(rawId: JsonElement) {
         val response = FileChangeRequestApprovalResponse(decision = ApprovalDecision.Decline)
-        rpc.respondToServerRequest(requestId, response)
+        rpc.respondToServerRequest(rawId, response)
     }
 
     // ============== 账户相关 ==============
@@ -507,6 +509,8 @@ sealed class AppServerEvent {
 
     data class CommandApprovalRequired(
         val requestId: String,
+        /** 原始的 id JsonElement（保留 Codex 发送的类型：整数或字符串） */
+        val rawId: JsonElement,
         val itemId: String,
         val threadId: String,
         val turnId: String,
@@ -518,6 +522,8 @@ sealed class AppServerEvent {
 
     data class FileChangeApprovalRequired(
         val requestId: String,
+        /** 原始的 id JsonElement（保留 Codex 发送的类型：整数或字符串） */
+        val rawId: JsonElement,
         val itemId: String,
         val threadId: String,
         val turnId: String,

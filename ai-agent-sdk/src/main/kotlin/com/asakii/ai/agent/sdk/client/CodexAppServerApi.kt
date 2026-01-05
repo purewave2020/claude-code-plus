@@ -13,6 +13,7 @@ import com.asakii.codex.agent.sdk.appserver.ThreadInfo
 import com.asakii.codex.agent.sdk.appserver.TurnInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.json.JsonElement
 import java.io.Closeable
 import java.nio.file.Path
 
@@ -40,10 +41,10 @@ internal interface CodexAppServerApi : Closeable {
         summary: ReasoningSummary? = null
     ): TurnInfo
     suspend fun interruptTurn(threadId: String, turnId: String)
-    suspend fun acceptCommand(requestId: String, forSession: Boolean = false)
-    suspend fun declineCommand(requestId: String)
-    suspend fun acceptFileChange(requestId: String)
-    suspend fun declineFileChange(requestId: String)
+    suspend fun acceptCommand(rawId: JsonElement, forSession: Boolean = false)
+    suspend fun declineCommand(rawId: JsonElement)
+    suspend fun acceptFileChange(rawId: JsonElement)
+    suspend fun declineFileChange(rawId: JsonElement)
     suspend fun listModels(cursor: String? = null, limit: Int? = null): ModelListResponse
     suspend fun listMcpServerStatus(cursor: String? = null, limit: Int? = null): ListMcpServerStatusResponse
     suspend fun startMcpOauthLogin(
@@ -96,20 +97,20 @@ internal class DefaultCodexAppServerApi(private val client: CodexAppServerClient
         client.interruptTurn(threadId, turnId)
     }
 
-    override suspend fun acceptCommand(requestId: String, forSession: Boolean) {
-        client.acceptCommand(requestId, forSession)
+    override suspend fun acceptCommand(rawId: JsonElement, forSession: Boolean) {
+        client.acceptCommand(rawId, forSession)
     }
 
-    override suspend fun declineCommand(requestId: String) {
-        client.declineCommand(requestId)
+    override suspend fun declineCommand(rawId: JsonElement) {
+        client.declineCommand(rawId)
     }
 
-    override suspend fun acceptFileChange(requestId: String) {
-        client.acceptFileChange(requestId)
+    override suspend fun acceptFileChange(rawId: JsonElement) {
+        client.acceptFileChange(rawId)
     }
 
-    override suspend fun declineFileChange(requestId: String) {
-        client.declineFileChange(requestId)
+    override suspend fun declineFileChange(rawId: JsonElement) {
+        client.declineFileChange(rawId)
     }
 
     override suspend fun listModels(cursor: String?, limit: Int?): ModelListResponse {

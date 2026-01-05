@@ -106,9 +106,10 @@ class CodexJsonRpcClient(
             }
             // 请求: 有 id 和 method (服务器请求，如审批)
             obj.containsKey("id") && obj.containsKey("method") -> {
+                val rawId = obj["id"]!!  // 保留原始 id（整数或字符串）
                 val request = json.decodeFromJsonElement<JsonRpcRequest>(jsonElement)
                 logger.info("RPC server request: method=${request.method} id=${request.id}")
-                handleServerRequest(request)
+                handleServerRequest(request, rawId)
             }
             // 通知: 只有 method，没有 id
             obj.containsKey("method") && !obj.containsKey("id") -> {
@@ -121,19 +122,19 @@ class CodexJsonRpcClient(
         }
     }
 
-    private suspend fun handleServerRequest(request: JsonRpcRequest) {
+    private suspend fun handleServerRequest(request: JsonRpcRequest, rawId: JsonElement) {
         val serverRequest = when (request.method) {
             "item/commandExecution/requestApproval" -> {
                 val params = request.params?.let {
                     json.decodeFromJsonElement<CommandExecutionRequestApprovalParams>(it)
                 }
-                params?.let { ServerRequest.CommandApproval(request.id, it) }
+                params?.let { ServerRequest.CommandApproval(request.id, rawId, it) }
             }
             "item/fileChange/requestApproval" -> {
                 val params = request.params?.let {
                     json.decodeFromJsonElement<FileChangeRequestApprovalParams>(it)
                 }
-                params?.let { ServerRequest.FileChangeApproval(request.id, it) }
+                params?.let { ServerRequest.FileChangeApproval(request.id, rawId, it) }
             }
             else -> null
         }
@@ -217,7 +218,26 @@ class CodexJsonRpcClient(
     }
 
     /**
-     * 响应服务器请求 (审批)
+     * 响应服务器请求 (审批) - 使用原始 id 类型
+     *
+     * @param rawId 原始的 id JsonElement（保留 Codex 发送的类型：整数或字符串）
+     * @param result 响应结果
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    suspend inline fun <reified R> respondToServerRequest(rawId: JsonElement, result: R) {
+        val response = buildJsonObject {
+            put("id", rawId)  // 使用原始类型
+            put("result", encodeToJsonElementSafely(result))
+        }
+        if (logger.isLoggable(Level.FINE)) {
+            logger.fine("RPC response to server request: id=$rawId")
+        }
+        sendLine(json.encodeToString(response))
+    }
+
+    /**
+     * 响应服务器请求 (审批) - 向后兼容，使用字符串 id
+     * @deprecated 使用 respondToServerRequest(rawId: JsonElement, result: R) 以保留原始 id 类型
      */
     @OptIn(ExperimentalSerializationApi::class)
     suspend inline fun <reified R> respondToServerRequest(requestId: String, result: R) {
@@ -292,14 +312,18 @@ class CodexJsonRpcClient(
  */
 sealed class ServerRequest {
     abstract val requestId: String
+    /** 原始的 id 值（保留 Codex 发送的类型：整数或字符串） */
+    abstract val rawId: JsonElement
 
     data class CommandApproval(
         override val requestId: String,
+        override val rawId: JsonElement,
         val params: CommandExecutionRequestApprovalParams
     ) : ServerRequest()
 
     data class FileChangeApproval(
         override val requestId: String,
+        override val rawId: JsonElement,
         val params: FileChangeRequestApprovalParams
     ) : ServerRequest()
 }

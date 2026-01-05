@@ -1,6 +1,7 @@
 ﻿package com.asakii.server.codex
 
 import com.asakii.codex.agent.sdk.appserver.*
+import kotlinx.serialization.json.JsonElement
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
@@ -388,35 +389,35 @@ class CodexBackendProvider(
     /**
      * 鍝嶅簲鍛戒护瀹℃壒
      */
-    suspend fun respondToCommandApproval(requestId: String, approved: Boolean, forSession: Boolean = false) {
+    suspend fun respondToCommandApproval(rawId: JsonElement, approved: Boolean, forSession: Boolean = false) {
         ensureRunning()
 
         val client = appServerClient ?: throw IllegalStateException("App-server client not available")
 
         if (approved) {
-            client.acceptCommand(requestId, forSession)
+            client.acceptCommand(rawId, forSession)
         } else {
-            client.declineCommand(requestId)
+            client.declineCommand(rawId)
         }
 
-        logger.info("Command approval response sent: $requestId, approved=$approved")
+        logger.info("Command approval response sent: $rawId, approved=$approved")
     }
 
     /**
      * 鍝嶅簲鏂囦欢淇敼瀹℃壒
      */
-    suspend fun respondToFileChangeApproval(requestId: String, approved: Boolean) {
+    suspend fun respondToFileChangeApproval(rawId: JsonElement, approved: Boolean) {
         ensureRunning()
 
         val client = appServerClient ?: throw IllegalStateException("App-server client not available")
 
         if (approved) {
-            client.acceptFileChange(requestId)
+            client.acceptFileChange(rawId)
         } else {
-            client.declineFileChange(requestId)
+            client.declineFileChange(rawId)
         }
 
-        logger.info("File change approval response sent: $requestId, approved=$approved")
+        logger.info("File change approval response sent: $rawId, approved=$approved")
     }
 
     /**

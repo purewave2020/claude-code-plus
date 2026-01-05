@@ -26,6 +26,7 @@ import com.asakii.codex.agent.sdk.appserver.ThreadItem
 import com.asakii.codex.agent.sdk.appserver.TurnInfo
 import com.asakii.codex.agent.sdk.appserver.TurnStatus
 import com.asakii.codex.agent.sdk.appserver.SandboxPolicy
+import kotlinx.serialization.json.JsonElement
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
@@ -705,20 +706,20 @@ class CodexAgentClientImplTest {
         override suspend fun interruptTurn(threadId: String, turnId: String) {
         }
 
-        override suspend fun acceptCommand(requestId: String, forSession: Boolean) {
-            acceptedCommands.add(requestId)
+        override suspend fun acceptCommand(rawId: JsonElement, forSession: Boolean) {
+            acceptedCommands.add(rawId.toString())
         }
 
-        override suspend fun declineCommand(requestId: String) {
-            declinedCommands.add(requestId)
+        override suspend fun declineCommand(rawId: JsonElement) {
+            declinedCommands.add(rawId.toString())
         }
 
-        override suspend fun acceptFileChange(requestId: String) {
-            acceptedFileChanges.add(requestId)
+        override suspend fun acceptFileChange(rawId: JsonElement) {
+            acceptedFileChanges.add(rawId.toString())
         }
 
-        override suspend fun declineFileChange(requestId: String) {
-            declinedFileChanges.add(requestId)
+        override suspend fun declineFileChange(rawId: JsonElement) {
+            declinedFileChanges.add(rawId.toString())
         }
 
         override suspend fun listModels(cursor: String?, limit: Int?): ModelListResponse {

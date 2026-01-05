@@ -621,9 +621,9 @@ internal class CodexAgentClientImpl(
         val approveByDefault = bypass || approvalPolicy == ApprovalMode.NEVER
         val approved = decision?.approved ?: approveByDefault
         if (approved) {
-            client?.acceptCommand(event.requestId, forSession = false)
+            client?.acceptCommand(event.rawId, forSession = false)
         } else {
-            client?.declineCommand(event.requestId)
+            client?.declineCommand(event.rawId)
         }
     }
 
@@ -657,9 +657,9 @@ internal class CodexAgentClientImpl(
 
         val approved = decision?.approved ?: autoApprove
         if (approved) {
-            client?.acceptFileChange(event.requestId)
+            client?.acceptFileChange(event.rawId)
         } else {
-            client?.declineFileChange(event.requestId)
+            client?.declineFileChange(event.rawId)
         }
     }
 
