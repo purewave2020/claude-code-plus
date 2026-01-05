@@ -187,6 +187,13 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 ApplicationManager.getApplication().invokeLater {
                     val file = LocalFileSystem.getInstance().findFileByPath(request.filePath)
                     file?.refresh(false, false)
+
+                    // 检查是否是有效文件（非目录）
+                    if (file != null && file.isDirectory) {
+                        logger.warning("⚠️ [JetBrainsApi.file] Cannot show preview diff for directory: ${request.filePath}")
+                        return@invokeLater
+                    }
+
                     val currentContent = file?.let { String(it.contentsToByteArray(), Charsets.UTF_8) } ?: ""
 
                     // 依次应用所有编辑操作得到预览后的内容
@@ -241,6 +248,13 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 ApplicationManager.getApplication().invokeLater {
                     val file = LocalFileSystem.getInstance().findFileByPath(request.filePath)
                     file?.refresh(false, false)
+
+                    // 检查是否是有效文件（非目录）
+                    if (file != null && file.isDirectory) {
+                        logger.warning("⚠️ [JetBrainsApi.file] Cannot show diff for directory: ${request.filePath}")
+                        return@invokeLater
+                    }
+
                     val currentContent = file?.let { String(it.contentsToByteArray(), Charsets.UTF_8) } ?: ""
 
                     // 优先使用缓存的原始内容，否则通过反向替换计算
