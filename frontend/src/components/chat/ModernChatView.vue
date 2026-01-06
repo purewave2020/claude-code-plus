@@ -524,9 +524,10 @@ async function handleSendMessage(contents?: ContentBlock[], options?: SendOption
 
     // 如果是斜杠命令，不发送 contexts；否则过滤掉禁用的 contexts
     const currentContexts = options?.isSlashCommand ? [] : currentTabContexts.value.filter(c => !c.disabled)
-    // 清空当前 Tab 的 contexts
+    const remainingContexts = currentTabContexts.value.filter(c => c.disabled)
+    // 发送后保留禁用的 contexts
     if (sessionStore.currentTab) {
-      sessionStore.currentTab.uiState.contexts = []
+      sessionStore.currentTab.uiState.contexts = remainingContexts
     }
 
     console.log('Sending message via currentTab', options?.isSlashCommand ? '(no contexts for slash command)' : `(${currentContexts.length} contexts)`)
@@ -552,6 +553,7 @@ async function handleForceSend(contents?: ContentBlock[], options?: SendOptions)
 
   // 如果是斜杠命令，不发送 contexts；否则过滤掉禁用的 contexts
   const currentContexts = options?.isSlashCommand ? [] : currentTabContexts.value.filter(c => !c.disabled)
+  const remainingContexts = currentTabContexts.value.filter(c => c.disabled)
 
   // 发送消息时切换到跟随模式
   sessionStore.switchToFollowMode()
@@ -563,9 +565,9 @@ async function handleForceSend(contents?: ContentBlock[], options?: SendOptions)
     ideContext: options?.ideContext  // 传递结构化的 IDE 上下文
   }, { isSlashCommand: options?.isSlashCommand })
 
-  // 发送后清空当前 Tab 的上下文
+  // 发送后保留禁用的 contexts
   if (sessionStore.currentTab) {
-    sessionStore.currentTab.uiState.contexts = []
+    sessionStore.currentTab.uiState.contexts = remainingContexts
   }
 }
 

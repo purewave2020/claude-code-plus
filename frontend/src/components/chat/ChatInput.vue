@@ -1920,6 +1920,30 @@ onUnmounted(() => {
   text-decoration: line-through;
 }
 
+.context-tag.context-disabled .tag-image-preview {
+  filter: grayscale(1) contrast(0.9) brightness(0.9);
+}
+
+.context-tag.context-disabled.image-tag {
+  opacity: 0.7;
+}
+
+.context-tag.context-disabled.image-tag::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--theme-foreground, #24292e) 0,
+    var(--theme-foreground, #24292e) 2px,
+    transparent 2px,
+    transparent 4px
+  );
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 .context-tag.image-tag {
   position: relative;
   padding: 2px;
@@ -1967,6 +1991,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 2;
   opacity: 0;
   transition: opacity 0.15s;
 }
