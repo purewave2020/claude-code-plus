@@ -137,9 +137,12 @@ const otherInputs = reactive<Record<string, string>>({})
 // 多选模式 Other 输入
 const multiOtherInputs = reactive<Record<string, string>>({})
 
-// 是否有多选问题
+// 是否需要显示统一提交按钮（有多选问题 或 有多个问题）
 const hasMultiSelectQuestion = computed(() => {
-  return pendingQuestion.value?.questions.some(q => q.multiSelect) ?? false
+  if (!pendingQuestion.value) return false
+  const questions = pendingQuestion.value.questions
+  // 有多选问题，或者有多个问题时，都需要统一提交按钮
+  return questions.some(q => q.multiSelect) || questions.length > 1
 })
 
 // 当问题变化时重置状态
