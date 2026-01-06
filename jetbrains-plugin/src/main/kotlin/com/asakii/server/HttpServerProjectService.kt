@@ -195,7 +195,9 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         "context7Mcp=${settings.enableContext7Mcp}(${context7Backends.joinToString()}), " +
                         "terminalMcp=${settings.enableTerminalMcp}(${terminalBackends.joinToString()}), " +
                         "gitMcp=${settings.enableGitMcp}(${gitBackends.joinToString()}), " +
-                        "defaultBypass=${settings.defaultBypassPermissions}"
+                        "defaultBypass=${settings.defaultBypassPermissions}, " +
+                        "claudeAutoCleanup=${settings.claudeDefaultAutoCleanupContexts}, " +
+                        "codexAutoCleanup=${settings.codexDefaultAutoCleanupContexts}"
                 )
 
                 // 创建 IDEA 文件同步 hooks
@@ -221,6 +223,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         mcpServersConfig = loadMcpServersConfig(settings),
                         mcpInstructions = loadMcpInstructions(settings),
                         dangerouslySkipPermissions = settings.defaultBypassPermissions,
+                        defaultAutoCleanupContexts = settings.claudeDefaultAutoCleanupContexts,
                         defaultThinkingLevel = settings.defaultThinkingLevel,
                         defaultThinkingTokens = settings.defaultThinkingTokens,
                         ideaFileSyncHooks = fileSyncHooks
@@ -231,7 +234,8 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         defaultModelId = settings.codexDefaultModelId,
                         sandboxMode = settings.codexDefaultSandboxMode,
                         defaultReasoningEffort = settings.codexDefaultReasoningEffort,
-                        defaultReasoningSummary = settings.codexDefaultReasoningSummary
+                        defaultReasoningSummary = settings.codexDefaultReasoningSummary,
+                        defaultAutoCleanupContexts = settings.codexDefaultAutoCleanupContexts
                     ),
                     mcpEnabledBackends = mcpEnabledBackends,
                     customModels = settings.getCustomModels().map { model ->

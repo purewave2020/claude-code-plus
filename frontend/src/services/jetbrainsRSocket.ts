@@ -229,14 +229,16 @@ function decodeSettingsResponse(data: Uint8Array): IdeSettings | null {
   const proto = fromBinary(GetIdeSettingsResponseSchema, data)
   const s = proto.settings
 
-  if (!s) {
-    return {
-      defaultModelId: '',
-      defaultModelName: '',
-      defaultBypassPermissions: false,
-      enableUserInteractionMcp: true,
-      enableJetbrainsMcp: true,
-      includePartialMessages: true,
+    if (!s) {
+      return {
+        defaultModelId: '',
+        defaultModelName: '',
+        defaultBypassPermissions: false,
+        claudeDefaultAutoCleanupContexts: false,
+        codexDefaultAutoCleanupContexts: false,
+        enableUserInteractionMcp: true,
+        enableJetbrainsMcp: true,
+        includePartialMessages: true,
       codexDefaultReasoningEffort: 'medium',
       codexDefaultReasoningSummary: 'auto',
       codexDefaultSandboxMode: 'workspace-write',
@@ -252,6 +254,8 @@ function decodeSettingsResponse(data: Uint8Array): IdeSettings | null {
     defaultModelId: s.defaultModelId || '',
     defaultModelName: s.defaultModelName || '',
     defaultBypassPermissions: s.defaultBypassPermissions,
+    claudeDefaultAutoCleanupContexts: s.claudeDefaultAutoCleanupContexts,
+    codexDefaultAutoCleanupContexts: s.codexDefaultAutoCleanupContexts,
     enableUserInteractionMcp: s.enableUserInteractionMcp,
     enableJetbrainsMcp: s.enableJetbrainsMcp,
     includePartialMessages: s.includePartialMessages,
@@ -390,6 +394,8 @@ export interface IdeSettings {
   defaultModelId: string
   defaultModelName: string
   defaultBypassPermissions: boolean
+  claudeDefaultAutoCleanupContexts: boolean
+  codexDefaultAutoCleanupContexts: boolean
   enableUserInteractionMcp: boolean
   enableJetbrainsMcp: boolean
   includePartialMessages: boolean

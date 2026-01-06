@@ -32,6 +32,10 @@ export interface Settings {
   includePartialMessages: boolean           // 包含部分消息（通用）
   maxTurns: number | null                   // 最大轮次（通用）
 
+  // === 会话默认设置 ===
+  claudeDefaultAutoCleanupContexts: boolean // Claude 默认自动清理上下文
+  codexDefaultAutoCleanupContexts: boolean  // Codex 默认自动清理上下文
+
   // === 后端配置对象 ===
   claudeConfig: ClaudeBackendConfig         // Claude 后端配置
   codexConfig: CodexBackendConfig           // Codex 后端配置
@@ -69,12 +73,14 @@ export interface IdeSettings extends BaseIdeSettings {
   claudeThinkingLevelId?: string
   claudeThinkingTokens?: number
   claudeThinkingLevels?: Array<{ levelId: string; tokens: number }>
+  claudeDefaultAutoCleanupContexts?: boolean
 
   // === Codex 特定 ===
   codexDefaultModelId?: string
   codexDefaultReasoningEffort?: CodexReasoningEffort
   codexDefaultReasoningSummary?: CodexReasoningSummary
   codexDefaultSandboxMode?: SandboxMode
+  codexDefaultAutoCleanupContexts?: boolean
   codexReasoningEffort?: CodexReasoningEffort
   codexReasoningSummary?: CodexReasoningSummary
   codexSandboxMode?: SandboxMode
@@ -99,12 +105,14 @@ interface HttpDefaultSettings {
   claudeDefaultModelId?: string
   claudeDefaultThinkingLevel?: string
   claudeDefaultThinkingTokens?: number
+  claudeDefaultAutoCleanupContexts?: boolean
 
   // Codex 配置
   codexDefaultModelId?: string
   codexReasoningEffort?: CodexReasoningEffort
   codexReasoningSummary?: CodexReasoningSummary
   codexSandboxMode?: SandboxMode
+  codexDefaultAutoCleanupContexts?: boolean
   defaultThinkingLevel?: string
   defaultThinkingTokens?: number
 }
@@ -119,6 +127,8 @@ const DEFAULT_SETTINGS: Settings = {
   skipPermissions: false,
   includePartialMessages: true,
   maxTurns: null,
+  claudeDefaultAutoCleanupContexts: false,
+  codexDefaultAutoCleanupContexts: false,
 
   // 后端配置对象
   claudeConfig: {
@@ -491,13 +501,24 @@ export const useSettingsStore = defineStore('settings', () => {
     updates.skipPermissions = newBypassValue
     console.log('🔓 [IdeSettings] ByPass 权限设置:', newBypassValue)
 
-    // 8. 应用 includePartialMessages 设置
+    // 8. 应用默认自动清理上下文设置
+    if (newIdeSettings.claudeDefaultAutoCleanupContexts !== undefined) {
+      updates.claudeDefaultAutoCleanupContexts = newIdeSettings.claudeDefaultAutoCleanupContexts
+      console.log('🧹 [IdeSettings] Claude 默认自动清理上下文:', newIdeSettings.claudeDefaultAutoCleanupContexts)
+    }
+
+    if (newIdeSettings.codexDefaultAutoCleanupContexts !== undefined) {
+      updates.codexDefaultAutoCleanupContexts = newIdeSettings.codexDefaultAutoCleanupContexts
+      console.log('🧹 [IdeSettings] Codex 默认自动清理上下文:', newIdeSettings.codexDefaultAutoCleanupContexts)
+    }
+
+    // 9. 应用 includePartialMessages 设置
     if (newIdeSettings.includePartialMessages !== undefined) {
       updates.includePartialMessages = newIdeSettings.includePartialMessages
       console.log('📡 [IdeSettings] Include Partial Messages:', newIdeSettings.includePartialMessages)
     }
 
-    // 9. 应用权限模式设置
+    // 10. 应用权限模式设置
     if (newIdeSettings.permissionMode) {
       updates.permissionMode = newIdeSettings.permissionMode as PermissionMode
       console.log('🔒 [IdeSettings] 权限模式:', newIdeSettings.permissionMode)
@@ -618,7 +639,18 @@ export const useSettingsStore = defineStore('settings', () => {
         updates.skipPermissions = httpSettings.defaultBypassPermissions ?? false
         console.log('🔓 [DefaultSettings] ByPass 权限设置:', updates.skipPermissions)
 
-        // 7. 应用 includePartialMessages 设置
+        // 7. 应用默认自动清理上下文设置
+        if (httpSettings.claudeDefaultAutoCleanupContexts !== undefined) {
+          updates.claudeDefaultAutoCleanupContexts = httpSettings.claudeDefaultAutoCleanupContexts
+          console.log('🧹 [DefaultSettings] Claude 默认自动清理上下文:', httpSettings.claudeDefaultAutoCleanupContexts)
+        }
+
+        if (httpSettings.codexDefaultAutoCleanupContexts !== undefined) {
+          updates.codexDefaultAutoCleanupContexts = httpSettings.codexDefaultAutoCleanupContexts
+          console.log('🧹 [DefaultSettings] Codex 默认自动清理上下文:', httpSettings.codexDefaultAutoCleanupContexts)
+        }
+
+        // 8. 应用 includePartialMessages 设置
         if (httpSettings.includePartialMessages !== undefined) {
           updates.includePartialMessages = httpSettings.includePartialMessages
           console.log('📡 [DefaultSettings] Include Partial Messages:', httpSettings.includePartialMessages)

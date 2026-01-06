@@ -740,6 +740,8 @@ message IdeSettings {
   string codex_default_reasoning_effort = 13;  // Codex default reasoning effort (minimal/low/medium/high/xhigh)
   string codex_default_reasoning_summary = 14; // Codex reasoning summary (auto/concise/detailed/none)
   string codex_default_sandbox_mode = 15;      // Codex sandbox mode (read-only/workspace-write/danger-full-access)
+  bool claude_default_auto_cleanup_contexts = 16; // Claude default auto cleanup contexts
+  bool codex_default_auto_cleanup_contexts = 17;  // Codex default auto cleanup contexts
 }
 
 // 思考级别配置

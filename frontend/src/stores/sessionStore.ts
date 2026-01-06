@@ -84,6 +84,19 @@ function getConnectOptionsForBackend(backendType: BackendType, settingsStore: Re
 }
 
 /**
+ * 获取默认的上下文自动清理开关（按后端区分）
+ */
+function getDefaultAutoCleanupContexts(
+  backendType: BackendType,
+  settingsStore: ReturnType<typeof useSettingsStore>
+): boolean {
+  if (backendType === 'claude') {
+    return settingsStore.settings.claudeDefaultAutoCleanupContexts
+  }
+  return settingsStore.settings.codexDefaultAutoCleanupContexts
+}
+
+/**
  * 从 sessionId 推断后端类型
  *
  * 规则：
@@ -400,6 +413,7 @@ export const useSessionStore = defineStore('session', () => {
     // 设置后端类型（默认从全局设置或参数读取）
     const backendType = options?.backendType || settingsStore.settings.defaultBackendType || 'claude'
     tab.setBackendType(backendType)
+    tab.uiState.autoCleanupContexts = getDefaultAutoCleanupContexts(backendType, settingsStore)
 
     // 设置名称
     const shortTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })

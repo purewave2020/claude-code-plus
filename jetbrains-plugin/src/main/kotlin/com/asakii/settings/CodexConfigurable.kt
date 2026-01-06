@@ -34,6 +34,7 @@ class CodexConfigurable : SearchableConfigurable {
     private var codexPathField: TextFieldWithBrowseButton? = null
     private var webSearchCheckBox: JBCheckBox? = null
     private var defaultBypassPermissionsCheckbox: JBCheckBox? = null
+    private var defaultAutoCleanupContextsCheckbox: JBCheckBox? = null
     private var defaultModelCombo: ComboBox<ModelInfo>? = null
     private var defaultReasoningEffortCombo: ComboBox<String>? = null
     private var defaultReasoningSummaryCombo: ComboBox<String>? = null
@@ -64,6 +65,13 @@ class CodexConfigurable : SearchableConfigurable {
         }
         contentPanel.add(defaultBypassPermissionsCheckbox)
         contentPanel.add(createDescription("  Skip confirmation dialogs for file edits and bash commands. Use with caution."))
+
+        defaultAutoCleanupContextsCheckbox = JBCheckBox("Default auto cleanup contexts").apply {
+            toolTipText = "When enabled, new sessions will auto clear enabled contexts after sending"
+            alignmentX = JPanel.LEFT_ALIGNMENT
+        }
+        contentPanel.add(defaultAutoCleanupContextsCheckbox)
+        contentPanel.add(createDescription("  Enabled contexts are cleared after send; disabled contexts stay."))
         contentPanel.add(Box.createVerticalStrut(8))
 
         contentPanel.add(createSectionTitle("Runtime Settings"))
@@ -244,6 +252,7 @@ class CodexConfigurable : SearchableConfigurable {
         return codexPathField?.text?.trim() != settings.codexPath ||
             (webSearchCheckBox?.isSelected ?: false) != settings.codexWebSearchEnabled ||
             (defaultBypassPermissionsCheckbox?.isSelected ?: false) != settings.defaultBypassPermissions ||
+            (defaultAutoCleanupContextsCheckbox?.isSelected ?: false) != settings.codexDefaultAutoCleanupContexts ||
             (defaultModelCombo?.selectedItem as? ModelInfo)?.modelId != settings.codexDefaultModelId ||
             defaultReasoningEffortCombo?.selectedItem != settings.codexDefaultReasoningEffort ||
             defaultReasoningSummaryCombo?.selectedItem != settings.codexDefaultReasoningSummary ||
@@ -256,6 +265,7 @@ class CodexConfigurable : SearchableConfigurable {
         settings.codexPath = codexPathField?.text?.trim() ?: ""
         settings.codexWebSearchEnabled = webSearchCheckBox?.isSelected ?: false
         settings.defaultBypassPermissions = defaultBypassPermissionsCheckbox?.isSelected ?: false
+        settings.codexDefaultAutoCleanupContexts = defaultAutoCleanupContextsCheckbox?.isSelected ?: false
         val selectedModel = defaultModelCombo?.selectedItem as? ModelInfo
         settings.codexDefaultModelId = selectedModel?.modelId ?: settings.getCodexBuiltInModels().first().modelId
         settings.codexDefaultReasoningEffort = defaultReasoningEffortCombo?.selectedItem as? String ?: "medium"
@@ -277,6 +287,7 @@ class CodexConfigurable : SearchableConfigurable {
         codexPathField?.text = settings.codexPath
         webSearchCheckBox?.isSelected = settings.codexWebSearchEnabled
         defaultBypassPermissionsCheckbox?.isSelected = settings.defaultBypassPermissions
+        defaultAutoCleanupContextsCheckbox?.isSelected = settings.codexDefaultAutoCleanupContexts
         customModelsTableModel?.rowCount = 0
         settings.getCodexCustomModels().forEach { model ->
             customModelsTableModel?.addRow(arrayOf(model.displayName, model.modelId))
@@ -309,6 +320,7 @@ class CodexConfigurable : SearchableConfigurable {
         codexPathField = null
         webSearchCheckBox = null
         defaultBypassPermissionsCheckbox = null
+        defaultAutoCleanupContextsCheckbox = null
         defaultModelCombo = null
         defaultReasoningEffortCombo = null
         defaultReasoningSummaryCombo = null

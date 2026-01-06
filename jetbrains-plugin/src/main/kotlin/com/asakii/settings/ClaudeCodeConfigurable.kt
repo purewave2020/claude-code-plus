@@ -139,6 +139,7 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
 
     // General Tab 组件
     private var defaultBypassPermissionsCheckbox: JBCheckBox? = null
+    private var defaultAutoCleanupContextsCheckbox: JBCheckBox? = null
     private var nodePathField: TextFieldWithBrowseButton? = null
     private var defaultModelCombo: ComboBox<ModelInfo>? = null
     private var defaultThinkingLevelCombo: ComboBox<ThinkingLevelConfig>? = null
@@ -218,6 +219,13 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         }
         panel.add(defaultBypassPermissionsCheckbox)
         panel.add(createDescription("  └ Skip confirmation dialogs for file edits and bash commands. Use with caution."))
+
+        defaultAutoCleanupContextsCheckbox = JBCheckBox("Default auto cleanup contexts").apply {
+            toolTipText = "When enabled, new sessions will auto clear enabled contexts after sending"
+            alignmentX = JPanel.LEFT_ALIGNMENT
+        }
+        panel.add(defaultAutoCleanupContextsCheckbox)
+        panel.add(createDescription("  └ Enabled contexts are cleared after send; disabled contexts stay."))
 
         permissionModeCombo = ComboBox(DefaultComboBoxModel(arrayOf(
             "default", "acceptEdits", "plan", "bypassPermissions"
@@ -950,7 +958,8 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
             (thinkTokensSpinner?.value as? Int ?: 2048) != settings.thinkTokens ||
             (ultraTokensSpinner?.value as? Int ?: 8096) != settings.ultraTokens ||
             permissionModeCombo?.selectedItem != settings.permissionMode ||
-            defaultBypassPermissionsCheckbox?.isSelected != settings.defaultBypassPermissions
+            defaultBypassPermissionsCheckbox?.isSelected != settings.defaultBypassPermissions ||
+            defaultAutoCleanupContextsCheckbox?.isSelected != settings.claudeDefaultAutoCleanupContexts
 
         // Agents Tab
         val currentConfig = parseAgentsConfig(settings.customAgents)
@@ -1006,6 +1015,7 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         settings.permissionMode = permissionModeCombo?.selectedItem as? String ?: "default"
         settings.includePartialMessages = true
         settings.defaultBypassPermissions = defaultBypassPermissionsCheckbox?.isSelected ?: false
+        settings.claudeDefaultAutoCleanupContexts = defaultAutoCleanupContextsCheckbox?.isSelected ?: false
 
         // Agents Tab
         val selectedAgentModel = exploreModelCombo?.selectedItem as? String ?: "(inherit)"
@@ -1054,6 +1064,7 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         permissionModeCombo?.selectedItem = settings.permissionMode
         includePartialMessagesCheckbox?.isSelected = true
         defaultBypassPermissionsCheckbox?.isSelected = settings.defaultBypassPermissions
+        defaultAutoCleanupContextsCheckbox?.isSelected = settings.claudeDefaultAutoCleanupContexts
 
         // Agents Tab
         val currentConfig = parseAgentsConfig(settings.customAgents)
@@ -1093,6 +1104,7 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         permissionModeCombo = null
         includePartialMessagesCheckbox = null
         defaultBypassPermissionsCheckbox = null
+        defaultAutoCleanupContextsCheckbox = null
         // Custom Models
         customModelsTable = null
         customModelsTableModel = null

@@ -548,6 +548,8 @@ class HttpApiServer(
                                             "codexReasoningEffort" to JsonPrimitive(config.codex.defaultReasoningEffort ?: "medium"),
                                             "codexReasoningSummary" to JsonPrimitive(config.codex.defaultReasoningSummary ?: "auto"),
                                             "codexSandboxMode" to JsonPrimitive(config.codex.sandboxMode ?: "workspace-write"),
+                                            "claudeDefaultAutoCleanupContexts" to JsonPrimitive(config.claude.defaultAutoCleanupContexts),
+                                            "codexDefaultAutoCleanupContexts" to JsonPrimitive(config.codex.defaultAutoCleanupContexts),
                                             "defaultBypassPermissions" to JsonPrimitive(config.claude.dangerouslySkipPermissions),
                                             "includePartialMessages" to JsonPrimitive(config.claude.includePartialMessages),
                                             "defaultThinkingLevel" to JsonPrimitive(config.claude.defaultThinkingLevel),
