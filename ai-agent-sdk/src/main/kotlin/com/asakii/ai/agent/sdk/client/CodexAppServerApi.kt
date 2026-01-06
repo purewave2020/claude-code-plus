@@ -26,6 +26,7 @@ internal interface CodexAppServerApi : Closeable {
         cwd: String? = null,
         approvalPolicy: String? = null,
         sandbox: String? = null,
+        config: Map<String, JsonElement>? = null,
         developerInstructions: String? = null
     ): ThreadInfo
     suspend fun resumeThread(threadId: String): ThreadInfo
@@ -66,8 +67,16 @@ internal class DefaultCodexAppServerApi(private val client: CodexAppServerClient
         cwd: String?,
         approvalPolicy: String?,
         sandbox: String?,
+        config: Map<String, JsonElement>?,
         developerInstructions: String?
-    ): ThreadInfo = client.startThread(model, cwd, approvalPolicy, sandbox, developerInstructions)
+    ): ThreadInfo = client.startThread(
+        model = model,
+        cwd = cwd,
+        approvalPolicy = approvalPolicy,
+        sandbox = sandbox,
+        config = config,
+        developerInstructions = developerInstructions
+    )
 
     override suspend fun resumeThread(threadId: String): ThreadInfo = client.resumeThread(threadId)
 

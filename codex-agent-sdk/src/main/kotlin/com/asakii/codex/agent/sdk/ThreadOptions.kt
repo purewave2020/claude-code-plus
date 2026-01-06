@@ -44,6 +44,8 @@ data class ThreadOptions @JvmOverloads constructor(
     val approvalPolicy: ApprovalMode? = null,
     val developerInstructions: String? = null,
     val additionalDirectories: List<String> = emptyList(),
+    /** MCP 服务器配置，key 为服务器名称，value 为 HTTP URL */
+    val mcpServers: Map<String, String> = emptyMap(),
 )
 
 data class TurnOptions @JvmOverloads constructor(

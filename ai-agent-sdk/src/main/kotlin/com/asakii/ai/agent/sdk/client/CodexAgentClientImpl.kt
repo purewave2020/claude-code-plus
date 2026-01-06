@@ -43,6 +43,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -113,6 +114,7 @@ internal class CodexAgentClientImpl(
                 cwd = codexThreadOptions.workingDirectory,
                 approvalPolicy = codexThreadOptions.approvalPolicy?.wireValue,
                 sandbox = codexThreadOptions.sandboxMode?.wireValue,
+                config = buildMcpConfig(codexThreadOptions.mcpServers),
                 developerInstructions = codexThreadOptions.developerInstructions
             )
         }
@@ -504,6 +506,7 @@ internal class CodexAgentClientImpl(
                 cwd = threadOptions.workingDirectory,
                 approvalPolicy = threadOptions.approvalPolicy?.wireValue,
                 sandbox = threadOptions.sandboxMode?.wireValue,
+                config = buildMcpConfig(threadOptions.mcpServers),
                 developerInstructions = threadOptions.developerInstructions
             )
         }
@@ -667,6 +670,22 @@ internal class CodexAgentClientImpl(
         is PatchChangeKind.Add -> "add"
         is PatchChangeKind.Delete -> "delete"
         is PatchChangeKind.Update -> "update"
+    }
+
+    /**
+     * 构建 MCP 配置（将 MCP 服务器配置转换为 Codex 配置格式）
+     *
+     * @param mcpServers MCP 服务器配置，key 为服务器名称，value 为 HTTP URL
+     * @return Codex thread config 参数，如果为空则返回 null
+     */
+    private fun buildMcpConfig(mcpServers: Map<String, String>): Map<String, JsonElement>? {
+        if (mcpServers.isEmpty()) return null
+
+        val config = mutableMapOf<String, JsonElement>()
+        mcpServers.forEach { (serverName, url) ->
+            config["mcp_servers.$serverName.url"] = JsonPrimitive(url)
+        }
+        return config
     }
 
     private fun checkCapability(supported: Boolean, method: String) {

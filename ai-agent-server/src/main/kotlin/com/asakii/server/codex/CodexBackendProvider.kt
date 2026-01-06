@@ -2,6 +2,7 @@
 
 import com.asakii.codex.agent.sdk.appserver.*
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
@@ -66,13 +67,16 @@ class CodexBackendProvider(
     )
 
     /**
-     * 浼氳瘽閰嶇疆
+     * 会话配置
      */
     data class ThreadConfig(
         val model: String? = null,
         val cwd: String? = null,
         val approvalPolicy: String? = null,  // "never", "unlessTrusted", "always"
-        val sandbox: String? = null  // "readOnly", "workspaceWrite", "dangerFullAccess"
+        val sandbox: String? = null,  // "readOnly", "workspaceWrite", "dangerFullAccess"
+        /** MCP 服务器配置，key 为服务器名称，value 为 HTTP URL */
+        val mcpServers: Map<String, String> = emptyMap(),
+        val developerInstructions: String? = null
     )
 
     /**
@@ -223,7 +227,7 @@ class CodexBackendProvider(
     }
 
     /**
-     * 鍒涘缓鏂扮嚎绋嬶紙浼氳瘽锛?
+     * 创建新线程（会话）
      */
     suspend fun createThread(config: ThreadConfig = ThreadConfig()): String {
         ensureRunning()
@@ -232,11 +236,16 @@ class CodexBackendProvider(
 
         val client = appServerClient ?: throw IllegalStateException("App-server client not available")
 
+        // 构建 thread config（包含 MCP 服务器配置）
+        val threadConfig = buildThreadConfig(config.mcpServers)
+
         val thread = client.startThread(
             model = config.model,
             cwd = config.cwd ?: workingDirectory,
             approvalPolicy = config.approvalPolicy,
-            sandbox = config.sandbox
+            sandbox = config.sandbox,
+            config = threadConfig,
+            developerInstructions = config.developerInstructions
         )
 
         // 淇濆瓨绾跨▼鐘舵€?
@@ -577,7 +586,30 @@ class CodexBackendProvider(
     }
 
     /**
-     * 纭繚鍚庣姝ｅ湪杩愯
+     * 构建 thread config（将 MCP 服务器配置转换为 Codex 配置格式）
+     *
+     * @param mcpServers MCP 服务器配置，key 为服务器名称，value 为 HTTP URL
+     * @return Codex thread config 参数
+     */
+    private fun buildThreadConfig(mcpServers: Map<String, String>): Map<String, JsonElement>? {
+        if (mcpServers.isEmpty()) return null
+
+        val config = mutableMapOf<String, JsonElement>()
+
+        // 将 MCP 服务器配置转换为 Codex 格式
+        // 格式: mcp_servers.<server_name>.url = "<url>"
+        mcpServers.forEach { (serverName, url) ->
+            config["mcp_servers.$serverName.url"] = JsonPrimitive(url)
+            logger.debug("Adding MCP server config: mcp_servers.$serverName.url = $url")
+        }
+
+        logger.info("Built thread config with ${mcpServers.size} MCP server(s): ${mcpServers.keys}")
+
+        return config
+    }
+
+    /**
+     * 确保后端正在运行
      */
     private fun ensureRunning() {
         if (!isRunning.get()) {

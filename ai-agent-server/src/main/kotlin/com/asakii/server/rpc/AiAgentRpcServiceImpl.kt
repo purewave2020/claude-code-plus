@@ -1016,6 +1016,20 @@ class AiAgentRpcServiceImpl(
             }
     }
 
+    /**
+     * Extract HTTP MCP server URLs for thread-level config.
+     * Note: Codex only supports HTTP MCP servers via thread config (not stdio).
+     */
+    private fun extractMcpHttpUrls(mcpServers: Map<String, McpServerSpec>): Map<String, String> {
+        if (mcpServers.isEmpty()) return emptyMap()
+        return mcpServers.mapNotNull { (name, server) ->
+            when (server) {
+                is McpHttpServerConfig -> name to server.url
+                else -> null // stdio servers cannot be passed via thread config
+            }
+        }.toMap()
+    }
+
     private fun buildCodexMcpConfigOverrides(mcpServers: Map<String, McpServerSpec>): Map<String, String> {
         if (mcpServers.isEmpty()) return emptyMap()
 
@@ -1158,6 +1172,9 @@ class AiAgentRpcServiceImpl(
         val cwdLog = workingDirectory ?: "default"
         sdkLog.info("[buildCodexOverrides] model=${model ?: "default"}, codexPath=$codexPathLog, baseUrl=$baseUrlLog, apiKeyPresent=$apiKeyPresent, sandbox=$sandboxLog, approval=$approvalLog, effort=$effortLog, summary=$summaryLog, cwd=$cwdLog")
 
+        // Extract HTTP MCP URLs for thread-level config (required for model to see MCP tools)
+        val mcpHttpUrls = extractMcpHttpUrls(mcpSetup.claudeServers)
+
         val threadOptions = ThreadOptions(
             model = model,
             sandboxMode = sandboxMode,
@@ -1166,7 +1183,8 @@ class AiAgentRpcServiceImpl(
             modelReasoningEffort = reasoningEffort,
             modelReasoningSummary = reasoningSummary,
             approvalPolicy = approvalPolicy,
-            developerInstructions = mcpSetup.mcpSystemPromptAppendix.takeIf { it.isNotBlank() }
+            developerInstructions = mcpSetup.mcpSystemPromptAppendix.takeIf { it.isNotBlank() },
+            mcpServers = mcpHttpUrls
         )
 
         return CodexOverrides(

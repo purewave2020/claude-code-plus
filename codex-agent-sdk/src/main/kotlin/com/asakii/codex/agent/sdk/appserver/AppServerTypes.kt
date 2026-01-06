@@ -76,9 +76,12 @@ data class InitializeResult(
 @Serializable
 data class ThreadStartParams(
     val model: String? = null,
+    val modelProvider: String? = null,
     val cwd: String? = null,
     val approvalPolicy: String? = null,
     val sandbox: String? = null,
+    val config: Map<String, JsonElement>? = null,
+    val baseInstructions: String? = null,
     val developerInstructions: String? = null
 )
 

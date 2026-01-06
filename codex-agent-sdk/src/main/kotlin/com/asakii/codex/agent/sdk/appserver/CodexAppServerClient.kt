@@ -211,22 +211,37 @@ class CodexAppServerClient private constructor(
     // ============== 绾跨▼绠＄悊 ==============
 
     /**
-     * 鍒涘缓鏂扮嚎绋?
+     * 创建新线程
+     *
+     * @param model 模型名称
+     * @param modelProvider 模型提供商
+     * @param cwd 工作目录
+     * @param approvalPolicy 审批策略
+     * @param sandbox 沙箱模式
+     * @param config 配置覆盖 (key=value 形式，如 mcp_servers.test.url)
+     * @param baseInstructions 基础指令
+     * @param developerInstructions 开发者指令
      */
     suspend fun startThread(
         model: String? = null,
+        modelProvider: String? = null,
         cwd: String? = null,
         approvalPolicy: String? = null,
         sandbox: String? = null,
+        config: Map<String, kotlinx.serialization.json.JsonElement>? = null,
+        baseInstructions: String? = null,
         developerInstructions: String? = null
     ): ThreadInfo {
         checkInitialized()
 
         val params = ThreadStartParams(
             model = model,
+            modelProvider = modelProvider,
             cwd = cwd,
             approvalPolicy = approvalPolicy,
             sandbox = sandbox,
+            config = config,
+            baseInstructions = baseInstructions,
             developerInstructions = developerInstructions
         )
 
