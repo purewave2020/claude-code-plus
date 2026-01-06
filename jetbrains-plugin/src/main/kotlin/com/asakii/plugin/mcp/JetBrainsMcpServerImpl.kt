@@ -34,6 +34,8 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
     private lateinit var findUsagesTool: FindUsagesTool
     private lateinit var renameTool: RenameTool
     private lateinit var readFileTool: ReadFileTool
+    private lateinit var writeFileTool: WriteFileTool
+    private lateinit var editFileTool: EditFileTool
 
     override fun getSystemPromptAppendix(): String {
         return AgentSettingsService.getInstance().effectiveJetbrainsInstructions
@@ -41,7 +43,8 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
 
     /**
      * 获取需要自动允许的工具列表
-     * JetBrains MCP 的所有工具都应该自动允许，因为它们只是读取 IDE 信息
+     * JetBrains MCP 的只读工具应该自动允许
+     * 写入工具（WriteFile, EditFile）需要用户确认
      */
     override fun getAllowedTools(): List<String> = listOf(
         "DirectoryTree",
@@ -51,6 +54,7 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
         "FindUsages",
         "Rename",
         "ReadFile"
+        // WriteFile 和 EditFile 不在此列表，需要用户确认
     )
 
     companion object {
@@ -107,6 +111,8 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
             findUsagesTool = FindUsagesTool(project)
             renameTool = RenameTool(project)
             readFileTool = ReadFileTool(project)
+            writeFileTool = WriteFileTool(project)
+            editFileTool = EditFileTool(project)
             logger.info { "✅ All tool instances created" }
 
             // 注册目录树工具（使用预加载的 Schema）
@@ -158,7 +164,21 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
                 wrapToolResult(readFileTool.execute(arguments))
             }
 
-            logger.info { "✅ JetBrains MCP Server initialized, registered 7 tools" }
+            // 注册文件写入工具
+            val writeFileSchema = getToolSchema("WriteFile")
+            logger.info { "📝 WriteFile schema: ${writeFileSchema.keys}" }
+            registerToolFromSchema("WriteFile", writeFileSchema) { arguments ->
+                wrapToolResult(writeFileTool.execute(arguments))
+            }
+
+            // 注册文件编辑工具
+            val editFileSchema = getToolSchema("EditFile")
+            logger.info { "📝 EditFile schema: ${editFileSchema.keys}" }
+            registerToolFromSchema("EditFile", editFileSchema) { arguments ->
+                wrapToolResult(editFileTool.execute(arguments))
+            }
+
+            logger.info { "✅ JetBrains MCP Server initialized, registered 9 tools" }
         } catch (e: Exception) {
             logger.error(e) { "❌ Failed to initialize JetBrains MCP Server: ${e.message}" }
             throw e

@@ -64,12 +64,25 @@ class ReadFileTool(private val project: Project) {
      * 解析文件路径为 VirtualFile
      *
      * 支持多种路径格式：
-     * - 普通文件路径
+     * - 相对路径（相对于项目根目录）: frontend/src/App.vue
+     * - 绝对路径: C:/path/to/file.java
      * - jar://...!/... (IDEA 标准格式)
      * - C:/path.jar!/... (简化格式)
      * - jrt://module/... (JDK 9+ 模块)
      */
     private fun resolveVirtualFile(path: String): VirtualFile? {
+        // 0. 如果是相对路径，先尝试在项目根目录下查找
+        if (isRelativePath(path)) {
+            val projectBasePath = project.basePath
+            if (projectBasePath != null) {
+                val absolutePath = "$projectBasePath/$path".replace("\\", "/")
+                VirtualFileManager.getInstance().findFileByUrl("file://$absolutePath")?.let {
+                    logger.info { "Resolved relative path '$path' to '${it.path}'" }
+                    return it
+                }
+            }
+        }
+
         // 1. 尝试直接作为 URL 解析
         VirtualFileManager.getInstance().findFileByUrl(path)?.let { return it }
 
@@ -233,6 +246,25 @@ class ReadFileTool(private val project: Project) {
             file.path.contains("/jrt:/") -> "JDK module"
             else -> file.fileType.name
         }
+    }
+
+    /**
+     * 判断路径是否为相对路径
+     *
+     * 相对路径特征：
+     * - 不以 / 开头（Unix 绝对路径）
+     * - 不以 盘符: 开头（Windows 绝对路径，如 C:、D:）
+     * - 不以 协议:// 开头（如 file://、jar://、jrt://）
+     */
+    private fun isRelativePath(path: String): Boolean {
+        val normalizedPath = path.trim()
+        // 以 / 开头 -> Unix 绝对路径
+        if (normalizedPath.startsWith("/")) return false
+        // 以 盘符: 开头 -> Windows 绝对路径 (C:, D:, etc.)
+        if (normalizedPath.length >= 2 && normalizedPath[1] == ':') return false
+        // 包含 :// -> 协议 URL
+        if (normalizedPath.contains("://")) return false
+        return true
     }
 
     /**

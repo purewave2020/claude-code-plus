@@ -303,7 +303,7 @@ object McpDefaults {
     "properties": {
       "filePath": {
         "type": "string",
-        "description": "File path. Supports: regular paths, JAR paths (path.jar!/inner/path), jar:// URLs, JDK sources (src.zip!/...)"
+        "description": "File path. Supports: relative paths (to project root), absolute paths, JAR paths (path.jar!/inner/path), jar:// URLs, JDK sources (src.zip!/...)"
       },
       "maxLines": {
         "type": "integer",
@@ -320,6 +320,47 @@ object McpDefaults {
       }
     },
     "required": ["filePath"]
+  },
+
+  "WriteFile": {
+    "type": "object",
+    "description": "Write content to a file. Creates the file if it doesn't exist, or overwrites if it does. Supports relative paths (to project root) and absolute paths.",
+    "properties": {
+      "filePath": {
+        "type": "string",
+        "description": "File path (relative to project root or absolute)"
+      },
+      "content": {
+        "type": "string",
+        "description": "Content to write to the file"
+      }
+    },
+    "required": ["filePath", "content"]
+  },
+
+  "EditFile": {
+    "type": "object",
+    "description": "Edit a file by replacing text. The oldString must be unique in the file unless replaceAll is true. Supports relative paths (to project root) and absolute paths.",
+    "properties": {
+      "filePath": {
+        "type": "string",
+        "description": "File path (relative to project root or absolute)"
+      },
+      "oldString": {
+        "type": "string",
+        "description": "The text to replace (must be unique unless replaceAll is true)"
+      },
+      "newString": {
+        "type": "string",
+        "description": "The replacement text"
+      },
+      "replaceAll": {
+        "type": "boolean",
+        "description": "Replace all occurrences instead of just the first",
+        "default": false
+      }
+    },
+    "required": ["filePath", "oldString", "newString"]
   }
 }
     """.trimIndent()
@@ -405,6 +446,8 @@ You have access to JetBrains IDE tools that leverage the IDE's powerful indexing
 - `jetbrains / FindUsages`: Find all references/usages of a symbol (class, method, field, variable) in the project
 - `jetbrains / Rename`: Safely rename a symbol and automatically update all references (like Refactor > Rename)
 - `jetbrains / ReadFile`: Read file content using IDE's VFS. Supports JAR/ZIP entries, JDK sources, and .class files (auto-decompiled)
+- `jetbrains / WriteFile`: Write content to a file (create or overwrite). Supports relative and absolute paths
+- `jetbrains / EditFile`: Edit a file by replacing text (oldString → newString). Supports replaceAll mode
 
 CRITICAL: You MUST use JetBrains tools instead of Glob/Grep. DO NOT use Glob or Grep unless JetBrains tools fail or are unavailable:
 - ALWAYS use `jetbrains / CodeSearch` instead of `Grep` for searching code content
@@ -760,7 +803,9 @@ object KnownTools {
         "mcp__jetbrains__FileProblems",   // 静态分析
         "mcp__jetbrains__FindUsages",     // 查找引用
         "mcp__jetbrains__Rename",         // 重命名重构
-        "mcp__jetbrains__ReadFile"        // 读取文件（支持 JAR/反编译）
+        "mcp__jetbrains__ReadFile",       // 读取文件（支持 JAR/反编译）
+        "mcp__jetbrains__WriteFile",      // 写入文件
+        "mcp__jetbrains__EditFile"        // 编辑文件
     )
 
     /**
