@@ -16,14 +16,7 @@
 
     <!-- 右侧：功能按钮 -->
     <div class="header-actions">
-      <button
-        class="icon-btn"
-        type="button"
-        title="History"
-        @click="emit('toggle-history')"
-      >
-        📋
-      </button>
+      <!-- 新建会话 -->
       <button
         class="new-session-btn"
         type="button"
@@ -33,6 +26,15 @@
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
+      </button>
+      <!-- 历史会话 -->
+      <button
+        class="icon-btn"
+        type="button"
+        title="History"
+        @click="emit('toggle-history')"
+      >
+        📋
       </button>
       <!-- 后端切换按钮 -->
       <div class="backend-switcher" @click="toggleBackendMenu">
@@ -302,27 +304,10 @@ async function handleCloseTab(tabId: string) {
   await sessionStore.closeTab(tabId)
 }
 
-function handleNewSession() {
+async function handleNewSession() {
   const defaultBackend = settingsStore.settings.defaultBackendType || BackendTypes.CLAUDE
-  void startNewSessionWithBackend(defaultBackend)
-}
-
-async function startNewSessionWithBackend(backendType: BackendType) {
-  const currentTab = sessionStore.currentTab
-  const isGenerating = currentTab?.isGenerating.value ?? false
-  const isConnecting = currentTab?.connectionState.status === ConnectionStatus.CONNECTING
-
-  // 如果正在生成或连接中，创建新的 Tab
-  if (isGenerating || isConnecting) {
-    await sessionStore.createTab(undefined, { backendType })
-    return
-  }
-
-  // 否则重置当前 Tab
-  if (currentTab && backendType !== currentBackendType.value) {
-    await sessionStore.switchTabBackend(currentTab, backendType)
-  }
-  await sessionStore.resetCurrentTab()
+  // 每次都创建新的 Tab
+  await sessionStore.createTab(undefined, { backendType: defaultBackend })
 }
 
 function handleReorder(newOrder: string[]) {
