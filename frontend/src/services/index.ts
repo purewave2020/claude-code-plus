@@ -3,12 +3,11 @@
  * 导出所有服务和事件监听
  */
 
-import { ideService, ideaBridge, aiAgentBridgeService } from './ideaBridge'
+import { ideaBridge, aiAgentBridgeService } from './ideaBridge'
 
 // 导出所有服务
 export {
   aiAgentBridgeService,
-  ideService,
   ideaBridge
 }
 

@@ -128,7 +128,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
-import { ideService } from '@/services/ideaBridge'
+import { fileSearchService } from '@/services/fileSearchService'
 
 export interface ContextReference {
   type: 'file' | 'folder' | 'url' | 'code'
@@ -332,16 +332,14 @@ function handleInput(event: Event) {
 
 async function fetchSuggestions(query: string) {
   try {
-    const response = await ideService.searchFiles(query, 10)
-    if (response.success && response.data) {
-      const files = response.data.files || []
-      filteredSuggestions.value = files.map((file: any) => ({
-        type: file.isDirectory ? 'folder' : 'file',
+    const result = await fileSearchService.searchFiles(query, 10)
+    if (result.files.length > 0) {
+      filteredSuggestions.value = result.files.map((file) => ({
+        type: 'file' as const,
         name: file.name,
-        path: file.path
+        path: file.relativePath
       }))
     } else {
-      // 如果搜索失败，使用空列表
       filteredSuggestions.value = []
     }
   } catch (error) {

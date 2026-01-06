@@ -315,18 +315,6 @@ export async function openUrl(url: string) {
   }
 }
 
-// 为兼容性保留，也导出命名方式
-export const ideService = {
-  openFile,
-  showDiff,
-  searchFiles,
-  getFileContent,
-  getLocale,
-  setLocale,
-  detectNode,
-  openUrl
-}
-
 export const aiAgentBridgeService = {
   async connect(options?: any) {
     return ideaBridge.query('claude.connect', options)
