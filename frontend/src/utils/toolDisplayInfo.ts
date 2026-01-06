@@ -180,8 +180,7 @@ export function extractToolDisplayInfo(
 
   const icon = TOOL_ICONS[toolName] || '🔧'
   const rawActionType = ACTION_TYPES[toolName] || toolName || 'Unknown'
-  const toolType = (tool as any)?.toolType as string | undefined
-  const actionType = toolType?.startsWith('CODEX_') ? `Codex ${rawActionType}` : rawActionType
+  const actionType = rawActionType
 
   // 直接使用后端格式：result.is_error
   const status = result?.is_error ? 'error' : (result ? 'success' : 'pending')
