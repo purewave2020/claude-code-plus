@@ -77,13 +77,17 @@
       <el-tooltip
         v-for="(context, index) in contexts"
         :key="`context-${index}`"
-        :content="getContextFullPath(context)"
+        :content="getContextTooltip(context)"
         placement="top"
         :show-after="300"
       >
         <div
           class="context-tag"
-          :class="{ 'image-tag': isImageContext(context) }"
+          :class="{
+            'image-tag': isImageContext(context),
+            'context-disabled': context.disabled
+          }"
+          @click.stop="toggleContext(context)"
         >
           <!-- 图片：只显示缩略图，点击可预览 -->
           <template v-if="isImageContext(context)">
@@ -91,7 +95,6 @@
               :src="getContextImagePreviewUrl(context)"
               class="tag-image-preview"
               alt="图片"
-              @click="openContextImagePreview(context)"
             >
           </template>
           <!-- 非图片：显示图标和文字 -->
@@ -536,6 +539,7 @@ interface Emits {
   (e: 'stop'): void
   (e: 'context-add', context: ContextReference): void
   (e: 'context-remove', context: ContextReference): void
+  (e: 'context-toggle', context: ContextReference): void  // 切换启用/禁用
   (e: 'skip-permissions-change', skip: boolean): void
   (e: 'cancel'): void  // 取消编辑（仅 inline 模式）
   (e: 'update:modelValue', value: string): void  // v-model 支持
@@ -1327,6 +1331,10 @@ function removeContext(context: ContextReference) {
   emit('context-remove', context)
 }
 
+function toggleContext(context: ContextReference) {
+  emit('context-toggle', context)
+}
+
 async function handleAddContextClick() {
   showContextSelectorPopup.value = true
 
@@ -1394,6 +1402,16 @@ function getContextFullPath(context: ContextReference): string {
     return context.url || ''
   }
   return context.uri || ''
+}
+
+/**
+ * 获取上下文 tooltip（包含路径和启用/禁用状态提示）
+ */
+function getContextTooltip(context: ContextReference): string {
+  const path = getContextFullPath(context)
+  const status = context.disabled ? t('common.disabled') : t('common.enabled')
+  const hint = t('chat.clickToToggle')
+  return `${path}\n[${status}] ${hint}`
 }
 
 /**
@@ -1862,6 +1880,28 @@ onUnmounted(() => {
   border: 1px solid var(--theme-border, #e1e4e8);
   border-radius: 3px;
   font-size: 11px;
+  cursor: pointer;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.context-tag:hover {
+  background: var(--theme-hover-background, #f6f8fa);
+}
+
+/* 禁用状态的上下文标签 */
+.context-tag.context-disabled {
+  opacity: 0.45;
+  background: var(--theme-background-disabled, #f0f0f0);
+  border-style: dashed;
+}
+
+.context-tag.context-disabled:hover {
+  opacity: 0.65;
+}
+
+.context-tag.context-disabled .tag-icon,
+.context-tag.context-disabled .tag-text {
+  text-decoration: line-through;
 }
 
 .context-tag.image-tag {

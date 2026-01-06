@@ -57,6 +57,8 @@ export interface ContextReference {
   mimeType?: string
   base64Data?: string
   size?: number
+  // 启用/禁用状态
+  disabled?: boolean
 }
 
 // ============ DisplayItem 基础接口 ============

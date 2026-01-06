@@ -27,7 +27,9 @@ export default {
     renderFailed: '渲染失败',
     noMore: '没有更多了',
     expand: '展开',
-    collapse: '收起'
+    collapse: '收起',
+    enabled: '已启用',
+    disabled: '已禁用'
   },
   chat: {
     placeholder: '',
@@ -55,6 +57,7 @@ export default {
     autoCleanupContext: '自动清理上下文',
     autoCleanupContextTooltip: '发送消息后自动清空上下文标签',
     dropFileToAddContext: '释放文件以添加到上下文',
+    clickToToggle: '点击切换启用/禁用',
     taskQueue: '任务队列',
     taskQueueCount: '任务队列 ({count})',
     pendingQueue: '待发送 ({count})',

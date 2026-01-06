@@ -71,6 +71,7 @@
         @stop="handleStopGeneration"
         @context-add="handleAddContext"
         @context-remove="handleRemoveContext"
+        @context-toggle="handleToggleContext"
         @auto-cleanup-change="handleAutoCleanupChange"
       />
     </div>
@@ -521,8 +522,8 @@ async function handleSendMessage(contents?: ContentBlock[], options?: SendOption
 
     // 连接状态检查已移至 ChatInput.handleSend，此处不再重复检查
 
-    // 如果是斜杠命令，不发送 contexts
-    const currentContexts = options?.isSlashCommand ? [] : [...currentTabContexts.value]
+    // 如果是斜杠命令，不发送 contexts；否则过滤掉禁用的 contexts
+    const currentContexts = options?.isSlashCommand ? [] : currentTabContexts.value.filter(c => !c.disabled)
     // 清空当前 Tab 的 contexts
     if (sessionStore.currentTab) {
       sessionStore.currentTab.uiState.contexts = []
@@ -549,8 +550,8 @@ async function handleForceSend(contents?: ContentBlock[], options?: SendOptions)
   const safeContents = Array.isArray(contents) ? contents : []
   console.log('Force send:', safeContents.length, 'content blocks', options?.isSlashCommand ? '(slash command)' : '')
 
-  // 如果是斜杠命令，不发送 contexts
-  const currentContexts = options?.isSlashCommand ? [] : [...currentTabContexts.value]
+  // 如果是斜杠命令，不发送 contexts；否则过滤掉禁用的 contexts
+  const currentContexts = options?.isSlashCommand ? [] : currentTabContexts.value.filter(c => !c.disabled)
 
   // 发送消息时切换到跟随模式
   sessionStore.switchToFollowMode()
@@ -623,6 +624,18 @@ function handleRemoveContext(context: ContextReference) {
   console.log('Removing context:', context)
   if (sessionStore.currentTab) {
     sessionStore.currentTab.uiState.contexts = currentTabContexts.value.filter(c => c.uri !== context.uri)
+  }
+}
+
+function handleToggleContext(context: ContextReference) {
+  console.log('Toggling context:', context)
+  if (sessionStore.currentTab) {
+    sessionStore.currentTab.uiState.contexts = currentTabContexts.value.map(c => {
+      if (c.uri === context.uri) {
+        return { ...c, disabled: !c.disabled }
+      }
+      return c
+    })
   }
 }
 

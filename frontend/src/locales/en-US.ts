@@ -27,7 +27,9 @@ export default {
     renderFailed: 'Render failed',
     noMore: 'No more',
     expand: 'Expand',
-    collapse: 'Collapse'
+    collapse: 'Collapse',
+    enabled: 'Enabled',
+    disabled: 'Disabled'
   },
   chat: {
     placeholder: '',
@@ -55,6 +57,7 @@ export default {
     autoCleanupContext: 'Auto Cleanup Context',
     autoCleanupContextTooltip: 'Automatically clear context tags after sending message',
     dropFileToAddContext: 'Drop files here to add to context',
+    clickToToggle: 'Click to toggle enable/disable',
     taskQueue: 'Task Queue',
     taskQueueCount: 'Task Queue ({count})',
     pendingQueue: 'Pending ({count})',
