@@ -298,6 +298,17 @@
           :session-token-usage="sessionTokenUsage"
         />
 
+        <StatusToggle
+          v-if="showContextControls && !inline"
+          class="auto-cleanup-toggle"
+          :label="t('chat.autoCleanupContext')"
+          :enabled="autoCleanupContexts"
+          :disabled="!enabled"
+          :show-icon="false"
+          :tooltip="t('chat.autoCleanupContextTooltip')"
+          @toggle="handleAutoCleanupChange"
+        />
+
         <!-- 统计信息 -->
         <div
           v-if="tokenUsage"
@@ -504,6 +515,7 @@ interface Props {
   selectedPermission?: PermissionMode
   skipPermissions?: boolean
   showContextControls?: boolean
+  autoCleanupContexts?: boolean
   showModelSelector?: boolean
   showPermissionControls?: boolean
   showSendButton?: boolean
@@ -537,6 +549,7 @@ interface Emits {
   (e: 'context-add', context: ContextReference): void
   (e: 'context-remove', context: ContextReference): void
   (e: 'context-toggle', context: ContextReference): void  // 切换启用/禁用
+  (e: 'auto-cleanup-change', value: boolean): void
   (e: 'skip-permissions-change', skip: boolean): void
   (e: 'cancel'): void  // 取消编辑（仅 inline 模式）
   (e: 'update:modelValue', value: string): void  // v-model 支持
@@ -552,6 +565,7 @@ const props = withDefaults(defineProps<Props>(), {
   selectedPermission: 'default',
   skipPermissions: false,
   showContextControls: true,
+  autoCleanupContexts: false,
   showModelSelector: true,
   showPermissionControls: true,
   showSendButton: true,
@@ -1341,6 +1355,10 @@ function toggleContext(context: ContextReference) {
   emit('context-toggle', context)
 }
 
+function handleAutoCleanupChange(value: boolean) {
+  emit('auto-cleanup-change', value)
+}
+
 async function handleAddContextClick() {
   showContextSelectorPopup.value = true
 
@@ -1921,26 +1939,41 @@ onUnmounted(() => {
 }
 
 .context-tag.context-disabled .tag-image-preview {
-  filter: grayscale(1) contrast(0.9) brightness(0.9);
+  filter: grayscale(1) contrast(0.7) brightness(0.8);
 }
 
 .context-tag.context-disabled.image-tag {
-  opacity: 0.7;
+  opacity: 0.5;
 }
 
+/* 禁用图片标签的斜线覆盖效果 */
 .context-tag.context-disabled.image-tag::after {
   content: '';
   position: absolute;
-  inset: 2px;
-  border-radius: 2px;
-  background: repeating-linear-gradient(
-    135deg,
-    var(--theme-foreground, #24292e) 0,
-    var(--theme-foreground, #24292e) 2px,
-    transparent 2px,
-    transparent 4px
-  );
-  opacity: 0.35;
+  inset: 0;
+  border-radius: 3px;
+  background:
+    /* 对角线条纹 */
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 4px,
+      rgba(0, 0, 0, 0.25) 4px,
+      rgba(0, 0, 0, 0.25) 6px
+    );
+  pointer-events: none;
+}
+
+/* 禁用图片标签的删除线效果 */
+.context-tag.context-disabled.image-tag::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 80, 80, 0.8);
+  z-index: 2;
   pointer-events: none;
 }
 
@@ -2154,6 +2187,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.auto-cleanup-toggle {
+  white-space: nowrap;
 }
 
 /* ========== Cursor 风格选择器容器 ========== */
