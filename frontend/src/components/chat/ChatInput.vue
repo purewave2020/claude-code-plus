@@ -56,20 +56,17 @@
       <!-- Active File Tag (当前打开的文件 - 由 IDEA 推送) -->
       <el-tooltip
         v-if="shouldShowActiveFile"
-        :content="currentActiveFile?.path || ''"
+        :content="activeFileTooltip"
         placement="top"
         :show-after="300"
       >
-        <div class="context-tag active-file-tag">
+        <div
+          class="context-tag active-file-tag"
+          :class="{ 'context-disabled': activeFileDisabled }"
+          @click.stop="toggleActiveFile"
+        >
           <span class="tag-file-name">{{ activeFileName }}</span>
           <span v-if="activeFileLineRange" class="tag-line-range">{{ activeFileLineRange }}</span>
-          <button
-            class="tag-remove"
-            :title="t('common.remove')"
-            @click.stop="dismissActiveFile"
-          >
-            ×
-          </button>
         </div>
       </el-tooltip>
 
@@ -779,12 +776,16 @@ const slashCommandQuery = ref('')
 
 // Active File State (当前打开的文件 - 由 IDEA 推送)
 const currentActiveFile = ref<ActiveFileInfo | null>(null)
-// activeFileDismissed 从 sessionStore 获取，每个 Tab 独立
-const activeFileDismissed = computed({
-  get: () => sessionStore.currentTab?.uiState.activeFileDismissed ?? false,
+// activeFileDisabled 从 sessionStore 获取，每个 Tab 独立
+const activeFileDisabled = computed({
+  get: () => {
+    const state = sessionStore.currentTab?.uiState as any
+    return state?.activeFileDisabled ?? state?.activeFileDismissed ?? false
+  },
   set: (value: boolean) => {
-    if (sessionStore.currentTab) {
-      sessionStore.currentTab.uiState.activeFileDismissed = value
+    const state = sessionStore.currentTab?.uiState as any
+    if (state) {
+      state.activeFileDisabled = value
     }
   }
 })
@@ -915,9 +916,14 @@ const placeholderText = computed(() => {
   return props.placeholderText || ''
 })
 
-// 是否应该显示当前打开的文件标签
+// 是否应该显示当前打开的文件标签（始终显示，禁用时仅影响发送）
 const shouldShowActiveFile = computed(() => {
-  return currentActiveFile.value !== null && !activeFileDismissed.value
+  return currentActiveFile.value !== null
+})
+
+// 当前活跃文件是否启用
+const activeFileEnabled = computed(() => {
+  return shouldShowActiveFile.value && !activeFileDisabled.value
 })
 
 // 从路径中提取文件名
@@ -964,9 +970,9 @@ const activeFileDisplayText = computed(() => {
   return fileName
 })
 
-// 关闭当前活跃文件标签
-function dismissActiveFile() {
-  activeFileDismissed.value = true
+// 切换当前活跃文件启用/禁用
+function toggleActiveFile() {
+  activeFileDisabled.value = !activeFileDisabled.value
 }
 
 // XML 转换逻辑已移至 userMessageBuilder.ts 的 ideContextToContentBlocks 函数
@@ -1034,7 +1040,7 @@ async function handleRichTextSubmit(_content: { text: string; images: { id: stri
 
   // 获取 IDE 上下文（当前打开的文件，结构化数据）
   // 斜杠命令不需要 IDE 上下文
-  const ideContext = (!isSlashCommand && shouldShowActiveFile.value) ? currentActiveFile.value : null
+  const ideContext = (!isSlashCommand && activeFileEnabled.value) ? currentActiveFile.value : null
 
   // 发送消息（父组件的 enqueueMessage 会自动处理队列逻辑）
   // 注意：不再转换 XML，传递结构化的 ideContext
@@ -1294,7 +1300,7 @@ async function handleSend() {
 
     // 获取 IDE 上下文（当前打开的文件，结构化数据）
     // 斜杠命令不需要 IDE 上下文
-    const ideContext = (!isSlashCommand && shouldShowActiveFile.value) ? currentActiveFile.value : null
+    const ideContext = (!isSlashCommand && activeFileEnabled.value) ? currentActiveFile.value : null
 
     // 发送消息（父组件会处理队列逻辑和 XML 转换）
     emit('send', contents, { isSlashCommand, ideContext })
@@ -1313,7 +1319,7 @@ async function handleForceSend() {
   if (contents.length === 0 || !props.isGenerating) return
 
   // 获取 IDE 上下文（当前打开的文件，结构化数据）
-  const ideContext = shouldShowActiveFile.value ? currentActiveFile.value : null
+  const ideContext = activeFileEnabled.value ? currentActiveFile.value : null
 
   // 发送消息（父组件会处理 XML 转换）
   emit('force-send', contents, { ideContext })
@@ -1413,6 +1419,14 @@ function getContextTooltip(context: ContextReference): string {
   const hint = t('chat.clickToToggle')
   return `${path}\n[${status}] ${hint}`
 }
+
+const activeFileTooltip = computed(() => {
+  if (!currentActiveFile.value) return ''
+  const path = currentActiveFile.value.path || currentActiveFile.value.relativePath || ''
+  const status = activeFileDisabled.value ? t('common.disabled') : t('common.enabled')
+  const hint = t('chat.clickToToggle')
+  return `${path}\n[${status}] ${hint}`
+})
 
 /**
  * 获取上下文显示文本（使用类型守卫）- 只显示文件名
@@ -1629,8 +1643,8 @@ onMounted(() => {
   // 订阅活跃文件变更
   activeFileUnsubscribe = jetbrainsRSocket.onActiveFileChange((file) => {
     currentActiveFile.value = file
-    // 当新文件推送过来时，重置 dismissed 状态
-    activeFileDismissed.value = false
+    // 当新文件推送过来时，重置禁用状态
+    activeFileDisabled.value = false
     console.log('📂 [ChatInput] 活跃文件更新:', file?.relativePath || '无')
   })
 
@@ -1900,7 +1914,9 @@ onUnmounted(() => {
 }
 
 .context-tag.context-disabled .tag-icon,
-.context-tag.context-disabled .tag-text {
+.context-tag.context-disabled .tag-text,
+.context-tag.context-disabled .tag-file-name,
+.context-tag.context-disabled .tag-line-range {
   text-decoration: line-through;
 }
 

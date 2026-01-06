@@ -100,8 +100,8 @@ export interface UIState {
     contexts: any[]
     /** 滚动状态（替代原来的 scrollPosition/newMessageCount/showScrollToBottom） */
     scrollState: ScrollState
-    /** 是否手动关闭了当前打开的文件标签（每个 Tab 独立） */
-    activeFileDismissed: boolean
+    /** 当前打开的文件是否被禁用（每个 Tab 独立） */
+    activeFileDisabled: boolean
 }
 
 /**
@@ -335,7 +335,7 @@ export function useSessionTab(initialOrder: number = 0) {
         inputText: '',
         contexts: [],
         scrollState: { ...DEFAULT_SCROLL_STATE },
-        activeFileDismissed: false
+        activeFileDisabled: false
     })
 
     // ========== 压缩状态 ==========

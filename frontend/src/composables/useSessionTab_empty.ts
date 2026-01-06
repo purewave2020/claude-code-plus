@@ -60,7 +60,7 @@ export interface UIState {
     inputText: string
     contexts: any[]
     scrollState: ScrollState
-    activeFileDismissed: boolean
+    activeFileDisabled: boolean
 }
 
 /**
@@ -212,7 +212,7 @@ export function useSessionTab(initialOrder: number = 0, initialBackendType: Back
         inputText: '',
         contexts: [],
         scrollState: { ...DEFAULT_SCROLL_STATE },
-        activeFileDismissed: false
+        activeFileDisabled: false
     })
 
     // ========== 历史加载状态 ==========
