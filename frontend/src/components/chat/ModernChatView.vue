@@ -54,7 +54,7 @@
         :selected-permission="sessionStore.currentTab?.permissionMode.value || 'default'"
         :skip-permissions="sessionStore.currentTab?.skipPermissions.value ?? false"
         :selected-model="uiState.selectedModel"
-        :auto-cleanup-contexts="uiState.autoCleanupContexts"
+        :auto-cleanup-contexts="currentTabAutoCleanup"
         :message-history="[]"
         :session-token-usage="sessionTokenUsage"
         :streaming-start-time="streamingStartTime"
@@ -242,7 +242,6 @@ interface ChatUiState {
   actualModelId?: string
   selectedModel: AiModel
   selectedPermissionMode: PermissionMode
-  autoCleanupContexts: boolean
 }
 
 // 状态定义
@@ -254,8 +253,7 @@ const uiState = ref<ChatUiState>({
   errorMessage: undefined,
   actualModelId: undefined,
   selectedModel: 'DEFAULT' as AiModel,
-  selectedPermissionMode: 'default' as PermissionMode,
-  autoCleanupContexts: false
+  selectedPermissionMode: 'default' as PermissionMode
 })
 
 // 从 sessionStore 获取 displayItems
@@ -351,6 +349,15 @@ const currentTabContexts = computed({
   set: (value: any[]) => {
     if (sessionStore.currentTab) {
       sessionStore.currentTab.uiState.contexts = value
+    }
+  }
+})
+
+const currentTabAutoCleanup = computed({
+  get: () => sessionStore.currentTab?.uiState.autoCleanupContexts ?? false,
+  set: (value: boolean) => {
+    if (sessionStore.currentTab) {
+      sessionStore.currentTab.uiState.autoCleanupContexts = value
     }
   }
 })
@@ -524,8 +531,10 @@ async function handleSendMessage(contents?: ContentBlock[], options?: SendOption
 
     // 如果是斜杠命令，不发送 contexts；否则过滤掉禁用的 contexts
     const currentContexts = options?.isSlashCommand ? [] : currentTabContexts.value.filter(c => !c.disabled)
-    const remainingContexts = currentTabContexts.value.filter(c => c.disabled)
-    // 发送后保留禁用的 contexts
+    const remainingContexts = currentTabAutoCleanup.value
+      ? currentTabContexts.value.filter(c => c.disabled)
+      : currentTabContexts.value
+    // 发送后保留禁用的 contexts（自动清理时仅清理启用项）
     if (sessionStore.currentTab) {
       sessionStore.currentTab.uiState.contexts = remainingContexts
     }
@@ -553,7 +562,9 @@ async function handleForceSend(contents?: ContentBlock[], options?: SendOptions)
 
   // 如果是斜杠命令，不发送 contexts；否则过滤掉禁用的 contexts
   const currentContexts = options?.isSlashCommand ? [] : currentTabContexts.value.filter(c => !c.disabled)
-  const remainingContexts = currentTabContexts.value.filter(c => c.disabled)
+  const remainingContexts = currentTabAutoCleanup.value
+    ? currentTabContexts.value.filter(c => c.disabled)
+    : currentTabContexts.value
 
   // 发送消息时切换到跟随模式
   sessionStore.switchToFollowMode()
@@ -565,7 +576,7 @@ async function handleForceSend(contents?: ContentBlock[], options?: SendOptions)
     ideContext: options?.ideContext  // 传递结构化的 IDE 上下文
   }, { isSlashCommand: options?.isSlashCommand })
 
-  // 发送后保留禁用的 contexts
+  // 发送后保留禁用的 contexts（自动清理时仅清理启用项）
   if (sessionStore.currentTab) {
     sessionStore.currentTab.uiState.contexts = remainingContexts
   }
@@ -643,7 +654,7 @@ function handleToggleContext(context: ContextReference) {
 
 function handleAutoCleanupChange(cleanup: boolean) {
   console.log('Changing auto cleanup contexts:', cleanup)
-  uiState.value.autoCleanupContexts = cleanup
+  currentTabAutoCleanup.value = cleanup
 }
 
 function handleClearError() {

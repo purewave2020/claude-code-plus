@@ -98,6 +98,7 @@ export const DEFAULT_SCROLL_STATE: ScrollState = {
 export interface UIState {
     inputText: string
     contexts: any[]
+    autoCleanupContexts: boolean
     /** 滚动状态（替代原来的 scrollPosition/newMessageCount/showScrollToBottom） */
     scrollState: ScrollState
     /** 当前打开的文件是否被禁用（每个 Tab 独立） */
@@ -334,6 +335,7 @@ export function useSessionTab(initialOrder: number = 0) {
     const uiState = reactive<UIState>({
         inputText: '',
         contexts: [],
+        autoCleanupContexts: false,
         scrollState: { ...DEFAULT_SCROLL_STATE },
         activeFileDisabled: false
     })
@@ -2110,6 +2112,7 @@ export function useSessionTab(initialOrder: number = 0) {
     function saveUiState(state: Partial<UIState>): void {
         if (state.inputText !== undefined) uiState.inputText = state.inputText
         if (state.contexts !== undefined) uiState.contexts = state.contexts
+        if (state.autoCleanupContexts !== undefined) uiState.autoCleanupContexts = state.autoCleanupContexts
         if (state.scrollState !== undefined) {
             // 深度合并 scrollState
             Object.assign(uiState.scrollState, state.scrollState)

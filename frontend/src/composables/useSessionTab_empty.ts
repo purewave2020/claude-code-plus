@@ -59,6 +59,7 @@ export const DEFAULT_SCROLL_STATE: ScrollState = {
 export interface UIState {
     inputText: string
     contexts: any[]
+    autoCleanupContexts: boolean
     scrollState: ScrollState
     activeFileDisabled: boolean
 }
@@ -211,6 +212,7 @@ export function useSessionTab(initialOrder: number = 0, initialBackendType: Back
     const uiState = reactive<UIState>({
         inputText: '',
         contexts: [],
+        autoCleanupContexts: false,
         scrollState: { ...DEFAULT_SCROLL_STATE },
         activeFileDisabled: false
     })
@@ -752,6 +754,7 @@ export function useSessionTab(initialOrder: number = 0, initialBackendType: Back
     function saveUiState(state: Partial<UIState>): void {
         if (state.inputText !== undefined) uiState.inputText = state.inputText
         if (state.contexts !== undefined) uiState.contexts = state.contexts
+        if (state.autoCleanupContexts !== undefined) uiState.autoCleanupContexts = state.autoCleanupContexts
         if (state.scrollState !== undefined) {
             Object.assign(uiState.scrollState, state.scrollState)
         }
