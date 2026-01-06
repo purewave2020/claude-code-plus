@@ -72,18 +72,18 @@ const TOOL_ICONS: Record<string, string> = {
   ReadMcpResource: '📖',
   ExitPlanMode: '✅',
   EnterPlanMode: '📝',
-  // Terminal MCP 工具（统一使用终端 SVG 图标）
-  'mcp__terminal__Terminal': TERMINAL_SVG,
-  'mcp__terminal__TerminalRead': TERMINAL_SVG,
-  'mcp__terminal__TerminalList': TERMINAL_SVG,
-  'mcp__terminal__TerminalKill': TERMINAL_SVG,
-  'mcp__terminal__TerminalInterrupt': TERMINAL_SVG,
-  'mcp__terminal__TerminalTypes': TERMINAL_SVG,
-  'mcp__terminal__TerminalRename': TERMINAL_SVG,
-  // JetBrains MCP 文件操作工具
-  'mcp__jetbrains__ReadFile': FILE_READ_SVG,
-  'mcp__jetbrains__WriteFile': FILE_WRITE_SVG,
-  'mcp__jetbrains__EditFile': FILE_EDIT_SVG,
+  // JetBrains Terminal MCP 工具（统一使用终端 SVG 图标）
+  'mcp__jetbrains-terminal__Terminal': TERMINAL_SVG,
+  'mcp__jetbrains-terminal__TerminalRead': TERMINAL_SVG,
+  'mcp__jetbrains-terminal__TerminalList': TERMINAL_SVG,
+  'mcp__jetbrains-terminal__TerminalKill': TERMINAL_SVG,
+  'mcp__jetbrains-terminal__TerminalInterrupt': TERMINAL_SVG,
+  'mcp__jetbrains-terminal__TerminalTypes': TERMINAL_SVG,
+  'mcp__jetbrains-terminal__TerminalRename': TERMINAL_SVG,
+  // JetBrains File MCP 文件操作工具
+  'mcp__jetbrains-file__ReadFile': FILE_READ_SVG,
+  'mcp__jetbrains-file__WriteFile': FILE_WRITE_SVG,
+  'mcp__jetbrains-file__EditFile': FILE_EDIT_SVG,
   // 小写格式（兼容旧格式）
   read: '📄',
   write: '✏️',
@@ -133,18 +133,18 @@ const ACTION_TYPES: Record<string, string> = {
   ReadMcpResource: 'ReadMCP',
   ExitPlanMode: 'ExitPlan',
   EnterPlanMode: 'EnterPlan',
-  // Terminal MCP 工具
-  'mcp__terminal__Terminal': 'Terminal',
-  'mcp__terminal__TerminalRead': 'TerminalRead',
-  'mcp__terminal__TerminalList': 'TerminalList',
-  'mcp__terminal__TerminalKill': 'TerminalKill',
-  'mcp__terminal__TerminalInterrupt': 'TerminalInterrupt',
-  'mcp__terminal__TerminalTypes': 'TerminalTypes',
-  'mcp__terminal__TerminalRename': 'TerminalRename',
-  // JetBrains MCP 文件操作工具
-  'mcp__jetbrains__ReadFile': 'ReadFile',
-  'mcp__jetbrains__WriteFile': 'WriteFile',
-  'mcp__jetbrains__EditFile': 'EditFile',
+  // JetBrains Terminal MCP 工具
+  'mcp__jetbrains-terminal__Terminal': 'Terminal',
+  'mcp__jetbrains-terminal__TerminalRead': 'TerminalRead',
+  'mcp__jetbrains-terminal__TerminalList': 'TerminalList',
+  'mcp__jetbrains-terminal__TerminalKill': 'TerminalKill',
+  'mcp__jetbrains-terminal__TerminalInterrupt': 'TerminalInterrupt',
+  'mcp__jetbrains-terminal__TerminalTypes': 'TerminalTypes',
+  'mcp__jetbrains-terminal__TerminalRename': 'TerminalRename',
+  // JetBrains File MCP 文件操作工具
+  'mcp__jetbrains-file__ReadFile': 'ReadFile',
+  'mcp__jetbrains-file__WriteFile': 'WriteFile',
+  'mcp__jetbrains-file__EditFile': 'EditFile',
   // 小写格式（兼容旧格式）
   read: 'Read',
   write: 'Write',
@@ -361,8 +361,8 @@ export function extractToolDisplayInfo(
       secondaryInfo = toolInput.server || ''
       break
 
-    // Terminal MCP 工具
-    case 'mcp__terminal__Terminal': {
+    // JetBrains Terminal MCP 工具
+    case 'mcp__jetbrains-terminal__Terminal': {
       // 显示命令，session_id 作为次要信息
       const cmd = toolInput.command || ''
       primaryInfo = formatBashCommand(cmd)
@@ -370,18 +370,18 @@ export function extractToolDisplayInfo(
       break
     }
 
-    case 'mcp__terminal__TerminalRead':
+    case 'mcp__jetbrains-terminal__TerminalRead':
       // 显示 session_id
       primaryInfo = toolInput.session_id || ''
       secondaryInfo = toolInput.search ? `search: ${toolInput.search}` : ''
       break
 
-    case 'mcp__terminal__TerminalList':
+    case 'mcp__jetbrains-terminal__TerminalList':
       primaryInfo = 'List sessions'
       secondaryInfo = ''
       break
 
-    case 'mcp__terminal__TerminalKill': {
+    case 'mcp__jetbrains-terminal__TerminalKill': {
       // 显示要关闭的 session_ids
       const ids = toolInput.session_ids as string[] | undefined
       if (toolInput.all) {
@@ -395,21 +395,71 @@ export function extractToolDisplayInfo(
       break
     }
 
-    case 'mcp__terminal__TerminalInterrupt':
+    case 'mcp__jetbrains-terminal__TerminalInterrupt':
       // 显示 session_id
       primaryInfo = toolInput.session_id || ''
       secondaryInfo = ''
       break
 
-    case 'mcp__terminal__TerminalTypes':
+    case 'mcp__jetbrains-terminal__TerminalTypes':
       primaryInfo = 'Get shell types'
       secondaryInfo = ''
       break
 
-    case 'mcp__terminal__TerminalRename':
+    case 'mcp__jetbrains-terminal__TerminalRename':
       primaryInfo = toolInput.session_id || ''
       secondaryInfo = toolInput.new_name ? `→ ${toolInput.new_name}` : ''
       break
+
+    // ====== JetBrains File MCP 工具（camelCase 参数）======
+    case 'mcp__jetbrains-file__ReadFile': {
+      // 文件读取：显示文件名:行号范围
+      const fileName = extractFileName(toolInput.filePath || '')
+      let lineInfo = ''
+      if (toolInput.offset !== undefined && toolInput.maxLines !== undefined) {
+        const start = toolInput.offset
+        const end = toolInput.offset + toolInput.maxLines - 1
+        lineInfo = `:${start}-${end}`
+      } else if (toolInput.offset !== undefined) {
+        lineInfo = `:${toolInput.offset}+`
+      }
+      primaryInfo = fileName + lineInfo
+      secondaryInfo = toolInput.filePath || ''
+      break
+    }
+
+    case 'mcp__jetbrains-file__WriteFile': {
+      // 文件写入：显示文件名 (行数)
+      const fileName = extractFileName(toolInput.filePath || '')
+      const content = toolInput.content || ''
+      if (content) {
+        const lineCount = content.split('\n').length
+        primaryInfo = `${fileName} (${t('tools.writeTool.lines', { n: lineCount })})`
+        addedLines = lineCount || undefined
+      } else {
+        primaryInfo = fileName
+      }
+      secondaryInfo = toolInput.filePath || ''
+      break
+    }
+
+    case 'mcp__jetbrains-file__EditFile': {
+      // 文件编辑：显示文件名
+      const fileName = extractFileName(toolInput.filePath || '')
+      primaryInfo = fileName
+      secondaryInfo = toolInput.filePath || ''
+      if (toolInput.oldString || toolInput.newString) {
+        const oldLines = (toolInput.oldString || '').toString().split(/\r?\n/).length
+        const newLines = (toolInput.newString || '').toString().split(/\r?\n/).length
+        removedLines = oldLines || undefined
+        addedLines = newLines || undefined
+        const diff = newLines - oldLines
+        if (diff !== 0) {
+          lineChanges = diff > 0 ? `+${diff}` : `${diff}`
+        }
+      }
+      break
+    }
 
     default:
       // 通用处理

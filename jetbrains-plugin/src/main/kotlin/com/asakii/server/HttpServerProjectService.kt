@@ -5,6 +5,7 @@ import com.asakii.plugin.bridge.JetBrainsApiImpl
 import com.asakii.plugin.bridge.JetBrainsRSocketHandler
 import com.asakii.plugin.hooks.IdeaFileSyncHooks
 import com.asakii.plugin.mcp.JetBrainsMcpServerProviderImpl
+import com.asakii.plugin.mcp.JetBrainsFileMcpServerProviderImpl
 import com.asakii.plugin.mcp.TerminalMcpServerProviderImpl
 import com.asakii.plugin.mcp.GitMcpServerProviderImpl
 import com.asakii.server.config.AiAgentServiceConfig
@@ -168,6 +169,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
 
             // 创建 MCP Server Providers
             val jetBrainsMcpServerProvider = JetBrainsMcpServerProviderImpl(project)
+            val jetBrainsFileMcpServerProvider = JetBrainsFileMcpServerProviderImpl(project)
             val terminalMcpServerProvider = TerminalMcpServerProviderImpl(project)
             val gitMcpServerProvider = GitMcpServerProviderImpl(project)
 
@@ -256,7 +258,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             // 启动 Ktor HTTP 服务器
             // 开发模式：使用环境变量指定端口（默认 8765）
             // 生产模式：随机端口（支持多项目）
-            val server = HttpApiServer(ideTools, scope, frontendDir, jetbrainsApi, jetbrainsRSocketHandler, jetBrainsMcpServerProvider, terminalMcpServerProvider, gitMcpServerProvider, serviceConfigProvider)
+            val server = HttpApiServer(ideTools, scope, frontendDir, jetbrainsApi, jetbrainsRSocketHandler, jetBrainsMcpServerProvider, jetBrainsFileMcpServerProvider, terminalMcpServerProvider, gitMcpServerProvider, serviceConfigProvider)
             val devPort = System.getenv("CLAUDE_DEV_PORT")?.toIntOrNull()
             val url = server.start(preferredPort = devPort)
             httpServer = server

@@ -51,6 +51,8 @@ export default {
     autoCleanupContext: '자동 컨텍스트 정리',
     autoCleanupContextTooltip: '메시지 전송 후 컨텍스트 태그 자동 정리',
     dropFileToAddContext: '파일을 여기에 놓아 컨텍스트에 추가',
+    clickToPreview: '클릭하여 미리보기',
+    clickToOpenFile: '클릭하여 파일 열기',
     taskQueue: '작업 대기열',
     taskQueueCount: '작업 대기열 ({count})',
     taskStatus: {

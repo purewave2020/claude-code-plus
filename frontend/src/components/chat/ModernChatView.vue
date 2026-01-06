@@ -71,7 +71,6 @@
         @stop="handleStopGeneration"
         @context-add="handleAddContext"
         @context-remove="handleRemoveContext"
-        @context-toggle="handleToggleContext"
         @auto-cleanup-change="handleAutoCleanupChange"
       />
     </div>
@@ -529,14 +528,11 @@ async function handleSendMessage(contents?: ContentBlock[], options?: SendOption
 
     // 连接状态检查已移至 ChatInput.handleSend，此处不再重复检查
 
-    // 如果是斜杠命令，不发送 contexts；否则过滤掉禁用的 contexts
-    const currentContexts = options?.isSlashCommand ? [] : currentTabContexts.value.filter(c => !c.disabled)
-    const remainingContexts = currentTabAutoCleanup.value
-      ? currentTabContexts.value.filter(c => c.disabled)
-      : currentTabContexts.value
-    // 发送后保留禁用的 contexts（自动清理时仅清理启用项）
+    // 如果是斜杠命令，不发送 contexts；否则发送所有 contexts
+    const currentContexts = options?.isSlashCommand ? [] : currentTabContexts.value
+    // 自动清理：启用时清空所有 contexts，禁用时保留所有
     if (sessionStore.currentTab) {
-      sessionStore.currentTab.uiState.contexts = remainingContexts
+      sessionStore.currentTab.uiState.contexts = currentTabAutoCleanup.value ? [] : currentTabContexts.value
     }
 
     console.log('Sending message via currentTab', options?.isSlashCommand ? '(no contexts for slash command)' : `(${currentContexts.length} contexts)`)
@@ -560,11 +556,8 @@ async function handleForceSend(contents?: ContentBlock[], options?: SendOptions)
   const safeContents = Array.isArray(contents) ? contents : []
   console.log('Force send:', safeContents.length, 'content blocks', options?.isSlashCommand ? '(slash command)' : '')
 
-  // 如果是斜杠命令，不发送 contexts；否则过滤掉禁用的 contexts
-  const currentContexts = options?.isSlashCommand ? [] : currentTabContexts.value.filter(c => !c.disabled)
-  const remainingContexts = currentTabAutoCleanup.value
-    ? currentTabContexts.value.filter(c => c.disabled)
-    : currentTabContexts.value
+  // 如果是斜杠命令，不发送 contexts；否则发送所有 contexts
+  const currentContexts = options?.isSlashCommand ? [] : currentTabContexts.value
 
   // 发送消息时切换到跟随模式
   sessionStore.switchToFollowMode()
@@ -576,9 +569,9 @@ async function handleForceSend(contents?: ContentBlock[], options?: SendOptions)
     ideContext: options?.ideContext  // 传递结构化的 IDE 上下文
   }, { isSlashCommand: options?.isSlashCommand })
 
-  // 发送后保留禁用的 contexts（自动清理时仅清理启用项）
+  // 自动清理：启用时清空所有 contexts，禁用时保留所有
   if (sessionStore.currentTab) {
-    sessionStore.currentTab.uiState.contexts = remainingContexts
+    sessionStore.currentTab.uiState.contexts = currentTabAutoCleanup.value ? [] : currentTabContexts.value
   }
 }
 
@@ -637,18 +630,6 @@ function handleRemoveContext(context: ContextReference) {
   console.log('Removing context:', context)
   if (sessionStore.currentTab) {
     sessionStore.currentTab.uiState.contexts = currentTabContexts.value.filter(c => c.uri !== context.uri)
-  }
-}
-
-function handleToggleContext(context: ContextReference) {
-  console.log('Toggling context:', context)
-  if (sessionStore.currentTab) {
-    sessionStore.currentTab.uiState.contexts = currentTabContexts.value.map(c => {
-      if (c.uri === context.uri) {
-        return { ...c, disabled: !c.disabled }
-      }
-      return c
-    })
   }
 }
 

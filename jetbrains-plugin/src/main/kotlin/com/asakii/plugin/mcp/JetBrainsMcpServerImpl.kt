@@ -14,13 +14,15 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 /**
- * JetBrains MCP 服务器实现
+ * JetBrains LSP MCP 服务器实现
  *
- * 提供 IDEA 平台相关的工具，如目录树、文件问题检测、文件索引搜索、代码搜索等。
+ * 提供 IDEA 平台相关的 IDE 集成工具，如目录树、文件问题检测、文件索引搜索、代码搜索等。
  * 这些工具利用 IDEA 的强大索引和分析能力，提供比纯文件系统操作更丰富的功能。
+ *
+ * 注意：文件操作工具（Read/Write/Edit）已移至独立的 jetbrains-file MCP 服务器。
  */
 @McpServerConfig(
-    name = "jetbrains",
+    name = "jetbrains-lsp",
     version = "1.0.0",
     description = "JetBrains IDE integration tool server, providing directory browsing, file problem detection, index search, code search and other features"
 )
@@ -33,9 +35,6 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
     private lateinit var codeSearchTool: CodeSearchTool
     private lateinit var findUsagesTool: FindUsagesTool
     private lateinit var renameTool: RenameTool
-    private lateinit var readFileTool: ReadFileTool
-    private lateinit var writeFileTool: WriteFileTool
-    private lateinit var editFileTool: EditFileTool
 
     override fun getSystemPromptAppendix(): String {
         return AgentSettingsService.getInstance().effectiveJetbrainsInstructions
@@ -43,8 +42,7 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
 
     /**
      * 获取需要自动允许的工具列表
-     * JetBrains MCP 的只读工具应该自动允许
-     * 写入工具（WriteFile, EditFile）需要用户确认
+     * JetBrains LSP MCP 的所有工具都是只读或安全的重构工具，自动允许
      */
     override fun getAllowedTools(): List<String> = listOf(
         "DirectoryTree",
@@ -52,9 +50,7 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
         "FileIndex",
         "CodeSearch",
         "FindUsages",
-        "Rename",
-        "ReadFile"
-        // WriteFile 和 EditFile 不在此列表，需要用户确认
+        "Rename"
     )
 
     companion object {
@@ -92,116 +88,92 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
     }
 
     override suspend fun onInitialize() {
-        logger.info { "🔧 Initializing JetBrains MCP Server for project: ${project.name}" }
+        logger.info { "Initializing JetBrains LSP MCP Server for project: ${project.name}" }
 
         try {
             // 验证预加载的 Schema
-            logger.info { "📋 Using pre-loaded schemas: ${TOOL_SCHEMAS.size} tools (${TOOL_SCHEMAS.keys})" }
+            logger.info { "Using pre-loaded schemas: ${TOOL_SCHEMAS.size} tools (${TOOL_SCHEMAS.keys})" }
 
             if (TOOL_SCHEMAS.isEmpty()) {
-                logger.error { "❌ No schemas loaded! Tools will not work properly." }
+                logger.error { "No schemas loaded! Tools will not work properly." }
             }
 
             // 初始化工具实例
-            logger.info { "🔧 Creating tool instances..." }
+            logger.info { "Creating tool instances..." }
             directoryTreeTool = DirectoryTreeTool(project)
             fileProblemsTool = FileProblemsTool(project)
             fileIndexTool = FileIndexTool(project)
             codeSearchTool = CodeSearchTool(project)
             findUsagesTool = FindUsagesTool(project)
             renameTool = RenameTool(project)
-            readFileTool = ReadFileTool(project)
-            writeFileTool = WriteFileTool(project)
-            editFileTool = EditFileTool(project)
-            logger.info { "✅ All tool instances created" }
+            logger.info { "All tool instances created" }
 
             // 注册目录树工具（使用预加载的 Schema）
             val directoryTreeSchema = getToolSchema("DirectoryTree")
-            logger.info { "📝 DirectoryTree schema: ${directoryTreeSchema.keys}" }
+            logger.info { "DirectoryTree schema: ${directoryTreeSchema.keys}" }
             registerToolFromSchema("DirectoryTree", directoryTreeSchema) { arguments ->
                 wrapToolResult(directoryTreeTool.execute(arguments))
             }
 
             // 注册文件问题检测工具
             val fileProblemsSchema = getToolSchema("FileProblems")
-            logger.info { "📝 FileProblems schema: ${fileProblemsSchema.keys}" }
+            logger.info { "FileProblems schema: ${fileProblemsSchema.keys}" }
             registerToolFromSchema("FileProblems", fileProblemsSchema) { arguments ->
                 wrapToolResult(fileProblemsTool.execute(arguments))
             }
 
             // 注册文件索引搜索工具
             val fileIndexSchema = getToolSchema("FileIndex")
-            logger.info { "📝 FileIndex schema: ${fileIndexSchema.keys}" }
+            logger.info { "FileIndex schema: ${fileIndexSchema.keys}" }
             registerToolFromSchema("FileIndex", fileIndexSchema) { arguments ->
                 wrapToolResult(fileIndexTool.execute(arguments))
             }
 
             // 注册代码搜索工具
             val codeSearchSchema = getToolSchema("CodeSearch")
-            logger.info { "📝 CodeSearch schema: ${codeSearchSchema.keys}" }
+            logger.info { "CodeSearch schema: ${codeSearchSchema.keys}" }
             registerToolFromSchema("CodeSearch", codeSearchSchema) { arguments ->
                 wrapToolResult(codeSearchTool.execute(arguments))
             }
 
             // 注册查找引用工具
             val findUsagesSchema = getToolSchema("FindUsages")
-            logger.info { "📝 FindUsages schema: ${findUsagesSchema.keys}" }
+            logger.info { "FindUsages schema: ${findUsagesSchema.keys}" }
             registerToolFromSchema("FindUsages", findUsagesSchema) { arguments ->
                 wrapToolResult(findUsagesTool.execute(arguments))
             }
 
             // 注册重命名工具
             val renameSchema = getToolSchema("Rename")
-            logger.info { "📝 Rename schema: ${renameSchema.keys}" }
+            logger.info { "Rename schema: ${renameSchema.keys}" }
             registerToolFromSchema("Rename", renameSchema) { arguments ->
                 wrapToolResult(renameTool.execute(arguments))
             }
 
-            // 注册文件读取工具
-            val readFileSchema = getToolSchema("ReadFile")
-            logger.info { "📝 ReadFile schema: ${readFileSchema.keys}" }
-            registerToolFromSchema("ReadFile", readFileSchema) { arguments ->
-                wrapToolResult(readFileTool.execute(arguments))
-            }
-
-            // 注册文件写入工具
-            val writeFileSchema = getToolSchema("WriteFile")
-            logger.info { "📝 WriteFile schema: ${writeFileSchema.keys}" }
-            registerToolFromSchema("WriteFile", writeFileSchema) { arguments ->
-                wrapToolResult(writeFileTool.execute(arguments))
-            }
-
-            // 注册文件编辑工具
-            val editFileSchema = getToolSchema("EditFile")
-            logger.info { "📝 EditFile schema: ${editFileSchema.keys}" }
-            registerToolFromSchema("EditFile", editFileSchema) { arguments ->
-                wrapToolResult(editFileTool.execute(arguments))
-            }
-
-            logger.info { "✅ JetBrains MCP Server initialized, registered 9 tools" }
+            logger.info { "JetBrains LSP MCP Server initialized, registered 6 tools" }
         } catch (e: Exception) {
-            logger.error(e) { "❌ Failed to initialize JetBrains MCP Server: ${e.message}" }
+            logger.error(e) { "Failed to initialize JetBrains LSP MCP Server: ${e.message}" }
             throw e
         }
     }
 }
 
 /**
- * JetBrains MCP 服务器提供者实现
+ * JetBrains LSP MCP 服务器提供者实现
  *
  * 在 jetbrains-plugin 模块中实现，提供对 IDEA Platform API 的访问。
  */
 class JetBrainsMcpServerProviderImpl(private val project: Project) : JetBrainsMcpServerProvider {
 
     private val _server: McpServer by lazy {
-        logger.info { "🔧 Creating JetBrains MCP Server for project: ${project.name}" }
+        logger.info { "Creating JetBrains LSP MCP Server for project: ${project.name}" }
         JetBrainsMcpServerImpl(project).also {
-            logger.info { "✅ JetBrains MCP Server instance created" }
+            logger.info { "JetBrains LSP MCP Server instance created" }
         }
     }
 
     override fun getServer(): McpServer {
-        logger.info { "📤 JetBrainsMcpServerProvider.getServer() called" }
+        logger.info { "JetBrainsMcpServerProvider.getServer() called" }
         return _server
     }
 

@@ -51,6 +51,8 @@ export default {
     autoCleanupContext: 'コンテキスト自動クリーンアップ',
     autoCleanupContextTooltip: 'メッセージ送信後にコンテキストタグを自動的にクリア',
     dropFileToAddContext: 'ファイルをここにドロップしてコンテキストに追加',
+    clickToPreview: 'クリックしてプレビュー',
+    clickToOpenFile: 'クリックしてファイルを開く',
     taskQueue: 'タスクキュー',
     taskQueueCount: 'タスクキュー ({count})',
     taskStatus: {

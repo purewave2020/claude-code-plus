@@ -992,7 +992,7 @@ class BuiltInMcpServerDialog(
 
         // 禁用工具配置（标签选择界面）
         if (defaultDisabledTools.isNotEmpty()) {
-            val disabledToolsLabel = JBLabel("Disables built-in tools when enabled:").apply {
+            val disabledToolsLabel = JBLabel("Disables Claude Code built-in tools when enabled:").apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 foreground = JBColor(0x1976D2, 0x6BA3D6)
             }

@@ -62,8 +62,6 @@
       >
         <div
           class="context-tag active-file-tag"
-          :class="{ 'context-disabled': activeFileDisabled }"
-          @click.stop="toggleActiveFile"
         >
           <span class="tag-file-name">{{ activeFileName }}</span>
           <span v-if="activeFileLineRange" class="tag-line-range">{{ activeFileLineRange }}</span>
@@ -81,10 +79,9 @@
         <div
           class="context-tag"
           :class="{
-            'image-tag': isImageContext(context),
-            'context-disabled': context.disabled
+            'image-tag': isImageContext(context)
           }"
-          @click.stop="toggleContext(context)"
+          @click.stop="handleContextClick(context)"
         >
           <!-- 图片：只显示缩略图，点击可预览 -->
           <template v-if="isImageContext(context)">
@@ -470,6 +467,7 @@ import StatusToggle from './StatusToggle.vue'
 import ThinkingConfigPanel from '@/components/settings/ThinkingConfigPanel.vue'
 import CodexToolbar from './CodexToolbar.vue'
 import { fileSearchService, type IndexedFileInfo } from '@/services/fileSearchService'
+import { jetbrainsBridge } from '@/services/jetbrainsApi'
 import { isInAtQuery } from '@/utils/atSymbolDetector'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useSettingsStore } from '@/stores/settingsStore'
@@ -548,7 +546,6 @@ interface Emits {
   (e: 'stop'): void
   (e: 'context-add', context: ContextReference): void
   (e: 'context-remove', context: ContextReference): void
-  (e: 'context-toggle', context: ContextReference): void  // 切换启用/禁用
   (e: 'auto-cleanup-change', value: boolean): void
   (e: 'skip-permissions-change', skip: boolean): void
   (e: 'cancel'): void  // 取消编辑（仅 inline 模式）
@@ -935,9 +932,9 @@ const shouldShowActiveFile = computed(() => {
   return currentActiveFile.value !== null
 })
 
-// 当前活跃文件是否启用
+// 当前活跃文件是否启用（始终启用，只要有活跃文件）
 const activeFileEnabled = computed(() => {
-  return shouldShowActiveFile.value && !activeFileDisabled.value
+  return shouldShowActiveFile.value
 })
 
 // 从路径中提取文件名
@@ -983,11 +980,6 @@ const activeFileDisplayText = computed(() => {
   }
   return fileName
 })
-
-// 切换当前活跃文件启用/禁用
-function toggleActiveFile() {
-  activeFileDisabled.value = !activeFileDisabled.value
-}
 
 // XML 转换逻辑已移至 userMessageBuilder.ts 的 ideContextToContentBlocks 函数
 // ChatInput 现在传递结构化的 ideContext，由 useSessionMessages 在发送时转换为 XML
@@ -1351,8 +1343,19 @@ function removeContext(context: ContextReference) {
   emit('context-remove', context)
 }
 
-function toggleContext(context: ContextReference) {
-  emit('context-toggle', context)
+function handleContextClick(context: ContextReference) {
+  // 图片类型：打开预览
+  if (isImageContext(context)) {
+    openContextImagePreview(context)
+    return
+  }
+  // 文件类型：在 IDEA 中打开文件（使用与 Read 工具相同的 API）
+  if (isFileReference(context)) {
+    const filePath = context.fullPath || context.path || context.uri
+    if (filePath) {
+      jetbrainsBridge.openFile({ filePath })
+    }
+  }
 }
 
 function handleAutoCleanupChange(value: boolean) {
@@ -1429,21 +1432,22 @@ function getContextFullPath(context: ContextReference): string {
 }
 
 /**
- * 获取上下文 tooltip（包含路径和启用/禁用状态提示）
+ * 获取上下文 tooltip（包含路径，图片可点击预览，文件可点击打开）
  */
 function getContextTooltip(context: ContextReference): string {
   const path = getContextFullPath(context)
-  const status = context.disabled ? t('common.disabled') : t('common.enabled')
-  const hint = t('chat.clickToToggle')
-  return `${path}\n[${status}] ${hint}`
+  if (isImageContext(context)) {
+    return `${path}\n${t('chat.clickToPreview')}`
+  }
+  if (isFileReference(context)) {
+    return `${path}\n${t('chat.clickToOpenFile')}`
+  }
+  return path
 }
 
 const activeFileTooltip = computed(() => {
   if (!currentActiveFile.value) return ''
-  const path = currentActiveFile.value.path || currentActiveFile.value.relativePath || ''
-  const status = activeFileDisabled.value ? t('common.disabled') : t('common.enabled')
-  const hint = t('chat.clickToToggle')
-  return `${path}\n[${status}] ${hint}`
+  return currentActiveFile.value.path || currentActiveFile.value.relativePath || ''
 })
 
 /**
@@ -1918,63 +1922,6 @@ onUnmounted(() => {
 
 .context-tag:hover {
   background: var(--theme-hover-background, #f6f8fa);
-}
-
-/* 禁用状态的上下文标签 */
-.context-tag.context-disabled {
-  opacity: 0.45;
-  background: var(--theme-background-disabled, #f0f0f0);
-  border-style: dashed;
-}
-
-.context-tag.context-disabled:hover {
-  opacity: 0.65;
-}
-
-.context-tag.context-disabled .tag-icon,
-.context-tag.context-disabled .tag-text,
-.context-tag.context-disabled .tag-file-name,
-.context-tag.context-disabled .tag-line-range {
-  text-decoration: line-through;
-}
-
-.context-tag.context-disabled .tag-image-preview {
-  filter: grayscale(1) contrast(0.7) brightness(0.8);
-}
-
-.context-tag.context-disabled.image-tag {
-  opacity: 0.5;
-}
-
-/* 禁用图片标签的斜线覆盖效果 */
-.context-tag.context-disabled.image-tag::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 3px;
-  background:
-    /* 对角线条纹 */
-    repeating-linear-gradient(
-      -45deg,
-      transparent,
-      transparent 4px,
-      rgba(0, 0, 0, 0.25) 4px,
-      rgba(0, 0, 0, 0.25) 6px
-    );
-  pointer-events: none;
-}
-
-/* 禁用图片标签的删除线效果 */
-.context-tag.context-disabled.image-tag::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: rgba(255, 80, 80, 0.8);
-  z-index: 2;
-  pointer-events: none;
 }
 
 .context-tag.image-tag {

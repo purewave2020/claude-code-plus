@@ -1,7 +1,9 @@
 package com.asakii.plugin.mcp.tools
 
 import com.asakii.claude.agent.sdk.mcp.ToolResult
+import com.asakii.claude.agent.sdk.mcp.currentToolUseId
 import com.asakii.plugin.mcp.getString
+import com.asakii.server.services.FileContentCache
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.project.Project
@@ -21,7 +23,7 @@ private val logger = KotlinLogging.logger {}
  */
 class WriteFileTool(private val project: Project) {
 
-    fun execute(arguments: JsonObject): Any {
+    suspend fun execute(arguments: JsonObject): Any {
         val filePath = arguments.getString("filePath")
             ?: return ToolResult.error("Missing required parameter: filePath")
 
@@ -39,6 +41,13 @@ class WriteFileTool(private val project: Project) {
         // 安全检查：确保文件在项目目录内
         if (!absolutePath.startsWith(File(projectBasePath).canonicalPath)) {
             return ToolResult.error("File path must be within project directory")
+        }
+
+        // 从协程上下文获取 toolUseId，保存原始文件内容用于 Diff 显示
+        val toolUseId = currentToolUseId()
+        if (toolUseId != null) {
+            FileContentCache.saveOriginalContent(toolUseId, absolutePath)
+            logger.info { "WriteFile: saved original content for toolUseId=$toolUseId" }
         }
 
         return try {

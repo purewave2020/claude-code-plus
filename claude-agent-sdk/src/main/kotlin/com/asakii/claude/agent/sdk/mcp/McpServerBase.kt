@@ -1,6 +1,7 @@
 package com.asakii.claude.agent.sdk.mcp
 
 import com.asakii.claude.agent.sdk.mcp.annotations.*
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import mu.KotlinLogging
 import kotlin.reflect.*
@@ -441,13 +442,40 @@ abstract class McpServerBase : McpServer {
      */
     override suspend fun callTool(toolName: String, arguments: JsonObject): ToolResult {
         ensureInitialized()
-        
+
         val handler = registeredTools[toolName]
             ?: return ToolResult.error("工具 '$toolName' 未找到")
-        
+
         return try {
             logger.info("🎯 调用工具: $toolName, 参数: $arguments")
             handler.handler(arguments)
+        } catch (e: Exception) {
+            logger.error("❌ 工具 '$toolName' 执行失败: ${e.message}")
+            ToolResult.error("工具执行失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 实现 McpServer.callToolWithContext()
+     *
+     * 使用 ToolUseContext 在协程上下文中传递 toolUseId，
+     * 工具内部可以通过 currentToolUseId() 获取当前工具调用 ID。
+     */
+    override suspend fun callToolWithContext(
+        toolName: String,
+        arguments: JsonObject,
+        toolUseId: String?
+    ): ToolResult {
+        ensureInitialized()
+
+        val handler = registeredTools[toolName]
+            ?: return ToolResult.error("工具 '$toolName' 未找到")
+
+        return try {
+            logger.info("🎯 调用工具: $toolName, 参数: $arguments, toolUseId: $toolUseId")
+            withContext(ToolUseContext(toolUseId)) {
+                handler.handler(arguments)
+            }
         } catch (e: Exception) {
             logger.error("❌ 工具 '$toolName' 执行失败: ${e.message}")
             ToolResult.error("工具执行失败: ${e.message}")

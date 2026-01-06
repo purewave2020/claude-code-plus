@@ -31,7 +31,7 @@ import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Node, mergeAttributes } from '@tiptap/core'
-import { ideService } from '@/services/ideaBridge'
+import { jetbrainsBridge } from '@/services/jetbrainsApi'
 
 // 文件引用扩展 - 用于在编辑器中显示 @文件路径
 const FileReference = Node.create({
@@ -256,12 +256,12 @@ const editor = useEditor({
         }
       }
 
-      // 检查点击的是否是文件引用 - 通过 HTTP API 打开文件
+      // 检查点击的是否是文件引用 - 在 IDEA 中打开文件
       if (target.classList.contains('file-reference')) {
         const filePath = target.getAttribute('data-file-ref')
         if (filePath) {
-          // 通过 HTTP API 调用，IDEA 插件和 Web 环境都支持
-          ideService.openFile(filePath)
+          // 使用与 Read 工具相同的 API（RSocket）
+          jetbrainsBridge.openFile({ filePath })
           return true
         }
       }

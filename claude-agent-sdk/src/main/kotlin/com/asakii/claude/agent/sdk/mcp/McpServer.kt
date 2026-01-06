@@ -86,6 +86,22 @@ interface McpServer : McpServerSpec {
     suspend fun callTool(toolName: String, arguments: JsonObject): ToolResult
 
     /**
+     * 调用指定的工具，带 toolUseId 参数
+     *
+     * toolUseId 会通过协程上下文传递给工具，工具可以通过 currentToolUseId() 获取。
+     * 主要用于文件操作工具记录文件历史，以便后续展示 Diff。
+     *
+     * @param toolName 工具名称
+     * @param arguments 工具参数
+     * @param toolUseId 工具调用 ID（可选）
+     * @return 工具执行结果
+     */
+    suspend fun callToolWithContext(toolName: String, arguments: JsonObject, toolUseId: String?): ToolResult {
+        // 默认实现：直接调用 callTool，忽略 toolUseId
+        return callTool(toolName, arguments)
+    }
+
+    /**
      * 调用指定的工具（JsonObject 参数版本，推荐使用）
      * 直接传递原始 JSON，避免类型转换问题
      */

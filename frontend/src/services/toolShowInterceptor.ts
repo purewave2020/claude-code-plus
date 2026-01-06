@@ -48,6 +48,26 @@ export interface MultiEditToolInput {
   }>
 }
 
+// ====== JetBrains File MCP 工具输入类型（camelCase）======
+
+export interface JetBrainsReadFileInput {
+  filePath?: string
+  maxLines?: number
+  offset?: number
+}
+
+export interface JetBrainsWriteFileInput {
+  filePath?: string
+  content?: string
+}
+
+export interface JetBrainsEditFileInput {
+  filePath?: string
+  oldString?: string
+  newString?: string
+  replaceAll?: boolean
+}
+
 // ====== 泛型上下文和处理器 ======
 
 export interface ToolShowContext<TInput = Record<string, unknown>> {
@@ -231,6 +251,46 @@ class ToolShowInterceptorService {
           newString: edit.new_string || '',
           replaceAll: edit.replace_all || false
         }))
+      })
+    })
+
+    // ====== JetBrains File MCP 工具（camelCase 参数）======
+
+    // JetBrains ReadFile 工具：打开文件
+    this.register<JetBrainsReadFileInput>('mcp__jetbrains-file__ReadFile', (ctx, api) => {
+      api.openFile({
+        filePath: ctx.input.filePath || '',
+        line: ctx.input.offset ? undefined : 1,
+        startOffset: ctx.input.offset,
+        endOffset:
+          ctx.input.offset && ctx.input.maxLines ? ctx.input.offset + ctx.input.maxLines - 1 : undefined
+      })
+    })
+
+    // JetBrains WriteFile 工具：打开文件
+    this.register<JetBrainsWriteFileInput>('mcp__jetbrains-file__WriteFile', (ctx, api) => {
+      api.openFile({
+        filePath: ctx.input.filePath || ''
+      })
+    })
+
+    // JetBrains EditFile 工具：显示完整文件 Diff
+    this.register<JetBrainsEditFileInput>('mcp__jetbrains-file__EditFile', async (ctx, api) => {
+      const filePath = ctx.input.filePath || ''
+
+      // 尝试获取缓存的原始内容
+      let originalContent: string | undefined
+      if (ctx.toolUseId) {
+        originalContent = await jetbrainsBridge.getOriginalContent(ctx.toolUseId) || undefined
+      }
+
+      api.showEditFullDiff({
+        filePath,
+        oldString: ctx.input.oldString || '',
+        newString: ctx.input.newString || '',
+        replaceAll: ctx.input.replaceAll || false,
+        title: `Edit: ${filePath}`,
+        originalContent
       })
     })
   }

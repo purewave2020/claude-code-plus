@@ -366,6 +366,80 @@ object McpDefaults {
     """.trimIndent()
 
     /**
+     * JetBrains File MCP 工具 Schema（JSON 格式）
+     * 独立的文件操作 MCP 服务器
+     */
+    val JETBRAINS_FILE_TOOLS_SCHEMA = """
+{
+  "ReadFile": {
+    "type": "object",
+    "description": "Read file content using IDE's VFS. Supports project files, JAR/ZIP entries, JDK sources (src.zip), and .class files (auto-decompiled). Use this to read library source code or decompiled classes.",
+    "properties": {
+      "filePath": {
+        "type": "string",
+        "description": "File path. Supports: relative paths (to project root), absolute paths, JAR paths (path.jar!/inner/path), jar:// URLs, JDK sources (src.zip!/...)"
+      },
+      "maxLines": {
+        "type": "integer",
+        "description": "Maximum lines to return",
+        "default": 500,
+        "minimum": 1,
+        "maximum": 5000
+      },
+      "offset": {
+        "type": "integer",
+        "description": "Line offset for pagination (0-based)",
+        "default": 0,
+        "minimum": 0
+      }
+    },
+    "required": ["filePath"]
+  },
+
+  "WriteFile": {
+    "type": "object",
+    "description": "Write content to a file. Creates the file if it doesn't exist, or overwrites if it does. Supports relative paths (to project root) and absolute paths.",
+    "properties": {
+      "filePath": {
+        "type": "string",
+        "description": "File path (relative to project root or absolute)"
+      },
+      "content": {
+        "type": "string",
+        "description": "Content to write to the file"
+      }
+    },
+    "required": ["filePath", "content"]
+  },
+
+  "EditFile": {
+    "type": "object",
+    "description": "Edit a file by replacing text. The oldString must be unique in the file unless replaceAll is true. Supports relative paths (to project root) and absolute paths.",
+    "properties": {
+      "filePath": {
+        "type": "string",
+        "description": "File path (relative to project root or absolute)"
+      },
+      "oldString": {
+        "type": "string",
+        "description": "The text to replace (must be unique unless replaceAll is true)"
+      },
+      "newString": {
+        "type": "string",
+        "description": "The replacement text"
+      },
+      "replaceAll": {
+        "type": "boolean",
+        "description": "Replace all occurrences instead of just the first",
+        "default": false
+      }
+    },
+    "required": ["filePath", "oldString", "newString"]
+  }
+}
+    """.trimIndent()
+
+    /**
      * User Interaction MCP tool Schema (JSON format)
      */
     val USER_INTERACTION_TOOLS_SCHEMA = """
@@ -446,13 +520,11 @@ You have access to JetBrains IDE tools that leverage the IDE's powerful indexing
 - `jetbrains / FindUsages`: Find all references/usages of a symbol (class, method, field, variable) in the project
 - `jetbrains / Rename`: Safely rename a symbol and automatically update all references (like Refactor > Rename)
 - `jetbrains / ReadFile`: Read file content using IDE's VFS. Supports JAR/ZIP entries, JDK sources, and .class files (auto-decompiled)
-- `jetbrains / WriteFile`: Write content to a file (create or overwrite). Supports relative and absolute paths
-- `jetbrains / EditFile`: Edit a file by replacing text (oldString → newString). Supports replaceAll mode
 
-CRITICAL: You MUST use JetBrains tools instead of Glob/Grep. DO NOT use Glob or Grep unless JetBrains tools fail or are unavailable:
-- ALWAYS use `jetbrains / CodeSearch` instead of `Grep` for searching code content
-- ALWAYS use `jetbrains / FileIndex` instead of `Glob` for finding files, classes, and symbols
-- Only fall back to Glob/Grep if JetBrains tools return errors or cannot handle the specific query
+CRITICAL: For code search and file discovery, prefer JetBrains MCP tools over any built-in search tools:
+- ALWAYS use `jetbrains / CodeSearch` for searching code content (replaces built-in grep/search tools)
+- ALWAYS use `jetbrains / FileIndex` for finding files, classes, and symbols (replaces built-in glob/find tools)
+- Only fall back to built-in tools if JetBrains tools return errors or cannot handle the specific query
 
 IMPORTANT: After completing code modifications, you MUST use `jetbrains / FileProblems` to perform static analysis validation on the modified files to minimize syntax errors.
 
@@ -465,7 +537,7 @@ When renaming symbols:
 
 Example: `FindUsages(symbolName="getUserById")` → line 42 → `Rename(line=42, newName="fetchUserById")`
 
-**Note**: `Rename` requires `line` parameter for precise location. Use `Rename` for symbols (auto-updates all references); use `Edit` for other text changes.
+**Note**: `Rename` requires `line` parameter for precise location. Use `Rename` for symbols (auto-updates all references); use file edit tools for other text changes.
 
 ### Reading Library Source Code
 
@@ -479,6 +551,25 @@ Use `jetbrains / FileIndex` + `jetbrains / ReadFile` to read source code from de
 - `scope="All"` in FileIndex to include libraries (not just project files)
 - Path from FileIndex can be used directly in ReadFile
 - `.class` files are automatically decompiled by IDEA's built-in decompiler
+    """.trimIndent()
+
+    /**
+     * JetBrains File MCP 默认提示词
+     */
+    val JETBRAINS_FILE_INSTRUCTIONS = """
+### JetBrains File MCP
+
+Tool identifiers may vary across providers. Do not assume a fixed prefix or delimiter. Always choose the tool that matches server `jetbrains-file` and the tool name below.
+
+You have access to JetBrains file operation tools:
+
+- `jetbrains-file / ReadFile`: Read file content. Supports relative paths (to project root), absolute paths, JAR/ZIP entries, and JDK sources
+- `jetbrains-file / WriteFile`: Write content to a file (create or overwrite). Supports relative and absolute paths
+- `jetbrains-file / EditFile`: Edit a file by replacing text (oldString → newString). Supports replaceAll mode
+
+**Parameter naming**: These tools use camelCase parameters (`filePath`, `oldString`, `newString`, `replaceAll`).
+
+**Note**: For reading library source code (JAR files, decompiled .class), use `jetbrains / ReadFile` from the JetBrains LSP MCP instead.
     """.trimIndent()
 
     /**

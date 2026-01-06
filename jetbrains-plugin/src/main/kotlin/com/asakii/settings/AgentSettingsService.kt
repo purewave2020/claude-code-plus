@@ -75,7 +75,8 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     data class State(
         // MCP 服务器启用配置
         var enableUserInteractionMcp: Boolean = true,  // 用户交互 MCP（AskUserQuestion 工具）
-        var enableJetBrainsMcp: Boolean = true,        // JetBrains IDE MCP（IDE 索引工具）
+        var enableJetBrainsMcp: Boolean = true,        // JetBrains LSP MCP（IDE 索引工具）
+        var enableJetBrainsFileMcp: Boolean = true,    // JetBrains File MCP（文件操作工具）
         var enableContext7Mcp: Boolean = false,        // Context7 MCP（获取最新库文档）
         var context7ApiKey: String = "",               // Context7 API Key（可选）
         var enableTerminalMcp: Boolean = false,        // Terminal MCP（IDEA 内置终端，默认禁用）
@@ -89,6 +90,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         // MCP 后端启用范围（每个 MCP 单独配置，空 = 使用旧全局配置作为兼容）
         var userInteractionMcpBackends: String = "",
         var jetbrainsMcpBackends: String = "",
+        var jetbrainsFileMcpBackends: String = "",
         var context7McpBackends: String = "",
         var terminalMcpBackends: String = "",
         var gitMcpBackends: String = "",
@@ -98,6 +100,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         // MCP 系统提示词（自定义，空字符串表示使用默认值）
         var userInteractionInstructions: String = "",
         var jetbrainsInstructions: String = "",
+        var jetbrainsFileInstructions: String = "",
         var context7Instructions: String = "",
         var terminalInstructions: String = "",
         var gitInstructions: String = "",
@@ -240,6 +243,10 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         get() = state.enableJetBrainsMcp
         set(value) { state.enableJetBrainsMcp = value }
 
+    var enableJetBrainsFileMcp: Boolean
+        get() = state.enableJetBrainsFileMcp
+        set(value) { state.enableJetBrainsFileMcp = value }
+
     var enableContext7Mcp: Boolean
         get() = state.enableContext7Mcp
         set(value) { state.enableContext7Mcp = value }
@@ -256,6 +263,10 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     var jetbrainsInstructions: String
         get() = state.jetbrainsInstructions
         set(value) { state.jetbrainsInstructions = value }
+
+    var jetbrainsFileInstructions: String
+        get() = state.jetbrainsFileInstructions
+        set(value) { state.jetbrainsFileInstructions = value }
 
     var context7Instructions: String
         get() = state.context7Instructions
@@ -619,6 +630,10 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     /** 获取生效的 JetBrains MCP 提示词（自定义或默认） */
     val effectiveJetbrainsInstructions: String
         get() = state.jetbrainsInstructions.ifBlank { McpDefaults.JETBRAINS_INSTRUCTIONS }
+
+    /** 获取生效的 JetBrains File MCP 提示词（自定义或默认） */
+    val effectiveJetbrainsFileInstructions: String
+        get() = state.jetbrainsFileInstructions.ifBlank { McpDefaults.JETBRAINS_FILE_INSTRUCTIONS }
 
     /** 获取生效的 Context7 MCP 提示词（自定义或默认） */
     val effectiveContext7Instructions: String

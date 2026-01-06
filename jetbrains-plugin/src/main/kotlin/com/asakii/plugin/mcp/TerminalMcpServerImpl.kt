@@ -21,10 +21,10 @@ import java.util.concurrent.ConcurrentHashMap
 private val logger = KotlinLogging.logger {}
 
 /**
- * Terminal MCP server implementation.
+ * JetBrains Terminal MCP server implementation.
  */
 @McpServerConfig(
-    name = "terminal",
+    name = "jetbrains-terminal",
     version = "1.0.0",
     description = "IDEA integrated terminal tool server, providing command execution, output reading and session management"
 )
