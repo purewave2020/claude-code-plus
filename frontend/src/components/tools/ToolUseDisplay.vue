@@ -222,17 +222,25 @@ const asClaudeEditToolCall = computed(() => {
 
 /**
  * 将 Codex McpToolCall 转换为 MCP 工具格式
+ * Codex 格式：
+ * {
+ *   type: 'McpToolCall',
+ *   server: 'jetbrains',
+ *   tool: 'CodeSearch',
+ *   toolName: 'mcp__jetbrains__CodeSearch',
+ *   arguments: { query: '...', maxResults: 20 }
+ * }
  */
 const asMcpToolCall = computed(() => {
   const input = props.toolCall.input as any
-  const server = input.server || input.mcpServer
-  const tool = input.tool || input.toolName || input.name
-  const mcpToolName = server && tool ? `mcp__${server}__${tool}` : (tool || 'mcp__unknown')
+  // Codex 直接提供完整的 toolName（如 mcp__jetbrains__CodeSearch）
+  const mcpToolName = input.toolName || `mcp__${input.server}__${input.tool}`
   return {
     ...props.toolCall,
     toolType: OTHER_TOOL_TYPE.MCP,
     toolName: mcpToolName,
-    input: input.parameters || input.args || input,
+    // Codex 使用 arguments 字段存储实际参数
+    input: input.arguments || {},
     result: adaptCodexResultToClaudeFormat(props.toolCall.result)
   }
 })
