@@ -286,12 +286,26 @@ The user's response will be returned to you through the same tool.
 
             mcpLogger.info { "📥 [AskUserQuestion] 收到前端响应: ${protoResponse.answersCount} 个回答" }
 
+            // 构建回答映射
             val answersMap: Map<String, String> = protoResponse.answersList.associate {
                 it.question to it.answer
             }
-            val content = Json.encodeToString(answersMap)
 
-            mcpLogger.info { "✅ [AskUserQuestion] 完成，返回: $content" }
+            // 生成 Markdown 格式的回复
+            val content = buildString {
+                appendLine("## User Answers")
+                appendLine()
+                params.questions.forEachIndexed { index, q ->
+                    val answer = answersMap[q.question] ?: "(no answer)"
+                    val header = q.header ?: "Question ${index + 1}"
+                    appendLine("### $header")
+                    appendLine("**Q:** ${q.question}")
+                    appendLine("**A:** $answer")
+                    appendLine()
+                }
+            }.trim()
+
+            mcpLogger.info { "✅ [AskUserQuestion] 完成，返回:\n$content" }
             ToolResult.success(content)
 
         } catch (e: kotlinx.serialization.SerializationException) {
