@@ -23,12 +23,6 @@ dependencies {
     api(project(":claude-agent-sdk"))
     api(project(":codex-agent-sdk"))
 
-    testImplementation("org.jetbrains.kotlin:kotlin-test")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
-}
-
-tasks.test {
-    useJUnitPlatform()
 }
 
 

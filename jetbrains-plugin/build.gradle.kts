@@ -169,11 +169,6 @@ dependencies {
     implementation("io.ktor:ktor-server-cors:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
 
-    // 测试依赖 - 使用 compileOnly 避免与 IDE 内置版本冲突
-    testCompileOnly(kotlin("stdlib"))
-    testImplementation("io.mockk:mockk:1.13.8")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.0")
-    testImplementation(kotlin("test-junit5"))
 }
 
 // 从 CHANGELOG.md 提取最新版本的变更日志

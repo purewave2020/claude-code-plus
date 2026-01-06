@@ -55,20 +55,10 @@ dependencies {
     implementation("cn.hutool:hutool-cache:5.8.25")
     implementation("cn.hutool:hutool-crypto:5.8.25")
 
-    // 测试依赖
-    testImplementation("org.jetbrains.kotlin:kotlin-test")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.0")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
-    testImplementation("io.mockk:mockk:1.13.8")
 }
 
 kotlin {
     jvmToolchain(17)
-}
-
-tasks.test {
-    useJUnitPlatform()
 }
 
 // 🔧 配置 Dokka 任务以支持配置缓存
@@ -182,67 +172,11 @@ tasks.register<JavaExec>("runOpusTest") {
     standardInput = System.`in`
 }
 
-tasks.register<JavaExec>("runToolTest") {
-    group = "verification"
-    description = "测试工具调用解析和显示"
-    classpath = sourceSets["test"].runtimeClasspath + sourceSets["main"].runtimeClasspath
-    mainClass.set("com.asakii.claude.agent.sdk.test.TestClaudeToolsKt")
-    standardInput = System.`in`
-}
-
-tasks.register<JavaExec>("testInputSerialization") {
-    group = "verification"
-    description = "测试 SpecificToolUse input 字段序列化"
-    classpath = sourceSets["test"].runtimeClasspath + sourceSets["main"].runtimeClasspath
-    mainClass.set("com.asakii.claude.agent.sdk.test.TestInputSerializationKt")
-    standardInput = System.`in`
-}
-
 tasks.register<JavaExec>("runJointTestClient") {
     group = "verification"
     description = "Runs the joint test client to connect to a running server"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.asakii.claude.agent.sdk.examples.JointTestClientKt")
-}
-
-tasks.register<JavaExec>("runPlanModeTest") {
-    group = "verification"
-    description = "测试 Plan 模式的交互方式"
-    classpath = sourceSets["test"].runtimeClasspath + sourceSets["main"].runtimeClasspath
-    mainClass.set("com.asakii.claude.agent.sdk.PlanModeTestKt")
-    standardInput = System.`in`
-}
-
-tasks.register<JavaExec>("runPlanModeInteractiveTest") {
-    group = "verification"
-    description = "测试 Plan 模式的用户交互功能"
-    classpath = sourceSets["test"].runtimeClasspath + sourceSets["main"].runtimeClasspath
-    mainClass.set("com.asakii.claude.agent.sdk.PlanModeInteractiveTestKt")
-    standardInput = System.`in`
-}
-
-tasks.register<JavaExec>("runAskUserQuestionTest") {
-    group = "verification"
-    description = "测试 AskUserQuestion 工具调用"
-    classpath = sourceSets["test"].runtimeClasspath + sourceSets["main"].runtimeClasspath
-    mainClass.set("com.asakii.claude.agent.sdk.AskUserQuestionTestKt")
-    standardInput = System.`in`
-}
-
-tasks.register<JavaExec>("runMcpAskUserQuestionTest") {
-    group = "verification"
-    description = "测试自定义 MCP AskUserQuestion 工具"
-    classpath = sourceSets["test"].runtimeClasspath + sourceSets["main"].runtimeClasspath
-    mainClass.set("com.asakii.claude.agent.sdk.McpAskUserQuestionTestKt")
-    standardInput = System.`in`
-}
-
-tasks.register<JavaExec>("runOfficialMcpSdkTest") {
-    group = "verification"
-    description = "测试官方 MCP Kotlin SDK 工具"
-    classpath = sourceSets["test"].runtimeClasspath + sourceSets["main"].runtimeClasspath
-    mainClass.set("com.asakii.claude.agent.sdk.OfficialMcpSdkTestKt")
-    standardInput = System.`in`
 }
 
 tasks.register<JavaExec>("runQuickConnectionTest") {
