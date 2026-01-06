@@ -13,7 +13,7 @@
  * - useSessionMessages: 消息处理
  */
 
-import {ref, reactive, computed, shallowRef} from 'vue'
+import {ref, reactive, computed, shallowRef, watch} from 'vue'
 import {aiAgentService} from '@/services/aiAgentService'
 import type {ConnectOptions} from '@/services/aiAgentService'
 import {RSocketSession} from '@/services/rsocket/RSocketSession'
@@ -339,6 +339,23 @@ export function useSessionTab(initialOrder: number = 0) {
         scrollState: { ...DEFAULT_SCROLL_STATE },
         activeFileDisabled: false
     })
+
+    // ========== 监听消息变化，更新 scrollState.newMessageCount ==========
+    // 这确保后台 Tab 在 browse 模式下也能正确统计新消息数量
+    let lastDisplayItemsLength = 0
+    watch(
+        () => messagesHandler.displayItems.length,
+        (newLength) => {
+            const added = newLength - lastDisplayItemsLength
+            lastDisplayItemsLength = newLength
+
+            // 只在 browse 模式下且有新消息时更新计数
+            if (added > 0 && uiState.scrollState.mode === 'browse') {
+                uiState.scrollState.newMessageCount += added
+            }
+        },
+        { immediate: true }
+    )
 
     // ========== 压缩状态 ==========
     /**

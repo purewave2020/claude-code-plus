@@ -698,10 +698,7 @@ watch(() => displayMessages.value.length, async (newCount, oldCount) => {
   // 新消息到达
   if (added > 0) {
     if (scrollState.value.mode === 'browse') {
-      // browse 模式：累计新消息计数，保持位置
-      const currentCount = scrollState.value.newMessageCount
-      scrollState.value = { ...scrollState.value, newMessageCount: currentCount + added }
-      // 保存当前滚动位置
+      // browse 模式：保持位置（newMessageCount 由 useSessionTab 统一管理）
       const el = scrollerRef.value?.$el as HTMLElement | undefined
       const savedScrollTop = el?.scrollTop ?? 0
       await nextTick()
