@@ -413,9 +413,16 @@ function extractContentBlocks(): ContentBlock[] {
 
   const blocks: ContentBlock[] = []
   let currentText = ''
+  let isFirstParagraph = true
 
   editor.value.state.doc.descendants((node) => {
-    if (node.isText && node.text) {
+    if (node.type.name === 'paragraph') {
+      // 段落节点：在非第一个段落前添加换行符
+      if (!isFirstParagraph) {
+        currentText += '\n'
+      }
+      isFirstParagraph = false
+    } else if (node.isText && node.text) {
       currentText += node.text
     } else if (node.type.name === 'fileReference') {
       // 文件引用节点 - 先保存累积的文本
