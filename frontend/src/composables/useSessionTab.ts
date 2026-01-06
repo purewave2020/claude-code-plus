@@ -1143,6 +1143,65 @@ export function useSessionTab(initialOrder: number = 0) {
         }
     }
 
+    /**
+     * 重载会话（保留 sessionId，重置 UI，恢复历史）
+     *
+     * 用于"重载会话"按钮：
+     * 1. 保存当前 sessionId
+     * 2. 重置 Tab（清空消息/显示）
+     * 3. 使用原 sessionId 重连（continueConversation + resumeSessionId）
+     * 4. 加载该会话的历史记录
+     */
+    async function reloadSession(): Promise<void> {
+        const currentSessionId = sessionId.value
+        const currentProjectPath = projectPath.value
+
+        if (!currentSessionId) {
+            log.warn(`[Tab ${tabId}] 无法重载：没有当前会话 ID`)
+            return
+        }
+
+        log.info(`[Tab ${tabId}] 开始重载会话: ${currentSessionId}`)
+
+        // 1. 重置 Tab（清空消息/显示）
+        reset()
+
+        // 2. 断开当前连接（如果有）
+        if (rsocketSession.value) {
+            try {
+                await rsocketSession.value.disconnectSession()
+            } catch (e) {
+                // 忽略断开错误
+            }
+        }
+
+        // 3. 使用原 sessionId 重连
+        connectionState.status = ConnectionStatus.CONNECTING
+        connectionState.lastError = null
+
+        try {
+            await reconnect({
+                continueConversation: true,
+                resumeSessionId: currentSessionId
+            })
+
+            // 4. 加载历史记录
+            await loadHistory({
+                sessionId: currentSessionId,
+                projectPath: currentProjectPath ?? undefined,
+                offset: -1,  // 从尾部加载
+                limit: HISTORY_PAGE_SIZE
+            })
+
+            log.info(`[Tab ${tabId}] 会话重载完成: ${currentSessionId}`)
+        } catch (error) {
+            connectionState.status = ConnectionStatus.ERROR
+            connectionState.lastError = error instanceof Error ? error.message : String(error)
+            log.error(`[Tab ${tabId}] 会话重载失败:`, error)
+            messagesHandler.addErrorMessage(`重载失败: ${connectionState.lastError}`)
+        }
+    }
+
     // ========== RPC 处理器注册 ==========
 
     /**
@@ -2150,6 +2209,7 @@ export function useSessionTab(initialOrder: number = 0) {
         connect,
         disconnect,
         reconnect,
+        reloadSession,
 
         // 消息发送
         sendMessage,

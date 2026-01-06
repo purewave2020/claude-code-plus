@@ -161,7 +161,8 @@ async function handleReconnect() {
   if (!tab || isReconnecting.value) return
   isReconnecting.value = true
   try {
-    await tab.reconnect()
+    // 使用 reloadSession：重置 UI + 恢复原会话 + 加载历史
+    await tab.reloadSession()
   } finally {
     isReconnecting.value = false
   }
