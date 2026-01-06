@@ -83,7 +83,10 @@ class CodexAppServerProcess private constructor(
 
             val command = mutableListOf(executablePath)
             if (configOverrides.isNotEmpty()) {
-                logger.info("codex app-server configOverrides keys (${configOverrides.size}): ${configOverrides.keys.sorted().joinToString()}")
+                logger.info("codex app-server configOverrides (${configOverrides.size} entries):")
+                configOverrides.entries.sortedBy { it.key }.forEach { (key, value) ->
+                    logger.info("  --config $key=$value")
+                }
             }
             configOverrides.forEach { (key, value) ->
                 command.add("--config")

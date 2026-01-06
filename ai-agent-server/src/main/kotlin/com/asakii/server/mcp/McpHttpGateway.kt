@@ -55,11 +55,14 @@ object McpHttpGateway {
     ) : HttpServlet() {
         override fun service(req: HttpServletRequest, resp: HttpServletResponse) {
             val path = req.requestURI ?: ""
+            logger.debug { "[MCP] Incoming request: ${req.method} $path" }
             val transport = resolver(path)
             if (transport == null) {
+                logger.warn { "[MCP] No transport found for path: $path (registered: ${endpointsByPath.keys})" }
                 resp.sendError(HttpServletResponse.SC_NOT_FOUND)
                 return
             }
+            logger.debug { "[MCP] Routing to transport for path: $path" }
             transport.service(req, resp)
         }
     }
