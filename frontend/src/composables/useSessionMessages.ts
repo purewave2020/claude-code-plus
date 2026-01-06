@@ -616,6 +616,7 @@ export function useSessionMessages(
             // 尝试解析到 message.content
             try {
               contentBlock.input = JSON.parse(accumulated)
+              stats.incrementContentVersion() // 触发自动滚动（TodoList 等工具输入变化时）
             } catch {
               // JSON 不完整，继续累加
             }

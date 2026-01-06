@@ -831,20 +831,24 @@ function handleScrollCore() {
   // 更新 lastScrollTop
   lastScrollTop.value = scrollTop
 
-  // 模式切换逻辑（简化版）：
-  // - 向上滚动 → 切换到 browse 模式
-  // - 向下滚动到底部 → 切换回 follow 模式
+  // 模式切换逻辑（基于位置判断）：
+  // - follow 模式：始终保持在底部，只有用户明确向上滚动才切换（由 handleWheel 处理）
+  // - browse 模式：向下滚动到底部 → 切换回 follow 模式
 
   if (scrollState.value.mode === 'follow') {
-    // follow 模式下，向上滚动就切换到 browse
-    if (isScrollingUp && significantScroll) {
+    // follow 模式下：只有用户明确交互才切换到 browse
+    // - 滚轮向上：由 handleWheel 处理
+    // - 拖动滚动条向上：在这里处理
+    // 注意：不在 scroll 事件中做位置修正，由 watch(contentVersion/outputTokens) 处理
+    if (isUserInteracting.value && isScrollingUp && significantScroll && !nearBottom) {
+      // 用户正在拖动滚动条向上，切换到 browse 模式
       const anchor = computeScrollAnchor()
       scrollState.value = {
         mode: 'browse',
         anchor,
         newMessageCount: 0
       }
-      console.log('🔄 [Scroll] Switched to browse mode (scrolling up)')
+      console.log('🔄 [Scroll] Switched to browse mode (dragging scrollbar up)')
     }
   } else {
     // browse 模式下
