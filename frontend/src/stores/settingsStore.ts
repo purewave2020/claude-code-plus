@@ -362,7 +362,7 @@ export const useSettingsStore = defineStore('settings', () => {
         claudeModels.value = claudeList
         codexModels.value = codexList
 
-        // ?? Claude ????????????? UI ???
+        // 同步 Claude 模型到全局模型列表以供 UI 使用
         const mappedClaudeModels: ClaudeModelInfo[] = claudeList.map(model => ({
           modelId: model.modelId,
           displayName: model.displayName,

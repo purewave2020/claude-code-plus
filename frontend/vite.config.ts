@@ -171,5 +171,14 @@ export default defineConfig(({ mode }) => {
     // 放宽体积告警阈值，结合按需拆分大依赖
     chunkSizeWarningLimit: 1200
   },
-  base: './'
+  base: './',
+  // 启用 TypeScript 装饰器支持
+  esbuild: {
+    tsconfigRaw: {
+      compilerOptions: {
+        experimentalDecorators: true,
+        emitDecoratorMetadata: true
+      }
+    }
+  }
 }})
