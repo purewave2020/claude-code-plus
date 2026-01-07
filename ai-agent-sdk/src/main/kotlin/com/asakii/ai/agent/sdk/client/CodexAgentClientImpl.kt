@@ -31,6 +31,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -183,7 +184,17 @@ internal class CodexAgentClientImpl(
         if (turnId != null) {
             runCatching { activeClient.interruptTurn(activeThreadId, turnId) }
         }
-        activeCancellationJob?.cancel()
+        // Allow TurnCompleted(Interrupted) to flow through for queue processing.
+        // Fallback to cancellation if the turn does not complete promptly.
+        val job = activeCancellationJob
+        if (job != null) {
+            scope.launch {
+                delay(3000)
+                if (activeCancellationJob === job && job.isActive) {
+                    job.cancel()
+                }
+            }
+        }
     }
 
     override suspend fun runInBackground() {
