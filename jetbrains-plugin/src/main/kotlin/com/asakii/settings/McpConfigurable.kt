@@ -1251,8 +1251,8 @@ class BuiltInMcpServerDialog(
 
         // 中间可伸缩的提示词区域
         val customScrollPane = JBScrollPane(instructionsArea).apply {
-            minimumSize = Dimension(500, 100)
-            preferredSize = Dimension(500, 150)
+            minimumSize = Dimension(500, 160)
+            preferredSize = Dimension(500, 240)
         }
 
         // 底部 Reset 按钮
@@ -1267,7 +1267,7 @@ class BuiltInMcpServerDialog(
         panel.add(topPanel, BorderLayout.NORTH)
         panel.add(customScrollPane, BorderLayout.CENTER)
         panel.add(buttonPanel, BorderLayout.SOUTH)
-        panel.preferredSize = Dimension(580, 550)
+        panel.preferredSize = Dimension(580, 650)
         return panel
     }
 
