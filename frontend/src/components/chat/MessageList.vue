@@ -99,20 +99,6 @@
       </template>
     </DynamicScroller>
 
-    <div
-      v-if="userMessageMarkers.length > 0"
-      class="scrollbar-marker-layer"
-    >
-      <button
-        v-for="marker in userMessageMarkers"
-        :key="marker.id"
-        class="scrollbar-marker"
-        type="button"
-        :style="{ top: `calc(${marker.topPercent}% - 2px)` }"
-        @click="scrollToUserMessage(marker.index)"
-      />
-    </div>
-
     <!-- 回到底部按钮 -->
     <transition name="fade-slide">
       <button
@@ -661,56 +647,6 @@ watch(
 // 优先使用 displayItems，如果没有则使用 messages（向后兼容）
 const displayMessages = computed(() => props.displayItems || props.messages || [])
 
-type ScrollMarker = {
-  id: string
-  index: number
-  topPercent: number
-}
-
-function isUserMessageItem(item: DisplayItem | Message): boolean {
-  if ('displayType' in item) {
-    return item.displayType === 'userMessage'
-  }
-  return item.role === 'user'
-}
-
-const userMessageMarkers = computed<ScrollMarker[]>(() => {
-  const items = displayMessages.value as Array<DisplayItem | Message>
-  const total = items.length
-  if (total === 0) return []
-  const lastIndex = total - 1
-  return items.reduce<ScrollMarker[]>((markers, item, index) => {
-    if (!isUserMessageItem(item)) return markers
-    const percent = lastIndex === 0 ? 0 : (index / lastIndex) * 100
-    const clamped = Math.min(98, Math.max(2, percent))
-    markers.push({
-      id: item.id ?? `index-${index}`,
-      index,
-      topPercent: clamped
-    })
-    return markers
-  }, [])
-})
-
-function scrollToUserMessage(index: number) {
-  const scroller = scrollerRef.value as InstanceType<typeof DynamicScroller> & {
-    scrollToItem?: (idx: number) => void
-  }
-  if (!scroller) return
-  if (typeof scroller.scrollToItem === 'function') {
-    scroller.scrollToItem(index)
-    return
-  }
-  const el = scroller.$el as HTMLElement | undefined
-  if (!el) return
-  const maxScrollTop = el.scrollHeight - el.clientHeight
-  if (maxScrollTop <= 0) return
-  const ratio = displayMessages.value.length > 1
-    ? index / (displayMessages.value.length - 1)
-    : 0
-  el.scrollTop = Math.round(maxScrollTop * ratio)
-}
-
 const isCodexBackend = computed(() => {
   const tabBackend = sessionStore.currentTab?.backendType?.value
   const globalBackend = settingsStore.currentBackendType
@@ -1237,34 +1173,6 @@ async function ensureScrollable(): Promise<void> {
 .message-list-wrapper:hover .message-list {
   scrollbar-color: var(--theme-scrollbar-thumb-hover, #959da5)
     var(--theme-scrollbar-track-hover, rgba(0, 0, 0, 0.06));
-}
-
-.scrollbar-marker-layer {
-  position: absolute;
-  top: 6px;
-  bottom: 6px;
-  right: 4px;
-  width: 8px;
-  pointer-events: none;
-  z-index: 6;
-}
-
-.scrollbar-marker {
-  position: absolute;
-  left: 1px;
-  width: 6px;
-  height: 4px;
-  border: 0;
-  padding: 0;
-  border-radius: 2px;
-  background: var(--theme-accent, #0366d6);
-  opacity: 0.6;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.scrollbar-marker:hover {
-  opacity: 0.9;
 }
 
 /* 回到底部按钮 */
