@@ -2,6 +2,7 @@ package com.asakii.codex.agent.sdk
 
 import kotlinx.coroutines.Job
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 enum class ApprovalMode(val wireValue: String) {
@@ -46,6 +47,8 @@ data class ThreadOptions @JvmOverloads constructor(
     val additionalDirectories: List<String> = emptyList(),
     /** MCP 服务器配置，key 为服务器名称，value 为 HTTP URL */
     val mcpServers: Map<String, String> = emptyMap(),
+    /** Codex 线程级配置覆盖（传给 app-server 的 thread config） */
+    val threadConfigOverrides: Map<String, JsonElement> = emptyMap(),
 )
 
 data class TurnOptions @JvmOverloads constructor(

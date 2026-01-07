@@ -66,14 +66,12 @@ class CodexAppServerProcess private constructor(
          * @param codexPath Codex 可执行文件路径，null 则自动查找
          * @param workingDirectory 工作目录
          * @param env 环境变量
-         * @param configOverrides CLI 配置覆盖（--config key=value）
          * @param scope 协程作用域
          */
         fun spawn(
             codexPath: Path? = null,
             workingDirectory: Path? = null,
             env: Map<String, String> = emptyMap(),
-            configOverrides: Map<String, String> = emptyMap(),
             scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         ): CodexAppServerProcess {
             val executablePath = codexPath?.toString() ?: findCodexExecutable()
@@ -82,16 +80,6 @@ class CodexAppServerProcess private constructor(
             )
 
             val command = mutableListOf(executablePath)
-            if (configOverrides.isNotEmpty()) {
-                logger.info("codex app-server configOverrides (${configOverrides.size} entries):")
-                configOverrides.entries.sortedBy { it.key }.forEach { (key, value) ->
-                    logger.info("  --config $key=$value")
-                }
-            }
-            configOverrides.forEach { (key, value) ->
-                command.add("--config")
-                command.add("$key=$value")
-            }
             command.add("app-server")
 
             val finalCommand = if (isWindowsCmd(executablePath)) {

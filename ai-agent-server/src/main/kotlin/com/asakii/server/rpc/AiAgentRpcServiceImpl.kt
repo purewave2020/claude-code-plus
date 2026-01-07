@@ -92,6 +92,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
@@ -698,7 +701,7 @@ class AiAgentRpcServiceImpl(
         val claudeServers: Map<String, McpServerSpec>,
         val mcpSystemPromptAppendix: String,
         val allowedTools: List<String>,
-        val codexConfigOverrides: Map<String, String>,
+        val codexThreadConfigOverrides: Map<String, JsonElement>,
         /** 启用 MCP 时需要禁用的 Codex features（如 "shell_tool"） */
         val codexDisabledFeatures: List<String> = emptyList()
     )
@@ -821,9 +824,9 @@ class AiAgentRpcServiceImpl(
         }
 
         val allowedTools = buildMcpAllowedTools(internalServers)
-        val codexConfigOverrides = buildCodexMcpConfigOverrides(claudeServers, internalServers)
-        if (codexConfigOverrides.isNotEmpty()) {
-            sdkLog.info("[MCP] Codex config overrides keys: ${codexConfigOverrides.keys.sorted().joinToString()}")
+        val codexThreadConfigOverrides = buildCodexMcpThreadConfigOverrides(claudeServers, internalServers)
+        if (codexThreadConfigOverrides.isNotEmpty()) {
+            sdkLog.info("[MCP] Codex thread config overrides keys: ${codexThreadConfigOverrides.keys.sorted().joinToString()}")
         }
         if (claudeServers.isNotEmpty()) {
             sdkLog.info("?? [MCP] Registered servers: ${claudeServers.keys.joinToString()}")
@@ -842,7 +845,7 @@ class AiAgentRpcServiceImpl(
             claudeServers = claudeServers,
             mcpSystemPromptAppendix = mcpSystemPromptAppendix,
             allowedTools = allowedTools,
-            codexConfigOverrides = codexConfigOverrides,
+            codexThreadConfigOverrides = codexThreadConfigOverrides,
             codexDisabledFeatures = codexDisabledFeatures
         )
     }
@@ -1046,21 +1049,21 @@ class AiAgentRpcServiceImpl(
         }.toMap()
     }
 
-    private fun buildCodexMcpConfigOverrides(
+    private fun buildCodexMcpThreadConfigOverrides(
         mcpServers: Map<String, McpServerSpec>,
         internalServers: Map<String, McpServer>
-    ): Map<String, String> {
+    ): Map<String, JsonElement> {
         if (mcpServers.isEmpty()) return emptyMap()
 
-        val overrides = mutableMapOf<String, String>()
+        val overrides = mutableMapOf<String, JsonElement>()
         fun applyTimeoutOverride(serverName: String, timeout: Long?) {
             if (timeout == null || timeout <= 0) {
-                overrides["mcp_servers.$serverName.tool_timeout_sec"] = "0"
+                overrides["mcp_servers.$serverName.tool_timeout_sec"] = JsonPrimitive(0)
             } else {
                 // 将毫秒转换为秒（Codex 使用秒）
                 val timeoutSec = timeout / 1000
                 if (timeoutSec > 0) {
-                    overrides["mcp_servers.$serverName.tool_timeout_sec"] = timeoutSec.toString()
+                    overrides["mcp_servers.$serverName.tool_timeout_sec"] = JsonPrimitive(timeoutSec)
                 }
             }
         }
@@ -1076,18 +1079,24 @@ class AiAgentRpcServiceImpl(
             }
             when (server) {
                 is McpHttpServerConfig -> {
-                    overrides["mcp_servers.$name.url"] = toTomlString(server.url)
+                    overrides["mcp_servers.$name.url"] = JsonPrimitive(server.url)
                     if (server.headers.isNotEmpty()) {
-                        overrides["mcp_servers.$name.http_headers"] = toTomlInlineTable(server.headers)
+                        overrides["mcp_servers.$name.http_headers"] = buildJsonObject {
+                            server.headers.forEach { (key, value) -> put(key, value) }
+                        }
                     }
                 }
                 is McpStdioServerConfig -> {
-                    overrides["mcp_servers.$name.command"] = toTomlString(server.command)
+                    overrides["mcp_servers.$name.command"] = JsonPrimitive(server.command)
                     if (server.args.isNotEmpty()) {
-                        overrides["mcp_servers.$name.args"] = toTomlArray(server.args)
+                        overrides["mcp_servers.$name.args"] = buildJsonArray {
+                            server.args.forEach { add(it) }
+                        }
                     }
                     if (server.env.isNotEmpty()) {
-                        overrides["mcp_servers.$name.env"] = toTomlInlineTable(server.env)
+                        overrides["mcp_servers.$name.env"] = buildJsonObject {
+                            server.env.forEach { (key, value) -> put(key, value) }
+                        }
                     }
                 }
                 is McpServerConfig -> {
@@ -1099,35 +1108,6 @@ class AiAgentRpcServiceImpl(
             }
         }
         return overrides
-    }
-
-    private fun toTomlArray(values: List<String>): String {
-        return values.joinToString(prefix = "[", postfix = "]") { toTomlString(it) }
-    }
-
-    private fun toTomlInlineTable(entries: Map<String, String>): String {
-        return entries.entries.joinToString(prefix = "{ ", postfix = " }") { (key, value) ->
-            "${toTomlString(key)} = ${toTomlString(value)}"
-        }
-    }
-
-    private fun toTomlString(value: String): String {
-        return "\"${escapeTomlString(value)}\""
-    }
-
-    private fun escapeTomlString(value: String): String {
-        val builder = StringBuilder(value.length)
-        for (ch in value) {
-            when (ch) {
-                '\\' -> builder.append("\\\\")
-                '"' -> builder.append("\\\"")
-                '\n' -> builder.append("\\n")
-                '\r' -> builder.append("\\r")
-                '\t' -> builder.append("\\t")
-                else -> builder.append(ch)
-            }
-        }
-        return builder.toString()
     }
 
     /**
@@ -1167,18 +1147,15 @@ class AiAgentRpcServiceImpl(
     ): CodexOverrides {
         val codexDefaults = serviceConfig.codex
 
-        val configOverrides = buildMap<String, String> {
-            putAll(mcpSetup.codexConfigOverrides)
-            codexDefaults.webSearchEnabled?.let { enabled ->
-                put("features.web_search_request", enabled.toString())
-            }
+        val threadConfigOverrides = buildMap<String, JsonElement> {
+            putAll(mcpSetup.codexThreadConfigOverrides)
             // 禁用 MCP 替代的 Codex 内置工具
             mcpSetup.codexDisabledFeatures.forEach { feature ->
-                put("features.$feature", "false")
+                put("features.$feature", JsonPrimitive(false))
             }
         }
-        if (configOverrides.isNotEmpty()) {
-            sdkLog.info("[buildCodexOverrides] configOverrides keys: ${configOverrides.keys.sorted().joinToString()}")
+        if (threadConfigOverrides.isNotEmpty()) {
+            sdkLog.info("[buildCodexOverrides] threadConfigOverrides keys: ${threadConfigOverrides.keys.sorted().joinToString()}")
         }
 
         val clientOptions = CodexClientOptions(
@@ -1186,8 +1163,7 @@ class AiAgentRpcServiceImpl(
                 ?.takeIf { it.isNotBlank() }
                 ?.let { Path.of(it) },
             baseUrl = options.baseUrl ?: codexDefaults.baseUrl,
-            apiKey = options.apiKey ?: codexDefaults.apiKey,
-            configOverrides = configOverrides.ifEmpty { null }
+            apiKey = options.apiKey ?: codexDefaults.apiKey
         )
 
         val sandboxMode = options.sandboxMode?.toSdkSandboxMode()
@@ -1229,9 +1205,11 @@ class AiAgentRpcServiceImpl(
             skipGitRepoCheck = true,
             modelReasoningEffort = reasoningEffort,
             modelReasoningSummary = reasoningSummary,
+            webSearchEnabled = codexDefaults.webSearchEnabled,
             approvalPolicy = approvalPolicy,
             developerInstructions = mcpSetup.mcpSystemPromptAppendix.takeIf { it.isNotBlank() },
-            mcpServers = mcpHttpUrls
+            mcpServers = mcpHttpUrls,
+            threadConfigOverrides = threadConfigOverrides
         )
 
         return CodexOverrides(

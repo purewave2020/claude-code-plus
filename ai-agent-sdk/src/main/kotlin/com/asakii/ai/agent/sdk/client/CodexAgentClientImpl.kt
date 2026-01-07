@@ -115,7 +115,11 @@ internal class CodexAgentClientImpl(
                 cwd = codexThreadOptions.workingDirectory,
                 approvalPolicy = codexThreadOptions.approvalPolicy?.wireValue,
                 sandbox = codexThreadOptions.sandboxMode?.wireValue,
-                config = buildMcpConfig(codexThreadOptions.mcpServers),
+                config = buildMcpConfig(
+                    codexThreadOptions.mcpServers,
+                    codexThreadOptions.webSearchEnabled,
+                    codexThreadOptions.threadConfigOverrides
+                ),
                 developerInstructions = codexThreadOptions.developerInstructions
             )
         }
@@ -517,7 +521,11 @@ internal class CodexAgentClientImpl(
                 cwd = threadOptions.workingDirectory,
                 approvalPolicy = threadOptions.approvalPolicy?.wireValue,
                 sandbox = threadOptions.sandboxMode?.wireValue,
-                config = buildMcpConfig(threadOptions.mcpServers),
+                config = buildMcpConfig(
+                    threadOptions.mcpServers,
+                    threadOptions.webSearchEnabled,
+                    threadOptions.threadConfigOverrides
+                ),
                 developerInstructions = threadOptions.developerInstructions
             )
         }
@@ -689,12 +697,22 @@ internal class CodexAgentClientImpl(
      * @param mcpServers MCP 服务器配置，key 为服务器名称，value 为 HTTP URL
      * @return Codex thread config 参数，如果为空则返回 null
      */
-    private fun buildMcpConfig(mcpServers: Map<String, String>): Map<String, JsonElement>? {
-        if (mcpServers.isEmpty()) return null
+    private fun buildMcpConfig(
+        mcpServers: Map<String, String>,
+        webSearchEnabled: Boolean?,
+        threadConfigOverrides: Map<String, JsonElement>
+    ): Map<String, JsonElement>? {
+        if (mcpServers.isEmpty() && webSearchEnabled == null && threadConfigOverrides.isEmpty()) return null
 
         val config = mutableMapOf<String, JsonElement>()
+        webSearchEnabled?.let { enabled ->
+            config["features.web_search_request"] = JsonPrimitive(enabled)
+        }
         mcpServers.forEach { (serverName, url) ->
             config["mcp_servers.$serverName.url"] = JsonPrimitive(url)
+        }
+        threadConfigOverrides.forEach { (key, value) ->
+            config[key] = value
         }
         return config
     }

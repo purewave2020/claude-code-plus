@@ -30,12 +30,7 @@ data class CodexClientOptions @JvmOverloads constructor(
      * 传递给 Codex CLI 进程的环境变量。
      * 如果提供，则不会继承当前进程的环境。
      */
-    @JvmField val env: Map<String, String>? = null,
-    /**
-     * 传递给 Codex CLI 的配置覆盖（等价于 --config key=value）。
-     * 仅用于 app-server 模式启动参数。
-     */
-    @JvmField val configOverrides: Map<String, String>? = null,
+    @JvmField val env: Map<String, String>? = null
 )
 
 

@@ -472,14 +472,12 @@ class CodexAppServerClient private constructor(
             codexPath: Path? = null,
             workingDirectory: Path? = null,
             env: Map<String, String> = emptyMap(),
-            configOverrides: Map<String, String> = emptyMap(),
             scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         ): CodexAppServerClient {
             val process = CodexAppServerProcess.spawn(
                 codexPath = codexPath,
                 workingDirectory = workingDirectory,
                 env = env,
-                configOverrides = configOverrides,
                 scope = scope
             )
 

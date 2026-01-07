@@ -1465,12 +1465,10 @@ class HttpApiServer(
         val config = serviceConfigProvider()
         val codexPath = config.codex.binaryPath?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
         val workingDirectory = ideTools.getProjectPath().takeIf { it.isNotBlank() }?.let { Path.of(it) }
-        val configOverrides = buildCodexConfigOverrides(config.codex)
 
         val client = CodexAppServerClient.create(
             codexPath = codexPath,
             workingDirectory = workingDirectory,
-            configOverrides = configOverrides,
             scope = scope
         )
 
@@ -1517,12 +1515,10 @@ class HttpApiServer(
         val workingDirectory = (fallbackProjectPath ?: ideTools.getProjectPath())
             .takeIf { it.isNotBlank() }
             ?.let { Path.of(it) }
-        val configOverrides = buildCodexConfigOverrides(config.codex)
 
         val client = CodexAppServerClient.create(
             codexPath = codexPath,
             workingDirectory = workingDirectory,
-            configOverrides = configOverrides,
             scope = scope
         )
 
@@ -1552,12 +1548,10 @@ class HttpApiServer(
         val workingDirectory = (fallbackProjectPath ?: ideTools.getProjectPath())
             .takeIf { it.isNotBlank() }
             ?.let { Path.of(it) }
-        val configOverrides = buildCodexConfigOverrides(config.codex)
 
         val client = CodexAppServerClient.create(
             codexPath = codexPath,
             workingDirectory = workingDirectory,
-            configOverrides = configOverrides,
             scope = scope
         )
 
@@ -1579,12 +1573,10 @@ class HttpApiServer(
         val config = serviceConfigProvider()
         val codexPath = config.codex.binaryPath?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
         val workingDirectory = ideTools.getProjectPath().takeIf { it.isNotBlank() }?.let { Path.of(it) }
-        val configOverrides = buildCodexConfigOverrides(config.codex)
 
         val client = CodexAppServerClient.create(
             codexPath = codexPath,
             workingDirectory = workingDirectory,
-            configOverrides = configOverrides,
             scope = scope
         )
 
@@ -1634,13 +1626,6 @@ class HttpApiServer(
         return result
     }
 
-    private fun buildCodexConfigOverrides(codexDefaults: com.asakii.server.config.CodexDefaults): Map<String, String> {
-        val overrides = mutableMapOf<String, String>()
-        codexDefaults.webSearchEnabled?.let { enabled ->
-            overrides["features.web_search_request"] = enabled.toString()
-        }
-        return overrides
-    }
     // Stop server.
     fun stop() {
         try {

@@ -157,12 +157,10 @@ internal object DefaultCodexAppServerApiFactory : CodexAppServerApiFactory {
     ): CodexAppServerApi {
         val workingDirectory = threadOptions.workingDirectory?.let { Path.of(it) }
         val env = options.env ?: emptyMap()
-        val configOverrides = options.configOverrides ?: emptyMap()
         val client = CodexAppServerClient.create(
             codexPath = options.codexPathOverride,
             workingDirectory = workingDirectory,
             env = env,
-            configOverrides = configOverrides,
             scope = scope
         )
         return DefaultCodexAppServerApi(client)

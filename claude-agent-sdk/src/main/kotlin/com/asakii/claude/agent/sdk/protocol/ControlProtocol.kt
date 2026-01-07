@@ -264,10 +264,15 @@ class ControlProtocol(
                 handleControlRequest(requestId, request)
             }
             "control_response" -> {
-                logger.info("🎮 [ControlProtocol] 控制响应消息")
                 val response = messageParser.parseControlResponse(jsonElement)
+                logger.info("🎮 [ControlProtocol] 控制响应消息: requestId=${response.requestId}, subtype=${response.subtype}, error=${response.error}")
                 val deferred = pendingRequests.remove(response.requestId)
-                deferred?.complete(response)
+                if (deferred != null) {
+                    deferred.complete(response)
+                    logger.info("✅ [ControlProtocol] 响应已匹配到等待的请求: ${response.requestId}")
+                } else {
+                    logger.warn("⚠️ [ControlProtocol] 未找到匹配的等待请求: ${response.requestId}, pendingRequests=${pendingRequests.keys}")
+                }
             }
             "assistant", "user", "result", "stream_event" -> {
                 // Regular SDK messages
@@ -575,30 +580,37 @@ class ControlProtocol(
      * @param timeoutMs Timeout in milliseconds (default: 60000ms = 60 seconds, matching Python SDK)
      */
     private suspend fun sendControlRequestInternal(
-        request: JsonObject, 
+        request: JsonObject,
         timeoutMs: Long = 60000L
     ): ControlResponse {
         val requestId = "req_${requestCounter.incrementAndGet()}_${System.currentTimeMillis()}"
+        val subtype = request["subtype"]?.jsonPrimitive?.contentOrNull ?: "unknown"
         val deferred = CompletableDeferred<ControlResponse>()
         pendingRequests[requestId] = deferred
-        
+
         val requestMessage = buildJsonObject {
             put("type", "control_request")
             put("request_id", requestId)
             put("request", request)
         }
-        
+
         try {
             // ✅ 使用 Json.encodeToString 而不是 toString()，避免 BOM 问题
-            transport.write(json.encodeToString(requestMessage))
+            val jsonStr = json.encodeToString(requestMessage)
+            logger.info("📤 [ControlProtocol] 发送控制请求: requestId=$requestId, subtype=$subtype")
+            logger.debug("📤 [ControlProtocol] 请求内容: $jsonStr")
+            transport.write(jsonStr)
+            logger.info("⏳ [ControlProtocol] 等待响应: requestId=$requestId, timeout=${timeoutMs}ms")
             return withTimeout(timeoutMs) {
                 deferred.await()
             }
         } catch (e: TimeoutCancellationException) {
             pendingRequests.remove(requestId)
+            logger.error("❌ [ControlProtocol] 控制请求超时: requestId=$requestId, subtype=$subtype, timeout=${timeoutMs}ms")
             throw ControlProtocolException("Control request timeout for $requestId after ${timeoutMs}ms")
         } catch (e: Exception) {
             pendingRequests.remove(requestId)
+            logger.error("❌ [ControlProtocol] 控制请求失败: requestId=$requestId, subtype=$subtype, error=${e.message}")
             throw ControlProtocolException("Failed to send control request", e)
         }
     }
@@ -649,13 +661,16 @@ class ControlProtocol(
             put("subtype", "agent_run_to_background")
             targetId?.let { put("target_id", it) }
         }
+        val targetInfo = targetId ?: "latest"
+        logger.info("📤 [ControlProtocol] 发送 agent_run_to_background 请求 (target: $targetInfo)")
+
         val response = sendControlRequestInternal(request)
+        logger.info("📥 [ControlProtocol] 收到 agent_run_to_background 响应: subtype=${response.subtype}, error=${response.error}")
 
         if (response.subtype == "error") {
             throw ControlProtocolException("Agent run to background failed: ${response.error}")
         }
 
-        val targetInfo = targetId ?: "latest"
         logger.info("✅ [ControlProtocol] Agent 已切换到后台运行 (target: $targetInfo)")
     }
 
