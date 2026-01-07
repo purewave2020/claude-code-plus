@@ -128,12 +128,13 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         // 默认自动清理上下文（按后端分别配置）
         var claudeDefaultAutoCleanupContexts: Boolean = true,
         var codexDefaultAutoCleanupContexts: Boolean = true,
+        var defaultBackendType: String = MCP_BACKEND_CLAUDE,
 
         // Node.js 可执行文件路径，空字符串表示使用系统 PATH
         var nodePath: String = "",
         var codexPath: String = "",
         var codexWebSearchEnabled: Boolean = false,
-        var codexDefaultModelId: String = "gpt-5.2-codex",
+        var codexDefaultModelId: String = "gpt-5.2-codex-max",
         var codexDefaultReasoningEffort: String = "medium",
         var codexDefaultReasoningSummary: String = "auto",
         var codexDefaultSandboxMode: String = "workspace-write",
@@ -219,6 +220,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     override fun loadState(state: State) {
         XmlSerializerUtil.copyBean(state, this.state)
         migrateLegacyModelIds()
+        this.state.defaultBackendType = normalizeBackendType(this.state.defaultBackendType)
     }
 
     // ==================== 监听器管理 ====================
@@ -245,6 +247,25 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     }
 
     // ==================== 便捷属性 ====================
+
+    private fun normalizeBackendType(value: String): String {
+        return when (value.trim().lowercase()) {
+            MCP_BACKEND_CODEX -> MCP_BACKEND_CODEX
+            else -> MCP_BACKEND_CLAUDE
+        }
+    }
+
+    var defaultBackendType: String
+        get() = normalizeBackendType(state.defaultBackendType)
+        set(value) { state.defaultBackendType = normalizeBackendType(value) }
+
+    fun getDefaultBackendProvider(): AiAgentProvider {
+        return if (defaultBackendType == MCP_BACKEND_CODEX) {
+            AiAgentProvider.CODEX
+        } else {
+            AiAgentProvider.CLAUDE
+        }
+    }
 
     var enableUserInteractionMcp: Boolean
         get() = state.enableUserInteractionMcp

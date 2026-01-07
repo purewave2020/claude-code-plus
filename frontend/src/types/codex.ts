@@ -15,6 +15,7 @@ export interface CodexModelInfo {
 }
 
 export const CODEX_MODELS: CodexModelInfo[] = [
+  { modelId: 'gpt-5.2-codex-max', displayName: 'GPT-5.2-Codex-Max', supportsReasoning: true },
   { modelId: 'gpt-5.2-codex', displayName: 'GPT-5.2-Codex', supportsReasoning: true },
   { modelId: 'gpt-5.2', displayName: 'GPT-5.2', supportsReasoning: true },
 ]
@@ -28,7 +29,7 @@ export interface CodexSessionConfig {
 }
 
 export const DEFAULT_CODEX_CONFIG: CodexSessionConfig = {
-  model: 'gpt-5.2-codex',
+  model: 'gpt-5.2-codex-max',
   approvalMode: 'on-request',
   sandboxMode: 'workspace-write',
   reasoningEffort: 'medium',

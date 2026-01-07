@@ -150,7 +150,7 @@ const DEFAULT_SETTINGS: Settings = {
   claudeThinkingTokens: 8096,
 
   // Codex 设置（向后兼容）
-  codexModel: 'gpt-5.2-codex',
+  codexModel: 'gpt-5.2-codex-max',
   codexReasoningEffort: 'medium',
   codexReasoningSummary: 'auto',
   codexSandboxMode: 'workspace-write',
@@ -388,6 +388,11 @@ export const useSettingsStore = defineStore('settings', () => {
           defaultClaude: defaultClaudeModelId,
           defaultCodex: defaultCodexModelId
         })
+
+        if (defaultBackendType) {
+          settings.value.defaultBackendType = defaultBackendType
+          console.log('🔧 Default backend synced from models:', defaultBackendType)
+        }
 
         // 检查当前选中的模型是否仍存在，如果被删除则切换到默认模型
         const currentClaudeModel = settings.value.claudeModel
