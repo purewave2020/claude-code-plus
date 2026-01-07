@@ -3,7 +3,7 @@ package com.asakii.plugin.mcp.tools
 import com.asakii.claude.agent.sdk.mcp.ToolResult
 import com.asakii.claude.agent.sdk.mcp.currentToolUseId
 import com.asakii.plugin.mcp.getString
-import com.asakii.server.services.FileContentCache
+import com.intellij.history.LocalHistory
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.project.Project
@@ -43,11 +43,14 @@ class WriteFileTool(private val project: Project) {
             return ToolResult.error("File path must be within project directory")
         }
 
-        // 从协程上下文获取 toolUseId，保存原始文件内容用于 Diff 显示
+        // 从协程上下文获取 toolUseId，使用 LocalHistory 打标签并缓存（仅对已存在的文件）
         val toolUseId = currentToolUseId()
-        if (toolUseId != null) {
-            FileContentCache.saveOriginalContent(toolUseId, absolutePath)
-            logger.info { "WriteFile: saved original content for toolUseId=$toolUseId" }
+        val file = File(absolutePath)
+        if (toolUseId != null && file.exists()) {
+            // 打标签并缓存 Label 对象（用于后续获取原始内容）
+            val label = LocalHistory.getInstance().putSystemLabel(project, "claude_$toolUseId")
+            FileChangeLabelCache.record(toolUseId, absolutePath, label)
+            logger.info { "WriteFile: created LocalHistory label for toolUseId=$toolUseId" }
         }
 
         return try {

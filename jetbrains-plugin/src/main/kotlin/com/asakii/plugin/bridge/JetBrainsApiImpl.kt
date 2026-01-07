@@ -255,38 +255,19 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                         return@invokeLater
                     }
 
-                    val currentContent = file?.let { String(it.contentsToByteArray(), Charsets.UTF_8) } ?: ""
+                    val fileName = File(request.filePath).name
+                    val fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName)
 
-                    // 优先使用缓存的原始内容，否则通过反向替换计算
-                    val beforeContent: String = if (!request.originalContent.isNullOrEmpty()) {
-                        // 使用缓存的原始内容
-                        logger.info("✅ [JetBrainsApi.file] Using cached original content for diff")
-                        request.originalContent!!
-                    } else {
-                        // 回退：通过反向替换计算修改前的内容
-                        logger.info("⚠️ [JetBrainsApi.file] No cached content, using reverse replacement")
-                        if (request.replaceAll) {
-                            currentContent.replace(request.newString, request.oldString)
-                        } else {
-                            val index = currentContent.indexOf(request.newString)
-                            if (index >= 0) {
-                                buildString {
-                                    append(currentContent.substring(0, index))
-                                    append(request.oldString)
-                                    append(currentContent.substring(index + request.newString.length))
-                                }
-                            } else {
-                                // newString 不在文件中，可能文件已被修改，使用当前内容
-                                logger.warning("⚠️ [JetBrainsApi.file] newString not found in file, showing current content")
-                                currentContent
-                            }
-                        }
-                    }
+                    val beforeContent: String
+                    val afterContent: String
 
-                    // 计算修改后的内容：在原始内容上应用 oldString → newString 替换
-                    val afterContent = if (!request.originalContent.isNullOrEmpty()) {
-                        // 有原始内容时，应用正向替换得到修改后的内容
-                        if (request.replaceAll) {
+                    if (!request.originalContent.isNullOrEmpty()) {
+                        // 有缓存的原始内容：展示完整文件 Diff
+                        logger.info("✅ [JetBrainsApi.file] Using cached original content for full file diff")
+                        beforeContent = request.originalContent!!
+
+                        // 计算修改后的内容：在原始内容上应用 oldString → newString 替换
+                        afterContent = if (request.replaceAll) {
                             beforeContent.replace(request.oldString, request.newString)
                         } else {
                             val index = beforeContent.indexOf(request.oldString)
@@ -298,28 +279,34 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                                 }
                             } else {
                                 // oldString 不在原始内容中，使用当前文件内容
-                                currentContent
+                                file?.let { String(it.contentsToByteArray(), Charsets.UTF_8) } ?: ""
                             }
                         }
                     } else {
-                        // 没有原始内容时，使用当前文件内容作为修改后的内容
-                        currentContent
+                        // 没有缓存的原始内容：只展示编辑部分（oldString → newString）
+                        logger.info("⚠️ [JetBrainsApi.file] No cached content, showing edit-only diff")
+                        beforeContent = request.oldString
+                        afterContent = request.newString
                     }
-
-                    val fileName = File(request.filePath).name
-                    val fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName)
 
                     val leftContent = DiffContentFactory.getInstance()
                         .create(ideaProject, beforeContent, fileType)
                     val rightContent = DiffContentFactory.getInstance()
                         .create(ideaProject, afterContent, fileType)
 
+                    val diffTitle = if (request.originalContent.isNullOrEmpty()) {
+                        // 无缓存时显示"Edit Only"标记
+                        "${request.title ?: "Edit: $fileName"} (edit only)"
+                    } else {
+                        request.title ?: "Edit: $fileName"
+                    }
+
                     val diffRequest = SimpleDiffRequest(
-                        request.title ?: "Edit: $fileName",
+                        diffTitle,
                         leftContent,
                         rightContent,
-                        "$fileName (before)",
-                        "$fileName (after)"
+                        if (request.originalContent.isNullOrEmpty()) "old_string" else "$fileName (before)",
+                        if (request.originalContent.isNullOrEmpty()) "new_string" else "$fileName (after)"
                     )
 
                     DiffManager.getInstance().showDiff(ideaProject, diffRequest)

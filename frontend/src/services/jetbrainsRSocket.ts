@@ -24,7 +24,8 @@ import {
   JetBrainsGetProjectPathResponseSchema,
   JetBrainsSetLocaleRequestSchema,
   JetBrainsSessionStateSchema,
-  JetBrainsSessionSummarySchema
+  JetBrainsSessionSummarySchema,
+  JetBrainsGetOriginalContentResponseSchema
 } from '@/proto/jetbrains_api_pb'
 import {
   GetIdeSettingsResponseSchema,
@@ -188,6 +189,19 @@ function decodeLocaleResponse(data: Uint8Array): string {
 function decodeProjectPathResponse(data: Uint8Array): string {
   const proto = fromBinary(JetBrainsGetProjectPathResponseSchema, data)
   return proto.projectPath || ''
+}
+
+/**
+ * 解码 JetBrainsGetOriginalContentResponse
+ */
+function decodeGetOriginalContentResponse(data: Uint8Array): { success: boolean; found: boolean; content?: string; error?: string } {
+  const proto = fromBinary(JetBrainsGetOriginalContentResponseSchema, data)
+  return {
+    success: proto.success,
+    found: proto.found,
+    content: proto.content || undefined,
+    error: proto.error || undefined
+  }
 }
 
 /**
@@ -786,6 +800,35 @@ class JetBrainsRSocketService {
       return decodeActiveFileResponse(response)
     } catch (error) {
       console.error('[JetBrainsRSocket] Failed to get active file:', error)
+      return null
+    }
+  }
+
+  /**
+   * 获取文件修改前的原始内容
+   * 基于 LocalHistory Label 机制
+   */
+  async getOriginalContent(toolUseId: string): Promise<string | null> {
+    if (!this.client) return null
+
+    try {
+      // 直接发送 toolUseId 字符串作为请求数据
+      const data = new TextEncoder().encode(toolUseId)
+      const response = await this.client.requestResponse('jetbrains.getOriginalContent', data)
+      const result = decodeGetOriginalContentResponse(response)
+      if (result.success && result.found) {
+        console.log('[JetBrainsRSocket] Got original content for:', toolUseId)
+        return result.content || null
+      }
+      if (!result.found) {
+        console.log('[JetBrainsRSocket] Original content not found for:', toolUseId)
+      }
+      if (result.error) {
+        console.warn('[JetBrainsRSocket] Error getting original content:', result.error)
+      }
+      return null
+    } catch (error) {
+      console.error('[JetBrainsRSocket] Failed to get original content:', error)
       return null
     }
   }

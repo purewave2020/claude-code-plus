@@ -1,5 +1,6 @@
 package com.asakii.plugin.bridge
 
+import com.asakii.plugin.mcp.tools.FileChangeLabelCache
 import com.asakii.rpc.api.*
 import com.asakii.rpc.proto.ActiveFileChangedNotify
 import com.asakii.rpc.proto.IdeThemeProto
@@ -99,6 +100,7 @@ class JetBrainsRSocketHandler(
                     "jetbrains.setLocale" -> handleSetLocale(dataBytes)
                     "jetbrains.getProjectPath" -> handleGetProjectPath()
                     "jetbrains.reportSessionState" -> handleReportSessionState(dataBytes)
+                    "jetbrains.getOriginalContent" -> handleGetOriginalContent(dataBytes)
                     else -> {
                         logger.warn("⚠️ [JetBrains RSocket] Unknown route: $route")
                         buildErrorResponse("Unknown route: $route")
@@ -447,6 +449,34 @@ class JetBrainsRSocketHandler(
             buildOperationResponse(true, null)
         } catch (e: Exception) {
             logger.error("❌ [JetBrains] reportSessionState failed: ${e.message}")
+            buildErrorResponse(e.message ?: "Unknown error")
+        }
+    }
+
+    /**
+     * 获取文件修改前的原始内容
+     * 使用 LocalHistory Label 缓存
+     */
+    private fun handleGetOriginalContent(dataBytes: ByteArray): Payload {
+        return try {
+            // dataBytes 直接是 toolUseId 字符串
+            val toolUseId = String(dataBytes, Charsets.UTF_8)
+            logger.info("📄 [JetBrains] getOriginalContent: toolUseId=$toolUseId")
+
+            val content = FileChangeLabelCache.getOriginalContent(toolUseId)
+
+            // 构建响应：success + content（可能为 null）
+            val responseBuilder = com.asakii.rpc.proto.JetBrainsGetOriginalContentResponse.newBuilder()
+                .setSuccess(true)
+                .setFound(content != null)
+
+            if (content != null) {
+                responseBuilder.setContent(content)
+            }
+
+            buildPayload { data(responseBuilder.build().toByteArray()) }
+        } catch (e: Exception) {
+            logger.error("❌ [JetBrains] getOriginalContent failed: ${e.message}")
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }

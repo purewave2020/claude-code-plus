@@ -223,38 +223,13 @@ class JetBrainsBridgeService {
   }
 
   /**
-   * 获取缓存的原始文件内容（通过 HTTP API）
+   * 获取缓存的原始文件内容（通过 RSocket，使用 LocalHistory Label）
    * @param toolUseId 工具调用 ID
    * @returns 原始内容，如果不存在则返回 null
    */
   async getOriginalContent(toolUseId: string): Promise<string | null> {
-    try {
-      const baseUrl = resolveServerHttpUrl()
-      const response = await fetch(`${baseUrl}/api/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          action: 'file.getOriginalContent',
-          data: { toolUseId }
-        })
-      })
-
-      if (!response.ok) {
-        console.warn('[JetBrainsApi] getOriginalContent failed:', response.status)
-        return null
-      }
-
-      const data = await response.json()
-      if (data.success && data.data?.found) {
-        return data.data.content
-      }
-      return null
-    } catch (error) {
-      console.warn('[JetBrainsApi] Failed to get original content:', error)
-      return null
-    }
+    if (!this.enabled) return null
+    return jetbrainsRSocket.getOriginalContent(toolUseId)
   }
 
   /**

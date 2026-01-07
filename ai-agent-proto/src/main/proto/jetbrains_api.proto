@@ -174,3 +174,16 @@ message JetBrainsGetLocaleResponse {
 message JetBrainsSetLocaleRequest {
   string locale = 1;
 }
+
+// ========== 获取原始文件内容（LocalHistory Label）==========
+
+message JetBrainsGetOriginalContentRequest {
+  string tool_use_id = 1;
+}
+
+message JetBrainsGetOriginalContentResponse {
+  bool success = 1;
+  bool found = 2;                     // 是否找到缓存
+  optional string content = 3;        // 原始文件内容
+  optional string error = 4;
+}

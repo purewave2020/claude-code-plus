@@ -203,58 +203,9 @@ class ToolShowInterceptorService {
   }
 
   private registerDefaultHandlers(): void {
-    // Read 工具：打开文件并选中（使用泛型获得类型提示）
-    this.register<ReadToolInput>('Read', (ctx, api) => {
-      api.openFile({
-        filePath: ctx.input.file_path || ctx.input.path || '',
-        line: ctx.input.offset ? undefined : 1,
-        startOffset: ctx.input.offset,
-        // endOffset = offset + limit - 1（例如 offset=600, limit=38 → 600-637行）
-        endOffset:
-          ctx.input.offset && ctx.input.limit ? ctx.input.offset + ctx.input.limit - 1 : undefined
-      })
-    })
-
-    // Write 工具：打开文件
-    this.register<WriteToolInput>('Write', (ctx, api) => {
-      api.openFile({
-        filePath: ctx.input.file_path || ctx.input.path || ''
-      })
-    })
-
-    // Edit 工具：显示完整文件 Diff（修改前后对比）
-    this.register<EditToolInput>('Edit', async (ctx, api) => {
-      const filePath = ctx.input.file_path || ctx.input.path || ''
-
-      // 尝试获取缓存的原始内容
-      let originalContent: string | undefined
-      if (ctx.toolUseId) {
-        originalContent = await jetbrainsBridge.getOriginalContent(ctx.toolUseId) || undefined
-      }
-
-      api.showEditFullDiff({
-        filePath,
-        oldString: ctx.input.old_string || '',
-        newString: ctx.input.new_string || '',
-        replaceAll: ctx.input.replace_all || false,
-        title: `Edit: ${filePath}`,
-        originalContent
-      })
-    })
-
-    // MultiEdit 工具：显示多处编辑 Diff
-    this.register<MultiEditToolInput>('MultiEdit', (ctx, api) => {
-      api.showMultiEditDiff({
-        filePath: ctx.input.file_path || ctx.input.path || '',
-        edits: (ctx.input.edits || []).map((edit) => ({
-          oldString: edit.old_string || '',
-          newString: edit.new_string || '',
-          replaceAll: edit.replace_all || false
-        }))
-      })
-    })
-
     // ====== JetBrains File MCP 工具（camelCase 参数）======
+    // 注：原生 Claude/Codex 工具（Read, Write, Edit, MultiEdit）不注册 hook
+    // 浏览器环境下直接展开卡片显示内容，IDE 环境下也不调用 IDEA 打开文件
 
     // JetBrains ReadFile 工具：打开文件
     this.register<JetBrainsReadFileInput>('mcp__jetbrains-file__ReadFile', (ctx, api) => {
