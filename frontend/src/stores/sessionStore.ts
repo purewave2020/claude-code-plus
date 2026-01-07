@@ -410,8 +410,11 @@ export const useSessionStore = defineStore('session', () => {
     // 创建 Tab 实例
     const tab = useSessionTab(maxOrder + 1)
 
-    // 设置后端类型（默认从全局设置或参数读取）
-    const backendType = options?.backendType || settingsStore.settings.defaultBackendType || 'claude'
+    // 设置后端类型（默认优先沿用当前 Tab，其次使用全局设置或参数）
+    const backendType = options?.backendType
+      ?? currentTab.value?.backendType.value
+      ?? settingsStore.settings.defaultBackendType
+      ?? 'claude'
     tab.setBackendType(backendType)
     tab.uiState.autoCleanupContexts = getDefaultAutoCleanupContexts(backendType, settingsStore)
 

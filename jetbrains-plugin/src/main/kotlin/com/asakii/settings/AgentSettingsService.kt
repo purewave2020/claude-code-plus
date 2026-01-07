@@ -126,8 +126,8 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         // 默认启用 ByPass 权限（前端自动应用）
         var defaultBypassPermissions: Boolean = false,
         // 默认自动清理上下文（按后端分别配置）
-        var claudeDefaultAutoCleanupContexts: Boolean = false,
-        var codexDefaultAutoCleanupContexts: Boolean = false,
+        var claudeDefaultAutoCleanupContexts: Boolean = true,
+        var codexDefaultAutoCleanupContexts: Boolean = true,
 
         // Node.js 可执行文件路径，空字符串表示使用系统 PATH
         var nodePath: String = "",

@@ -127,8 +127,8 @@ const DEFAULT_SETTINGS: Settings = {
   skipPermissions: false,
   includePartialMessages: true,
   maxTurns: null,
-  claudeDefaultAutoCleanupContexts: false,
-  codexDefaultAutoCleanupContexts: false,
+  claudeDefaultAutoCleanupContexts: true,
+  codexDefaultAutoCleanupContexts: true,
 
   // 后端配置对象
   claudeConfig: {

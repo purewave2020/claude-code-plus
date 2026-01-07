@@ -37,7 +37,7 @@ data class AiAgentServiceConfig(
  */
 data class ClaudeDefaults(
     val dangerouslySkipPermissions: Boolean = false,
-    val defaultAutoCleanupContexts: Boolean = false,
+    val defaultAutoCleanupContexts: Boolean = true,
     val allowDangerouslySkipPermissions: Boolean = true,
     val includePartialMessages: Boolean = true,
     val permissionMode: String? = null,
@@ -104,7 +104,7 @@ data class CodexDefaults(
     val defaultReasoningSummary: String? = null,
     val webSearchEnabled: Boolean? = null,
     val defaultModelId: String? = null,
-    val defaultAutoCleanupContexts: Boolean = false
+    val defaultAutoCleanupContexts: Boolean = true
 )
 
 
