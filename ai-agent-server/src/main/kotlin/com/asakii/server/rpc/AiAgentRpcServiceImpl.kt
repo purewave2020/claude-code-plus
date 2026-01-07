@@ -57,15 +57,8 @@ import com.asakii.server.mcp.PermissionMode as McpPermissionMode
 import com.asakii.server.mcp.PermissionRuleValue as McpPermissionRuleValue
 import com.asakii.server.mcp.McpHttpGateway
 import com.asakii.server.mcp.UserInteractionMcpServer
-import com.asakii.server.mcp.JetBrainsMcpServerProvider
-import com.asakii.server.mcp.DefaultJetBrainsMcpServerProvider
-import com.asakii.server.mcp.JetBrainsFileMcpServerProvider
-import com.asakii.server.mcp.DefaultJetBrainsFileMcpServerProvider
+import com.asakii.server.mcp.McpProviders
 import com.asakii.server.services.FileContentCache
-import com.asakii.server.mcp.TerminalMcpServerProvider
-import com.asakii.server.mcp.DefaultTerminalMcpServerProvider
-import com.asakii.server.mcp.GitMcpServerProvider
-import com.asakii.server.mcp.DefaultGitMcpServerProvider
 import com.asakii.server.logging.StandaloneLogging
 import com.asakii.server.logging.asyncInfo
 import com.asakii.server.settings.ClaudeSettingsLoader
@@ -108,10 +101,7 @@ import com.asakii.server.history.HistoryJsonlLoader
 class AiAgentRpcServiceImpl(
     private val ideTools: IdeTools,
     private val clientCaller: ClientCaller? = null,
-    private val jetBrainsMcpServerProvider: JetBrainsMcpServerProvider = DefaultJetBrainsMcpServerProvider,
-    private val jetBrainsFileMcpServerProvider: JetBrainsFileMcpServerProvider = DefaultJetBrainsFileMcpServerProvider,
-    private val terminalMcpServerProvider: TerminalMcpServerProvider = DefaultTerminalMcpServerProvider,
-    private val gitMcpServerProvider: GitMcpServerProvider = DefaultGitMcpServerProvider,
+    private val mcpProviders: McpProviders = McpProviders.DEFAULT,
     private val serviceConfigProvider: () -> AiAgentServiceConfig = { AiAgentServiceConfig() },
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) : AiAgentRpcService {
@@ -269,7 +259,7 @@ class AiAgentRpcServiceImpl(
         sdkLog.info("✅ [SDK] 已连接: provider=${connectOptions.provider}, model=${connectOptions.model ?: "default"}")
 
         // 设置当前 AI 会话 ID，用于终端默认会话关联
-        terminalMcpServerProvider.setCurrentAiSession(sessionId)
+        mcpProviders.terminal.setCurrentAiSession(sessionId)
 
         val capabilities = newClient.getCapabilities().toRpcCapabilities()
         sdkLog.debug("✅ [SDK] 能力: canInterrupt=${capabilities.canInterrupt}, canThink=${capabilities.canThink}")
@@ -632,7 +622,7 @@ class AiAgentRpcServiceImpl(
             sdkLog.warn("[MCP] Failed to unregister session endpoints: ${error.message}")
         }
         runCatching {
-            terminalMcpServerProvider.disposeSession(sessionId)
+            mcpProviders.terminal.disposeSession(sessionId)
         }.onFailure { error ->
             sdkLog.warn("[MCP] Failed to dispose terminal session: ${error.message}")
         }
@@ -719,6 +709,7 @@ class AiAgentRpcServiceImpl(
         sdkLog.info(
             "[MCP] builtins enabled: userInteraction=${defaults.enableUserInteractionMcp} backends=${defaults.userInteractionMcpBackends.joinToString()}," +
                 " jetbrains=${defaults.enableJetBrainsMcp} backends=${defaults.jetbrainsMcpBackends.joinToString()}," +
+                " jetbrainsFile=${defaults.enableJetBrainsFileMcp} backends=${defaults.jetbrainsFileMcpBackends.joinToString()}," +
                 " terminal=${defaults.enableTerminalMcp} backends=${defaults.terminalMcpBackends.joinToString()}," +
                 " git=${defaults.enableGitMcp} backends=${defaults.gitMcpBackends.joinToString()}"
         )
@@ -737,16 +728,22 @@ class AiAgentRpcServiceImpl(
         }
 
         if (defaults.enableJetBrainsMcp && isProviderAllowed(defaults.jetbrainsMcpBackends)) {
-            jetBrainsMcpServerProvider.getServer()?.let { globalServers["jetbrains-lsp"] = it }
-            jetBrainsFileMcpServerProvider.getServer()?.let { globalServers["jetbrains-file"] = it }
+            mcpProviders.jetBrains.getServer()?.let { globalServers["jetbrains-lsp"] = it }
+        }
+
+        sdkLog.info("[MCP] jetbrains-file check: enabled=${defaults.enableJetBrainsFileMcp}, backends=${defaults.jetbrainsFileMcpBackends}, providerAllowed=${isProviderAllowed(defaults.jetbrainsFileMcpBackends)}")
+        if (defaults.enableJetBrainsFileMcp && isProviderAllowed(defaults.jetbrainsFileMcpBackends)) {
+            val server = mcpProviders.jetBrainsFile.getServer()
+            sdkLog.info("[MCP] jetbrains-file server: ${server?.let { "OK" } ?: "NULL"}")
+            server?.let { globalServers["jetbrains-file"] = it }
         }
 
         if (defaults.enableTerminalMcp && isProviderAllowed(defaults.terminalMcpBackends)) {
-            terminalMcpServerProvider.getServerForSession(sessionId)?.let { sessionServers["jetbrains-terminal"] = it }
+            mcpProviders.terminal.getServerForSession(sessionId)?.let { sessionServers["jetbrains-terminal"] = it }
         }
 
         if (defaults.enableGitMcp && isProviderAllowed(defaults.gitMcpBackends)) {
-            gitMcpServerProvider.getServer()?.let { globalServers["jetbrains_git"] = it }
+            mcpProviders.git.getServer()?.let { globalServers["jetbrains_git"] = it }
         }
 
         if (globalServers.isNotEmpty()) {
@@ -835,7 +832,7 @@ class AiAgentRpcServiceImpl(
         // 收集 Codex 禁用 features
         val codexDisabledFeatures = mutableListOf<String>()
         if (claudeServers.containsKey("jetbrains-terminal")) {
-            codexDisabledFeatures.addAll(terminalMcpServerProvider.getCodexDisabledFeatures())
+            codexDisabledFeatures.addAll(mcpProviders.terminal.getCodexDisabledFeatures())
         }
         if (codexDisabledFeatures.isNotEmpty()) {
             sdkLog.info("🚫 [MCP] Codex disabled features: ${codexDisabledFeatures.joinToString()}")
@@ -1125,15 +1122,15 @@ class AiAgentRpcServiceImpl(
 
         // 从 MCP 提供者获取需要禁用的工具
         if (mcpSetup.claudeServers.containsKey("jetbrains-lsp")) {
-            disallowedTools.addAll(jetBrainsMcpServerProvider.getDisallowedBuiltinTools())
+            disallowedTools.addAll(mcpProviders.jetBrains.getDisallowedBuiltinTools())
         }
 
         if (mcpSetup.claudeServers.containsKey("jetbrains-file")) {
-            disallowedTools.addAll(jetBrainsFileMcpServerProvider.getDisallowedBuiltinTools())
+            disallowedTools.addAll(mcpProviders.jetBrainsFile.getDisallowedBuiltinTools())
         }
 
         if (mcpSetup.claudeServers.containsKey("jetbrains-terminal")) {
-            disallowedTools.addAll(terminalMcpServerProvider.getDisallowedBuiltinTools())
+            disallowedTools.addAll(mcpProviders.terminal.getDisallowedBuiltinTools())
         }
 
         return disallowedTools.distinct()

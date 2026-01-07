@@ -8,6 +8,7 @@ import com.asakii.plugin.mcp.JetBrainsMcpServerProviderImpl
 import com.asakii.plugin.mcp.JetBrainsFileMcpServerProviderImpl
 import com.asakii.plugin.mcp.TerminalMcpServerProviderImpl
 import com.asakii.plugin.mcp.GitMcpServerProviderImpl
+import com.asakii.server.mcp.McpProviders
 import com.asakii.server.config.AiAgentServiceConfig
 import com.asakii.server.config.ClaudeDefaults
 import com.asakii.server.config.CodexDefaults
@@ -167,11 +168,13 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             // 监听文件编辑器切换，通过 RSocket 推送给前端
             setupFileEditorListener(ideTools, jetbrainsRSocketHandler)
 
-            // 创建 MCP Server Providers
-            val jetBrainsMcpServerProvider = JetBrainsMcpServerProviderImpl(project)
-            val jetBrainsFileMcpServerProvider = JetBrainsFileMcpServerProviderImpl(project)
-            val terminalMcpServerProvider = TerminalMcpServerProviderImpl(project)
-            val gitMcpServerProvider = GitMcpServerProviderImpl(project)
+            // 创建 MCP Server Providers（封装到 McpProviders）
+            val mcpProviders = McpProviders(
+                jetBrains = JetBrainsMcpServerProviderImpl(project),
+                jetBrainsFile = JetBrainsFileMcpServerProviderImpl(project),
+                terminal = TerminalMcpServerProviderImpl(project),
+                git = GitMcpServerProviderImpl(project)
+            )
 
             // 创建服务配置提供者（每次 connect 时调用，获取最新的用户设置）
             val serviceConfigProvider: () -> AiAgentServiceConfig = {
@@ -264,7 +267,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             // 启动 Ktor HTTP 服务器
             // 开发模式：使用环境变量指定端口（默认 8765）
             // 生产模式：随机端口（支持多项目）
-            val server = HttpApiServer(ideTools, scope, frontendDir, jetbrainsApi, jetbrainsRSocketHandler, jetBrainsMcpServerProvider, jetBrainsFileMcpServerProvider, terminalMcpServerProvider, gitMcpServerProvider, serviceConfigProvider)
+            val server = HttpApiServer(ideTools, scope, frontendDir, jetbrainsApi, jetbrainsRSocketHandler, mcpProviders, serviceConfigProvider)
             val devPort = System.getenv("CLAUDE_DEV_PORT")?.toIntOrNull()
             val url = server.start(preferredPort = devPort)
             httpServer = server

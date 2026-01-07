@@ -41,14 +41,7 @@ import com.asakii.rpc.api.RpcHistorySession
 import com.asakii.rpc.api.RpcHistoryMetadata
 import com.asakii.rpc.api.RpcHistoryResult
 import com.asakii.rpc.api.RpcHistorySessionsResult
-import com.asakii.server.mcp.JetBrainsMcpServerProvider
-import com.asakii.server.mcp.DefaultJetBrainsMcpServerProvider
-import com.asakii.server.mcp.JetBrainsFileMcpServerProvider
-import com.asakii.server.mcp.DefaultJetBrainsFileMcpServerProvider
-import com.asakii.server.mcp.TerminalMcpServerProvider
-import com.asakii.server.mcp.DefaultTerminalMcpServerProvider
-import com.asakii.server.mcp.GitMcpServerProvider
-import com.asakii.server.mcp.DefaultGitMcpServerProvider
+import com.asakii.server.mcp.McpProviders
 import com.asakii.server.rsocket.ProtoConverter.toProto
 import com.asakii.server.codex.CodexBackendProvider
 import io.rsocket.kotlin.ktor.server.RSocketSupport
@@ -139,10 +132,7 @@ class HttpApiServer(
     private val frontendDir: Path? = null,  // 开发模式下可以为 null
     private val jetbrainsApi: JetBrainsApi = DefaultJetBrainsApi,  // 默认不支持 JetBrains 集成
     private val jetbrainsRSocketHandler: JetBrainsRSocketHandlerProvider? = null,  // JetBrains RSocket 处理器
-    private val jetBrainsMcpServerProvider: JetBrainsMcpServerProvider = DefaultJetBrainsMcpServerProvider,  // JetBrains LSP MCP Server Provider
-    private val jetBrainsFileMcpServerProvider: JetBrainsFileMcpServerProvider = DefaultJetBrainsFileMcpServerProvider,  // JetBrains File MCP Server Provider
-    private val terminalMcpServerProvider: TerminalMcpServerProvider = DefaultTerminalMcpServerProvider,  // Terminal MCP Server Provider
-    private val gitMcpServerProvider: GitMcpServerProvider = DefaultGitMcpServerProvider,  // Git MCP Server Provider
+    private val mcpProviders: McpProviders = McpProviders.DEFAULT,  // All MCP Server Providers
     private val serviceConfigProvider: () -> com.asakii.server.config.AiAgentServiceConfig = { com.asakii.server.config.AiAgentServiceConfig() },  // 服务配置提供者（每次 connect 时调用获取最新配置）
     private val codexBackendProvider: CodexBackendProvider? = null  // Codex 后端提供者（可选）
 ) : com.asakii.bridge.EventBridge {
@@ -228,9 +218,7 @@ class HttpApiServer(
                         ideTools = ideTools,
                         clientRequester = requester,
                         connectionId = connectionId,
-                        jetBrainsMcpServerProvider = jetBrainsMcpServerProvider,
-                        terminalMcpServerProvider = terminalMcpServerProvider,
-                        gitMcpServerProvider = gitMcpServerProvider,
+                        mcpProviders = mcpProviders,
                         serviceConfigProvider = { currentConfig }
                     )
 
@@ -765,10 +753,7 @@ class HttpApiServer(
                             val rpcService = com.asakii.server.rpc.AiAgentRpcServiceImpl(
                                 ideTools = ideTools,
                                 clientCaller = null,
-                                jetBrainsMcpServerProvider = jetBrainsMcpServerProvider,
-                                jetBrainsFileMcpServerProvider = jetBrainsFileMcpServerProvider,
-                                terminalMcpServerProvider = terminalMcpServerProvider,
-                                gitMcpServerProvider = gitMcpServerProvider
+                                mcpProviders = mcpProviders
                             )
                             val result = if (provider == "codex") {
                                 listCodexHistorySessions(maxResults, offset)
@@ -842,10 +827,7 @@ class HttpApiServer(
                                 val rpcService = AiAgentRpcServiceImpl(
                                     ideTools = ideTools,
                                     clientCaller = null,
-                                    jetBrainsMcpServerProvider = jetBrainsMcpServerProvider,
-                                    jetBrainsFileMcpServerProvider = jetBrainsFileMcpServerProvider,
-                                    terminalMcpServerProvider = terminalMcpServerProvider,
-                                    gitMcpServerProvider = gitMcpServerProvider
+                                    mcpProviders = mcpProviders
                                 )
                                 rpcService.getHistoryMetadata(sessionId, projectPath).toProto()
                             }
@@ -885,10 +867,7 @@ class HttpApiServer(
                                 val rpcService = AiAgentRpcServiceImpl(
                                     ideTools = ideTools,
                                     clientCaller = null,
-                                    jetBrainsMcpServerProvider = jetBrainsMcpServerProvider,
-                                    jetBrainsFileMcpServerProvider = jetBrainsFileMcpServerProvider,
-                                    terminalMcpServerProvider = terminalMcpServerProvider,
-                                    gitMcpServerProvider = gitMcpServerProvider
+                                    mcpProviders = mcpProviders
                                 )
                                 rpcService.loadHistory(
                                     req.sessionId,
