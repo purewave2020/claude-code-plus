@@ -27,7 +27,7 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.logging.Logger
+import com.intellij.openapi.diagnostic.Logger
 import javax.swing.*
 
 /**
@@ -137,7 +137,7 @@ class HistorySessionAction(
         private const val POPUP_HEIGHT = 400
     }
 
-    private val logger = Logger.getLogger(HistorySessionAction::class.java.name)
+    private val logger = Logger.getInstance(HistorySessionAction::class.java.name)
     private val dateTimeFormat = SimpleDateFormat("MM-dd HH:mm")
 
     // 分页状态
@@ -489,7 +489,7 @@ class HistorySessionAction(
                     )
                 )
             } else {
-                logger.warning("❌ [HistorySessionAction] 历史文件删除失败: ${session.sessionId}")
+                logger.warn("❌ [HistorySessionAction] 历史文件删除失败: ${session.sessionId}")
             }
 
             // 4. 刷新弹窗（重新加载历史会话列表）

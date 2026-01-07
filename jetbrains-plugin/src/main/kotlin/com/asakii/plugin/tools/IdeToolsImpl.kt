@@ -33,7 +33,7 @@ import com.intellij.util.ui.UIUtil
 import java.awt.Color
 import java.io.File
 import java.util.Locale
-import java.util.logging.Logger
+import com.intellij.openapi.diagnostic.Logger
 
 /**
  * IDE 工具 IDEA 实现（继承默认实现，覆盖 IDEA 特有方法）
@@ -45,7 +45,7 @@ class IdeToolsImpl(
     private val project: Project
 ) : IdeToolsDefault(project.basePath) {
     
-    private val logger = Logger.getLogger(IdeToolsImpl::class.java.name)
+    private val logger = Logger.getInstance(IdeToolsImpl::class.java.name)
     private val PREFERRED_LOCALE_KEY = "com.asakii.locale"
     
     override fun openFile(path: String, line: Int, column: Int): Result<Unit> {
@@ -66,12 +66,12 @@ class IdeToolsImpl(
                     fileEditorManager.openTextEditor(descriptor, true)
                     logger.info("✅ Opened file: $path (line=$line, column=$column)")
                 } else {
-                    logger.warning("⚠️ File not found: $path")
+                    logger.warn("⚠️ File not found: $path")
                 }
             }
             Result.success(Unit)
         } catch (e: Exception) {
-            logger.severe("❌ Failed to open file: ${e.message}")
+            logger.error("❌ Failed to open file: ${e.message}")
             Result.failure(e)
         }
     }
@@ -136,7 +136,7 @@ class IdeToolsImpl(
             
             Result.success(Unit)
         } catch (e: Exception) {
-            logger.severe("❌ Failed to show diff: ${e.message}")
+            logger.error("❌ Failed to show diff: ${e.message}")
             Result.failure(e)
         }
     }
@@ -161,7 +161,7 @@ class IdeToolsImpl(
                         // 找到标准化匹配，使用原始 oldString 替换（保持格式）
                         content = replaceNormalized(content, operation.newString, operation.oldString)
                     } else {
-                        logger.warning("⚠️ rebuildBeforeContent: newString not found (replace_all), skipping operation")
+                        logger.warn("⚠️ rebuildBeforeContent: newString not found (replace_all), skipping operation")
                         // 继续处理其他操作，不抛出异常
                     }
                 }
@@ -185,7 +185,7 @@ class IdeToolsImpl(
                             append(content.substring(actualEnd))
                         }
                     } else {
-                        logger.warning("⚠️ rebuildBeforeContent: newString not found, skipping operation")
+                        logger.warn("⚠️ rebuildBeforeContent: newString not found, skipping operation")
                         // 继续处理其他操作，不抛出异常
                     }
                 }
@@ -295,7 +295,7 @@ class IdeToolsImpl(
             }
             Result.success(result)
         } catch (e: Exception) {
-            logger.warning("Failed to search files: ${e.message}")
+            logger.warn("Failed to search files: ${e.message}")
             Result.failure(e)
         }
     }
@@ -323,7 +323,7 @@ class IdeToolsImpl(
             
             Result.success(result)
         } catch (e: Exception) {
-            logger.severe("Failed to get file content: ${e.message}")
+            logger.error("Failed to get file content: ${e.message}")
             Result.failure(e)
         }
     }
@@ -336,7 +336,7 @@ class IdeToolsImpl(
             }
             Result.success(result)
         } catch (e: Exception) {
-            logger.warning("Failed to get recent files: ${e.message}")
+            logger.warn("Failed to get recent files: ${e.message}")
             Result.failure(e)
         }
     }
@@ -393,7 +393,7 @@ class IdeToolsImpl(
             logger.info("Locale preference set to: $locale")
             Result.success(Unit)
         } catch (e: Exception) {
-            logger.warning("Failed to set locale preference: ${e.message}")
+            logger.warn("Failed to set locale preference: ${e.message}")
             Result.failure(e)
         }
     }
@@ -452,19 +452,19 @@ class IdeToolsImpl(
                     )
                     logger.info("✅ Loaded agent: $name (tools: ${tools?.size ?: 0}, model: ${model ?: "inherit"})")
                 } catch (e: Exception) {
-                    logger.warning("⚠️ Failed to parse agent '$name': ${e.message}")
+                    logger.warn("⚠️ Failed to parse agent '$name': ${e.message}")
                 }
             }
 
             if (result.isNotEmpty()) {
                 logger.info("📦 Loaded ${result.size} custom agents from settings: ${result.keys.joinToString()}")
             } else {
-                logger.warning("⚠️ [getAgentDefinitions] 未加载到任何自定义代理")
+                logger.warn("⚠️ [getAgentDefinitions] 未加载到任何自定义代理")
             }
 
             result
         } catch (e: Exception) {
-            logger.warning("Failed to load agent definitions: ${e.message}")
+            logger.warn("Failed to load agent definitions: ${e.message}")
             getDefaultAgentDefinitions()
         }
     }
@@ -547,7 +547,7 @@ class IdeToolsImpl(
             }
             result
         } catch (e: Exception) {
-            logger.warning("Failed to get active editor file: ${e.message}")
+            logger.warn("Failed to get active editor file: ${e.message}")
             null
         }
     }
@@ -623,7 +623,7 @@ class IdeToolsImpl(
                 }
             }
         } catch (e: Exception) {
-            logger.warning("Failed to handle diff editor: ${e.message}")
+            logger.warn("Failed to handle diff editor: ${e.message}")
             null
         }
     }
@@ -637,7 +637,7 @@ class IdeToolsImpl(
             val buildNumber = com.intellij.openapi.application.ApplicationInfo.getInstance().build.baselineVersion
             buildNumber
         } catch (e: Exception) {
-            logger.warning("Failed to get IDEA build number: ${e.message}")
+            logger.warn("Failed to get IDEA build number: ${e.message}")
             242 // 默认返回 242（2024.2）作为保守值
         }
     }
@@ -879,10 +879,10 @@ class IdeToolsImpl(
                     fontDirs.add(jbrFontsDir)
                     logger.info("🔤 [Font] JBR fonts dir: ${jbrFontsDir.absolutePath}")
                 } else {
-                    logger.warning("🔤 [Font] JBR fonts dir not found: ${jbrFontsDir.absolutePath}")
+                    logger.warn("🔤 [Font] JBR fonts dir not found: ${jbrFontsDir.absolutePath}")
                 }
             } catch (e: Exception) {
-                logger.warning("Failed to get IDEA home path: ${e.message}")
+                logger.warn("Failed to get IDEA home path: ${e.message}")
             }
 
             // 搜索字体文件
@@ -918,7 +918,7 @@ class IdeToolsImpl(
             logger.info("⚠️ Font not found: $fontFamily")
             null
         } catch (e: Exception) {
-            logger.warning("Failed to get font data: ${e.message}")
+            logger.warn("Failed to get font data: ${e.message}")
             null
         }
     }
@@ -990,7 +990,7 @@ class IdeToolsImpl(
             BrowserUtil.browse(url)
             Result.success(Unit)
         } catch (e: Exception) {
-            logger.warning("Failed to open URL: ${e.message}")
+            logger.warn("Failed to open URL: ${e.message}")
             Result.failure(e)
         }
     }

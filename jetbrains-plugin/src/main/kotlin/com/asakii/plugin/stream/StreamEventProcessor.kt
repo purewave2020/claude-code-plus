@@ -3,7 +3,7 @@ package com.asakii.plugin.stream
 import com.asakii.claude.agent.sdk.types.*
 import com.asakii.plugin.types.ToolCallItem
 import kotlinx.serialization.json.*
-import java.util.logging.Logger
+import com.intellij.openapi.diagnostic.Logger
 
 /**
  * Stream Event 处理器
@@ -33,7 +33,7 @@ data class StreamEventContext(
 
 object StreamEventProcessor {
     
-    private val logger = Logger.getLogger(StreamEventProcessor::class.java.name)
+    private val logger = Logger.getInstance(StreamEventProcessor::class.java.name)
     
     /**
      * 处理 StreamEvent
@@ -59,7 +59,7 @@ object StreamEventProcessor {
             "message_delta" -> processMessageDelta(event, context)
             "message_stop" -> processMessageStop(event, context)
             else -> {
-                logger.warning("未知的 StreamEvent 类型: $eventType")
+                logger.warn("未知的 StreamEvent 类型: $eventType")
                 createNoOpResult()
             }
         }

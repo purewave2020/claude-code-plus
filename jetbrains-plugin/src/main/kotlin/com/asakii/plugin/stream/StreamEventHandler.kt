@@ -2,7 +2,7 @@ package com.asakii.plugin.stream
 
 import com.asakii.claude.agent.sdk.types.*
 import kotlinx.serialization.json.*
-import java.util.logging.Logger
+import com.intellij.openapi.diagnostic.Logger
 
 /**
  * Stream Event 处理工具函数
@@ -12,7 +12,7 @@ import java.util.logging.Logger
  */
 object StreamEventHandler {
     
-    private val logger = Logger.getLogger(StreamEventHandler::class.java.name)
+    private val logger = Logger.getInstance(StreamEventHandler::class.java.name)
     
     /**
      * 类型守卫：检查是否为 message_start 事件

@@ -6,7 +6,7 @@ import com.asakii.rpc.api.JetBrainsSessionCommandType
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import java.util.logging.Logger
+import com.intellij.openapi.diagnostic.Logger
 
 /**
  * 新建会话按钮 - 显示在 ToolWindow 标题栏右侧
@@ -19,7 +19,7 @@ class NewSessionAction(
     private val sessionApi: JetBrainsSessionApi
 ) : AnAction("新建会话", "创建新会话", AllIcons.General.Add) {
 
-    private val logger = Logger.getLogger(NewSessionAction::class.java.name)
+    private val logger = Logger.getInstance(NewSessionAction::class.java.name)
 
     override fun actionPerformed(e: AnActionEvent) {
         logger.info("🆕 [NewSessionAction] 点击新建会话按钮")

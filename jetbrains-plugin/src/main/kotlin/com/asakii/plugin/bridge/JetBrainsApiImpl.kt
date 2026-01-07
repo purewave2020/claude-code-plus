@@ -22,7 +22,7 @@ import java.awt.Color
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.logging.Logger
+import com.intellij.openapi.diagnostic.Logger
 
 /**
  * JetBrains IDE 集成 API 实现
@@ -36,7 +36,7 @@ import java.util.logging.Logger
  */
 class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
 
-    private val logger = Logger.getLogger(JetBrainsApiImpl::class.java.name)
+    private val logger = Logger.getInstance(JetBrainsApiImpl::class.java.name)
 
     override val capabilities = CapabilitiesApiImpl()
     override val file = FileApiImpl()
@@ -107,12 +107,12 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                             logger.info("✅ [JetBrainsApi.file] Opened: ${request.filePath}")
                         }
                     } else {
-                        logger.warning("⚠️ [JetBrainsApi.file] Not found: ${request.filePath}")
+                        logger.warn("⚠️ [JetBrainsApi.file] Not found: ${request.filePath}")
                     }
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.severe("❌ [JetBrainsApi.file] Failed to open: ${e.message}")
+                logger.error("❌ [JetBrainsApi.file] Failed to open: ${e.message}")
                 Result.failure(e)
             }
         }
@@ -141,7 +141,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.severe("❌ [JetBrainsApi.file] Failed to show diff: ${e.message}")
+                logger.error("❌ [JetBrainsApi.file] Failed to show diff: ${e.message}")
                 Result.failure(e)
             }
         }
@@ -177,7 +177,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.severe("❌ [JetBrainsApi.file] Failed to show multi-edit diff: ${e.message}")
+                logger.error("❌ [JetBrainsApi.file] Failed to show multi-edit diff: ${e.message}")
                 Result.failure(e)
             }
         }
@@ -190,7 +190,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
 
                     // 检查是否是有效文件（非目录）
                     if (file != null && file.isDirectory) {
-                        logger.warning("⚠️ [JetBrainsApi.file] Cannot show preview diff for directory: ${request.filePath}")
+                        logger.warn("⚠️ [JetBrainsApi.file] Cannot show preview diff for directory: ${request.filePath}")
                         return@invokeLater
                     }
 
@@ -211,7 +211,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                                 }
                             } else {
                                 // 找不到时保持不变，记录警告
-                                logger.warning("⚠️ [JetBrainsApi.file] oldString not found in file, skipping edit")
+                                logger.warn("⚠️ [JetBrainsApi.file] oldString not found in file, skipping edit")
                                 afterContent
                             }
                         }
@@ -238,7 +238,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.severe("❌ [JetBrainsApi.file] Failed to show edit preview diff: ${e.message}")
+                logger.error("❌ [JetBrainsApi.file] Failed to show edit preview diff: ${e.message}")
                 Result.failure(e)
             }
         }
@@ -251,7 +251,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
 
                     // 检查是否是有效文件（非目录）
                     if (file != null && file.isDirectory) {
-                        logger.warning("⚠️ [JetBrainsApi.file] Cannot show diff for directory: ${request.filePath}")
+                        logger.warn("⚠️ [JetBrainsApi.file] Cannot show diff for directory: ${request.filePath}")
                         return@invokeLater
                     }
 
@@ -314,7 +314,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.severe("❌ [JetBrainsApi.file] Failed to show edit full diff: ${e.message}")
+                logger.error("❌ [JetBrainsApi.file] Failed to show edit full diff: ${e.message}")
                 Result.failure(e)
             }
         }
@@ -334,7 +334,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.severe("❌ [JetBrainsApi.file] Failed to show markdown: ${e.message}")
+                logger.error("❌ [JetBrainsApi.file] Failed to show markdown: ${e.message}")
                 Result.failure(e)
             }
         }
@@ -416,7 +416,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
             } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
                 throw e  // 必须重新抛出
             } catch (e: Exception) {
-                logger.severe("❌ [JetBrainsApi.file] Failed to get active file: ${e.message}")
+                logger.error("❌ [JetBrainsApi.file] Failed to get active file: ${e.message}")
                 null
             }
         }
@@ -560,7 +560,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 logger.info("[JetBrainsApi.locale] Set to: $locale")
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.warning("[JetBrainsApi.locale] Failed to set: ${e.message}")
+                logger.warn("[JetBrainsApi.locale] Failed to set: ${e.message}")
                 Result.failure(e)
             }
         }
