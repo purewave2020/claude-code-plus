@@ -1395,6 +1395,7 @@ function handleContextDismiss() {
 function handleContextSelect(result: IndexedFileInfo) {
   // 将文件转换为 ContextReference
   const contextRef: ContextReference = {
+    id: `ctx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
     type: 'file',
     uri: result.relativePath,
     displayType: 'TAG',

@@ -225,6 +225,7 @@ export function convertMessageToDisplayItems(
       for (const imgBlock of parsed.contextImages) {
         if (imgBlock.source.type === 'base64') {
           contexts.push({
+            id: `ctx_${message.id}_${contexts.length}`,
             type: 'image',
             uri: `image://context-${message.id}-${contexts.length}`,
             displayType: 'TAG',
@@ -259,6 +260,7 @@ export function convertMessageToDisplayItems(
     for (const imgBlock of parsed.contextImages) {
       if (imgBlock.source.type === 'base64') {
         contexts.push({
+          id: `ctx_${message.id}_${contexts.length}`,
           type: 'image',
           uri: `image://context-${message.id}-${contexts.length}`,
           displayType: 'TAG',
@@ -426,7 +428,8 @@ export function convertToDisplayItems(
         const parsed = parseUserMessage(message.content as any)
         const contexts: ContextReference[] = [
           ...parsed.contexts,
-          ...parsed.contextImages.map(img => ({
+          ...parsed.contextImages.map((img, idx) => ({
+            id: `ctx_${message.id}_img_${idx}`,
             type: 'image' as const,
             uri: `image://context`,
             displayType: 'TAG' as const,
@@ -458,7 +461,8 @@ export function convertToDisplayItems(
       const parsed = parseUserMessage(message.content as any)
       const contexts: ContextReference[] = [
         ...parsed.contexts,
-        ...parsed.contextImages.map(img => ({
+        ...parsed.contextImages.map((img, idx) => ({
+          id: `ctx_${message.id}_img_${idx}`,
           type: 'image' as const,
           uri: `image://context`,
           displayType: 'TAG' as const,

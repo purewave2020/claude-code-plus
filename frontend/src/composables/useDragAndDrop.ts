@@ -65,6 +65,7 @@ export function useDragAndDrop(options: UseDragAndDropOptions = {}) {
     try {
       // 创建上下文引用
       const contextRef: ContextReference = {
+        id: `ctx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         type: 'file',
         uri: file.name,
         displayType: 'TAG' as ContextDisplayType,
