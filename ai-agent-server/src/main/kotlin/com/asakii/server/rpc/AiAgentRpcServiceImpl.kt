@@ -1039,8 +1039,19 @@ class AiAgentRpcServiceImpl(
 
         val overrides = mutableMapOf<String, String>()
         mcpServers.forEach { (name, server) ->
-            if (name == "user_interaction") {
-                overrides["mcp_servers.$name.tool_timeout_sec"] = "0"
+            // 从 MCP server 读取超时配置（如果 server 是 McpServer 实例）
+            // timeout 为 null 或 0 或负数表示无限超时
+            if (server is McpServer) {
+                val timeout = server.timeout
+                if (timeout == null || timeout <= 0) {
+                    overrides["mcp_servers.$name.tool_timeout_sec"] = "0"
+                } else {
+                    // 将毫秒转换为秒（Codex 使用秒）
+                    val timeoutSec = timeout / 1000
+                    if (timeoutSec > 0) {
+                        overrides["mcp_servers.$name.tool_timeout_sec"] = timeoutSec.toString()
+                    }
+                }
             }
             when (server) {
                 is McpHttpServerConfig -> {

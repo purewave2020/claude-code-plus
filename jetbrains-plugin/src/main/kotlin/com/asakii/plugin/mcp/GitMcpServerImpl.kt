@@ -28,6 +28,17 @@ private val logger = KotlinLogging.logger {}
 )
 class GitMcpServerImpl(private val project: Project) : McpServerBase() {
 
+    /**
+     * 工具调用超时时间（毫秒）
+     * 从 AgentSettingsService 读取配置（秒），转换为毫秒
+     * 0 或负数表示无限超时
+     */
+    override val timeout: Long?
+        get() {
+            val timeoutSec = AgentSettingsService.getInstance().gitMcpTimeout
+            return if (timeoutSec <= 0) null else timeoutSec * 1000L
+        }
+
     private lateinit var getVcsChangesTool: GetVcsChangesTool
     private lateinit var getCommitMessageTool: GetCommitMessageTool
     private lateinit var setCommitMessageTool: SetCommitMessageTool

@@ -30,6 +30,17 @@ private val logger = KotlinLogging.logger {}
 )
 class TerminalMcpServerImpl(private val project: Project) : McpServerBase(), Disposable {
 
+    /**
+     * 工具调用超时时间（毫秒）
+     * 从 AgentSettingsService 读取配置（秒），转换为毫秒
+     * 0 或负数表示无限超时
+     */
+    override val timeout: Long?
+        get() {
+            val timeoutSec = AgentSettingsService.getInstance().terminalMcpTimeout
+            return if (timeoutSec <= 0) null else timeoutSec * 1000L
+        }
+
     internal val sessionManager by lazy { TerminalSessionManager(project) }
 
     private lateinit var terminalTool: TerminalTool

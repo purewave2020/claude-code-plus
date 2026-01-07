@@ -28,6 +28,17 @@ private val logger = KotlinLogging.logger {}
 )
 class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
 
+    /**
+     * 工具调用超时时间（毫秒）
+     * 从 AgentSettingsService 读取配置（秒），转换为毫秒
+     * 0 或负数表示无限超时
+     */
+    override val timeout: Long?
+        get() {
+            val timeoutSec = AgentSettingsService.getInstance().jetbrainsMcpTimeout
+            return if (timeoutSec <= 0) null else timeoutSec * 1000L
+        }
+
     // 工具实例
     private lateinit var directoryTreeTool: DirectoryTreeTool
     private lateinit var fileProblemsTool: FileProblemsTool

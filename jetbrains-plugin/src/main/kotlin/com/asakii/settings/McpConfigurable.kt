@@ -410,6 +410,12 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         settings.terminalDefaultShell = terminalEntry?.terminalDefaultShell ?: ""
         settings.terminalAvailableShells = terminalEntry?.terminalAvailableShells ?: ""
         settings.terminalReadTimeout = terminalEntry?.terminalReadTimeout ?: 30
+        // 保存超时配置
+        settings.userInteractionMcpTimeout = userInteractionEntry?.toolTimeoutSec ?: 0
+        settings.jetbrainsMcpTimeout = jetbrainsEntry?.toolTimeoutSec ?: 60
+        settings.context7McpTimeout = context7Entry?.toolTimeoutSec ?: 60
+        settings.terminalMcpTimeout = terminalEntry?.toolTimeoutSec ?: 60
+        settings.gitMcpTimeout = gitEntry?.toolTimeoutSec ?: 60
 
         // 保存自定义服务器配置
         val globalServers = customServers.filter { it.level == McpServerLevel.GLOBAL }
@@ -454,6 +460,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 if (server.instructions.isNotBlank()) {
                     entryMap["instructions"] = kotlinx.serialization.json.JsonPrimitive(server.instructions)
                 }
+                // 添加超时配置（0 表示永不超时）
+                entryMap["toolTimeoutSec"] = kotlinx.serialization.json.JsonPrimitive(server.toolTimeoutSec)
                     serversMap[serverName] = JsonObject(entryMap)
                 }
             } catch (_: Exception) {
@@ -486,7 +494,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             configSummary = "Allows the agent to ask questions",
             isBuiltIn = true,
             instructions = settings.userInteractionInstructions,
-            defaultInstructions = McpDefaults.USER_INTERACTION_INSTRUCTIONS
+            defaultInstructions = McpDefaults.USER_INTERACTION_INSTRUCTIONS,
+            toolTimeoutSec = settings.userInteractionMcpTimeout
         ))
         builtInServers.add(McpServerEntry(
             name = "JetBrains IDE MCP",
@@ -497,7 +506,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             isBuiltIn = true,
             instructions = settings.jetbrainsInstructions,
             defaultInstructions = McpDefaults.JETBRAINS_INSTRUCTIONS,
-            disabledTools = listOf("Glob", "Grep")
+            disabledTools = listOf("Glob", "Grep"),
+            toolTimeoutSec = settings.jetbrainsMcpTimeout
         ))
         builtInServers.add(McpServerEntry(
             name = "Context7 MCP",
@@ -508,7 +518,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             isBuiltIn = true,
             instructions = settings.context7Instructions,
             apiKey = settings.context7ApiKey,
-            defaultInstructions = McpDefaults.CONTEXT7_INSTRUCTIONS
+            defaultInstructions = McpDefaults.CONTEXT7_INSTRUCTIONS,
+            toolTimeoutSec = settings.context7McpTimeout
         ))
         builtInServers.add(McpServerEntry(
             name = "Terminal MCP",
@@ -525,7 +536,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             terminalMaxOutputChars = settings.terminalMaxOutputChars,
             terminalDefaultShell = settings.terminalDefaultShell,
             terminalAvailableShells = settings.terminalAvailableShells,
-            terminalReadTimeout = settings.terminalReadTimeout
+            terminalReadTimeout = settings.terminalReadTimeout,
+            toolTimeoutSec = settings.terminalMcpTimeout
         ))
         builtInServers.add(McpServerEntry(
             name = "JetBrains Git MCP",
@@ -535,7 +547,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             configSummary = "VCS integration and commit message generation",
             isBuiltIn = true,
             instructions = settings.gitInstructions,
-            defaultInstructions = McpDefaults.GIT_INSTRUCTIONS
+            defaultInstructions = McpDefaults.GIT_INSTRUCTIONS,
+            toolTimeoutSec = settings.gitMcpTimeout
         ))
 
         // 加载自定义服务器
@@ -586,6 +599,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 val enabled = entryObj["enabled"]?.toString()?.toBooleanStrictOrNull() ?: true
                 val instructions = entryObj["instructions"]?.toString()?.trim('"') ?: ""
                 val enabledBackends = parseBackendKeys(entryObj["enabledBackends"], fallbackBackends)
+                val toolTimeoutSec = entryObj["toolTimeoutSec"]?.jsonPrimitive?.intOrNull ?: 60
 
                 // 生成配置摘要
                 val summary = if (serverType == "http" || url.isNotBlank()) {
@@ -605,7 +619,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                     configSummary = summary,
                     isBuiltIn = false,
                     jsonConfig = """{"$name": $pureConfig}""",
-                    instructions = instructions
+                    instructions = instructions,
+                    toolTimeoutSec = toolTimeoutSec
                 )
             }
         } catch (e: Exception) {
@@ -805,7 +820,9 @@ data class McpServerEntry(
     /** Terminal MCP: 可用 shell 列表（逗号分隔） */
     val terminalAvailableShells: String = "",
     /** Terminal MCP: TerminalRead 默认超时时间（秒） */
-    val terminalReadTimeout: Int = 30
+    val terminalReadTimeout: Int = 30,
+    /** 工具调用超时时间（秒），0 表示永不超时，默认 60 秒 */
+    val toolTimeoutSec: Int = 60
 )
 
 private class McpBackendSelection(initialKeys: Set<String>) {
@@ -926,6 +943,9 @@ class BuiltInMcpServerDialog(
     private val maxOutputCharsField = JBTextField(entry.terminalMaxOutputChars.toString(), 8)
     // Terminal MCP 超时配置
     private val readTimeoutField = JBTextField(entry.terminalReadTimeout.toString(), 6)
+
+    // 通用工具调用超时配置（0 表示永不超时）
+    private val toolTimeoutField = JBTextField(entry.toolTimeoutSec.toString(), 6)
 
     // Terminal MCP Shell 配置
     // 动态检测已安装的 shell
@@ -1172,6 +1192,24 @@ class BuiltInMcpServerDialog(
             topPanel.add(Box.createVerticalStrut(8))
         }
 
+        // 通用工具调用超时配置
+        val toolTimeoutLabel = JBLabel("Tool Call Timeout:").apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+        }
+        topPanel.add(toolTimeoutLabel)
+        topPanel.add(Box.createVerticalStrut(4))
+
+        val toolTimeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+            add(JBLabel("Timeout:"))
+            add(toolTimeoutField)
+            add(JBLabel("seconds"))
+            add(Box.createHorizontalStrut(8))
+            add(JBLabel("<html><font color='gray' size='-1'>(0 = never timeout)</font></html>"))
+        }
+        topPanel.add(toolTimeoutPanel)
+        topPanel.add(Box.createVerticalStrut(8))
+
         // 系统提示词标签
         val customPromptLabel = JBLabel("Appended System Prompt:").apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
@@ -1282,7 +1320,8 @@ class BuiltInMcpServerDialog(
             terminalAvailableShells = availableShellsValue,
             terminalReadTimeout = if (entry.name == "Terminal MCP") {
                 readTimeoutField.text.toIntOrNull() ?: 30
-            } else entry.terminalReadTimeout
+            } else entry.terminalReadTimeout,
+            toolTimeoutSec = (toolTimeoutField.text.toIntOrNull() ?: 60).coerceAtLeast(0)
         )
     }
 }
@@ -1311,6 +1350,9 @@ class McpServerDialog(
     private val levelGroup = ButtonGroup()
     private val globalRadio = JBRadioButton("Global", entry?.level != McpServerLevel.PROJECT)
     private val projectRadio = JBRadioButton("Project", entry?.level == McpServerLevel.PROJECT)
+
+    // 工具调用超时配置（0 表示永不超时）
+    private val toolTimeoutField = JBTextField((entry?.toolTimeoutSec ?: 60).toString(), 6)
 
     init {
         title = if (entry == null) "New MCP Server" else "Edit MCP Server"
@@ -1430,6 +1472,24 @@ class McpServerDialog(
             preferredSize = Dimension(500, 60)
         }
         contentPanel.add(instructionsScrollPane)
+        contentPanel.add(Box.createVerticalStrut(15))
+
+        // Tool call timeout
+        val timeoutLabel = JBLabel("Tool Call Timeout:").apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+        }
+        contentPanel.add(timeoutLabel)
+        contentPanel.add(Box.createVerticalStrut(5))
+
+        val timeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+            add(JBLabel("Timeout:"))
+            add(toolTimeoutField)
+            add(JBLabel("seconds"))
+            add(Box.createHorizontalStrut(8))
+            add(JBLabel("<html><font color='gray' size='-1'>(0 = never timeout)</font></html>"))
+        }
+        contentPanel.add(timeoutPanel)
         contentPanel.add(Box.createVerticalStrut(15))
 
         // Server level
@@ -1584,7 +1644,8 @@ class McpServerDialog(
             configSummary = summary,
             isBuiltIn = false,
             jsonConfig = jsonText,
-            instructions = instructionsArea.text.trim()
+            instructions = instructionsArea.text.trim(),
+            toolTimeoutSec = (toolTimeoutField.text.toIntOrNull() ?: 60).coerceAtLeast(0)
         )
     }
 }

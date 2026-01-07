@@ -87,6 +87,13 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var terminalAvailableShells: String = "",      // Terminal 可用 shell 列表（逗号分隔，空 = 全部）
         var terminalReadTimeout: Int = 10,             // TerminalRead 默认超时时间（秒）
         var enableGitMcp: Boolean = false,             // Git MCP（VCS 集成，默认禁用）
+        // MCP 工具调用超时配置（秒），0 表示永不超时
+        var userInteractionMcpTimeout: Int = 0,        // User Interaction MCP 默认永不超时
+        var jetbrainsMcpTimeout: Int = 60,             // JetBrains MCP 默认 60 秒
+        var jetbrainsFileMcpTimeout: Int = 60,         // JetBrains File MCP 默认 60 秒
+        var context7McpTimeout: Int = 60,              // Context7 MCP 默认 60 秒
+        var terminalMcpTimeout: Int = 60,              // Terminal MCP 默认 60 秒
+        var gitMcpTimeout: Int = 60,                   // Git MCP 默认 60 秒
         // MCP 后端启用范围（每个 MCP 单独配置，空 = 使用旧全局配置作为兼容）
         var userInteractionMcpBackends: String = "",
         var jetbrainsMcpBackends: String = "",
@@ -439,6 +446,38 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         get() = state.gitMcpBackends
         set(value) { state.gitMcpBackends = value }
 
+    // ==================== MCP 超时配置 ====================
+
+    /** User Interaction MCP 超时时间（秒），0 = 永不超时 */
+    var userInteractionMcpTimeout: Int
+        get() = state.userInteractionMcpTimeout
+        set(value) { state.userInteractionMcpTimeout = value.coerceAtLeast(0) }
+
+    /** JetBrains MCP 超时时间（秒），0 = 永不超时 */
+    var jetbrainsMcpTimeout: Int
+        get() = state.jetbrainsMcpTimeout
+        set(value) { state.jetbrainsMcpTimeout = value.coerceAtLeast(0) }
+
+    /** JetBrains File MCP 超时时间（秒），0 = 永不超时 */
+    var jetbrainsFileMcpTimeout: Int
+        get() = state.jetbrainsFileMcpTimeout
+        set(value) { state.jetbrainsFileMcpTimeout = value.coerceAtLeast(0) }
+
+    /** Context7 MCP 超时时间（秒），0 = 永不超时 */
+    var context7McpTimeout: Int
+        get() = state.context7McpTimeout
+        set(value) { state.context7McpTimeout = value.coerceAtLeast(0) }
+
+    /** Terminal MCP 超时时间（秒），0 = 永不超时 */
+    var terminalMcpTimeout: Int
+        get() = state.terminalMcpTimeout
+        set(value) { state.terminalMcpTimeout = value.coerceAtLeast(0) }
+
+    /** Git MCP 超时时间（秒），0 = 永不超时 */
+    var gitMcpTimeout: Int
+        get() = state.gitMcpTimeout
+        set(value) { state.gitMcpTimeout = value.coerceAtLeast(0) }
+
     private fun normalizeMcpBackendKeys(keys: Set<String>): Set<String> {
         val normalized = keys.map { it.trim().lowercase() }
             .filter { it.isNotEmpty() }
@@ -523,6 +562,31 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     fun setGitMcpBackendKeys(keys: Set<String>) {
         state.gitMcpBackends = formatBackendKeys(keys)
     }
+
+    // MCP 工具调用超时配置（秒），0 表示永不超时
+    var userInteractionMcpTimeout: Int
+        get() = state.userInteractionMcpTimeout
+        set(value) { state.userInteractionMcpTimeout = value.coerceAtLeast(0) }
+
+    var jetbrainsMcpTimeout: Int
+        get() = state.jetbrainsMcpTimeout
+        set(value) { state.jetbrainsMcpTimeout = value.coerceAtLeast(0) }
+
+    var jetbrainsFileMcpTimeout: Int
+        get() = state.jetbrainsFileMcpTimeout
+        set(value) { state.jetbrainsFileMcpTimeout = value.coerceAtLeast(0) }
+
+    var context7McpTimeout: Int
+        get() = state.context7McpTimeout
+        set(value) { state.context7McpTimeout = value.coerceAtLeast(0) }
+
+    var terminalMcpTimeout: Int
+        get() = state.terminalMcpTimeout
+        set(value) { state.terminalMcpTimeout = value.coerceAtLeast(0) }
+
+    var gitMcpTimeout: Int
+        get() = state.gitMcpTimeout
+        set(value) { state.gitMcpTimeout = value.coerceAtLeast(0) }
 
     fun toProviders(keys: Set<String>): Set<AiAgentProvider> {
         val normalized = normalizeMcpBackendKeys(keys)
