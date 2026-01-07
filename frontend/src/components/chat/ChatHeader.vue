@@ -27,36 +27,6 @@
           <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
-      <!-- 历史会话 -->
-      <button
-        class="icon-btn"
-        type="button"
-        title="History"
-        @click="emit('toggle-history')"
-      >
-        📋
-      </button>
-      <!-- 后端切换按钮 -->
-      <div class="backend-switcher" @click="toggleBackendMenu">
-        <BackendIcon :type="currentBackendType" :size="16" />
-        <svg class="dropdown-arrow" width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
-          <path d="M1 2.5L4 5.5L7 2.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-        </svg>
-        <!-- 下拉菜单 -->
-        <div v-if="showBackendMenu" class="backend-menu">
-          <div
-            v-for="backend in availableBackends"
-            :key="backend"
-            class="backend-menu-item"
-            :class="{ active: backend === currentBackendType }"
-            @click.stop="handleSwitchBackend(backend)"
-          >
-            <BackendIcon :type="backend" :size="14" />
-            <span>{{ getBackendDisplayName(backend) }}</span>
-            <span v-if="backend === currentBackendType" class="check-mark">✓</span>
-          </div>
-        </div>
-      </div>
       <!-- 会话操作下拉菜单 -->
       <div class="session-menu-trigger" @click="toggleSessionMenu">
         <button
@@ -95,6 +65,36 @@
               <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
             </svg>
             <span>{{ t('session.resetSession') }}</span>
+          </div>
+        </div>
+      </div>
+      <!-- 历史会话 -->
+      <button
+        class="icon-btn"
+        type="button"
+        title="History"
+        @click="emit('toggle-history')"
+      >
+        📋
+      </button>
+      <!-- 后端切换按钮 -->
+      <div class="backend-switcher" @click="toggleBackendMenu">
+        <BackendIcon :type="currentBackendType" :size="16" />
+        <svg class="dropdown-arrow" width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
+          <path d="M1 2.5L4 5.5L7 2.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        </svg>
+        <!-- 下拉菜单 -->
+        <div v-if="showBackendMenu" class="backend-menu">
+          <div
+            v-for="backend in availableBackends"
+            :key="backend"
+            class="backend-menu-item"
+            :class="{ active: backend === currentBackendType }"
+            @click.stop="handleSwitchBackend(backend)"
+          >
+            <BackendIcon :type="backend" :size="14" />
+            <span>{{ getBackendDisplayName(backend) }}</span>
+            <span v-if="backend === currentBackendType" class="check-mark">✓</span>
           </div>
         </div>
       </div>
