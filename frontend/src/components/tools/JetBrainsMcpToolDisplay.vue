@@ -21,7 +21,45 @@
         <div v-if="hasResult" class="result-section">
           <div class="section-title">Result</div>
           <div class="result-content">
-            <MarkdownRenderer :content="resultText" />
+            <div v-for="(block, index) in resultBlocks" :key="index" class="result-block">
+              <MarkdownRenderer
+                v-if="blockType(block) === 'text'"
+                :content="blockText(block)"
+              />
+              <img
+                v-else-if="blockType(block) === 'image'"
+                class="result-image"
+                :src="mediaUrl(block)"
+                :alt="blockAlt(block)"
+              />
+              <audio
+                v-else-if="blockType(block) === 'audio'"
+                class="result-audio"
+                controls
+                :src="mediaUrl(block)"
+              />
+              <div v-else-if="blockType(block) === 'resource_link'" class="resource-link">
+                <a :href="block.uri" target="_blank" rel="noreferrer noopener">
+                  {{ block.title || block.name || block.uri }}
+                </a>
+                <div class="resource-meta">{{ resourceMeta(block) }}</div>
+                <div v-if="block.description" class="resource-desc">{{ block.description }}</div>
+              </div>
+              <div v-else-if="blockType(block) === 'resource'" class="embedded-resource">
+                <div class="resource-meta">{{ embeddedMeta(block) }}</div>
+                <pre v-if="embeddedText(block)" class="resource-text">{{ embeddedText(block) }}</pre>
+                <a
+                  v-else-if="embeddedBlob(block)"
+                  class="resource-link-inline"
+                  :href="embeddedBlobUrl(block)"
+                  download
+                >
+                  Download embedded resource
+                </a>
+                <pre v-else class="resource-text">{{ formatBlock(block) }}</pre>
+              </div>
+              <pre v-else class="resource-text">{{ formatBlock(block) }}</pre>
+            </div>
           </div>
         </div>
       </div>
@@ -62,25 +100,85 @@ function formatValue(value: any): string {
   return String(value)
 }
 
-const resultText = computed(() => {
+const resultBlocks = computed<any[]>(() => {
   const r = props.toolCall.result
-  if (!r || r.is_error) return ''
-  if (typeof r.content === 'string') return r.content
-  if (Array.isArray(r.content)) {
-    return (r.content as any[])
-      .filter((item: any) => item.type === 'text')
-      .map((item: any) => item.text)
-      .join('\n')
+  if (!r || r.is_error) return []
+  const content = (r as any).content
+  if (!content) return []
+  if (Array.isArray(content)) return content as any[]
+  if (typeof content === 'string') {
+    return [{ type: 'text', text: content }]
   }
-  return JSON.stringify(r.content, null, 2)
+  return [{ type: 'json', value: content }]
 })
 
 const hasResult = computed(() => {
   const r = props.toolCall.result
-  return r && !r.is_error && resultText.value
+  return r && !r.is_error && resultBlocks.value.length > 0
 })
 
 const hasDetails = computed(() => Object.keys(params.value).length > 0 || hasResult.value)
+
+function blockType(block: any): string {
+  return typeof block?.type === 'string' ? block.type : 'unknown'
+}
+
+function blockText(block: any): string {
+  if (typeof block?.text === 'string') return block.text
+  if (typeof block?.value === 'string') return block.value
+  return formatBlock(block)
+}
+
+function formatBlock(block: any): string {
+  try {
+    return JSON.stringify(block, null, 2)
+  } catch {
+    return String(block)
+  }
+}
+
+function mediaUrl(block: any): string {
+  const data = block?.data || block?.blob
+  if (!data) return ''
+  const mimeType = block?.mimeType || block?.mime_type || 'application/octet-stream'
+  return `data:${mimeType};base64,${data}`
+}
+
+function blockAlt(block: any): string {
+  return block?.mimeType || block?.mime_type || block?.type || 'media'
+}
+
+function resourceMeta(block: any): string {
+  const parts = [block?.mimeType || block?.mime_type, block?.size ? `${block.size} bytes` : '']
+  return parts.filter(Boolean).join(' · ')
+}
+
+function embeddedText(block: any): string | null {
+  const resource = block?.resource
+  if (resource && typeof resource.text === 'string') return resource.text
+  return null
+}
+
+function embeddedBlob(block: any): string | null {
+  const resource = block?.resource
+  if (resource && typeof resource.blob === 'string') return resource.blob
+  return null
+}
+
+function embeddedBlobUrl(block: any): string {
+  const resource = block?.resource || {}
+  const data = resource.blob
+  if (!data) return ''
+  const mimeType = resource.mimeType || resource.mime_type || 'application/octet-stream'
+  return `data:${mimeType};base64,${data}`
+}
+
+function embeddedMeta(block: any): string {
+  const resource = block?.resource || {}
+  const uri = resource.uri ? ` ${resource.uri}` : ''
+  const mimeType = resource.mimeType || resource.mime_type || ''
+  return [mimeType, uri].filter(Boolean).join(' · ')
+}
 </script>
 
 <style scoped>
@@ -196,6 +294,54 @@ const hasDetails = computed(() => Object.keys(params.value).length > 0 || hasRes
   border-radius: 4px;
   max-height: 400px;
   overflow-y: auto;
+}
+
+.result-block + .result-block {
+  border-top: 1px solid var(--theme-border, #e1e4e8);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.result-image {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+}
+
+.result-audio {
+  width: 100%;
+}
+
+.resource-link,
+.embedded-resource {
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.resource-meta {
+  color: var(--theme-secondary-foreground, #586069);
+  margin-top: 4px;
+}
+
+.resource-desc {
+  margin-top: 4px;
+}
+
+.resource-link-inline {
+  display: inline-block;
+  font-size: 12px;
+}
+
+.resource-text {
+  margin: 8px 0 0;
+  padding: 8px;
+  background: var(--theme-background, #fff);
+  border: 1px solid var(--theme-border, #e1e4e8);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--theme-editor-font-family);
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 /* Markdown 内容样式覆盖 */
