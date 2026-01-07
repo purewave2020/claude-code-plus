@@ -1,10 +1,6 @@
 package com.asakii.plugin.mcp.tools.terminal
 
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -19,32 +15,32 @@ class TerminalTypesTool(private val sessionManager: TerminalSessionManager) {
      *
      * @param arguments 参数（无需参数）
      */
-    fun execute(arguments: JsonObject): JsonObject {
+    fun execute(arguments: JsonObject): String {
         logger.info { "Getting available shell types" }
 
         val types = sessionManager.getAvailableShellTypes()
         val platform = if (System.getProperty("os.name").lowercase().contains("windows")) {
-            "windows"
+            "Windows"
         } else {
-            "unix"
+            "Unix"
         }
 
         val defaultType = types.find { it.isDefault }?.name ?: types.firstOrNull()?.name ?: "bash"
 
-        return buildJsonObject {
-            put("success", true)
-            put("platform", platform)
-            put("types", buildJsonArray {
-                types.forEach { type ->
-                    add(buildJsonObject {
-                        put("name", type.name)
-                        put("display_name", type.displayName)
-                        type.command?.let { put("command", it) }
-                        put("is_default", type.isDefault)
-                    })
-                }
-            })
-            put("default_type", defaultType)
+        val typeInfoList = types.map { type ->
+            TerminalResultFormatter.ShellTypeInfo(
+                name = type.name,
+                displayName = type.displayName,
+                isDefault = type.isDefault
+            )
         }
+
+        return TerminalResultFormatter.formatTypesResult(
+            success = true,
+            platform = platform,
+            types = typeInfoList,
+            defaultType = defaultType,
+            error = null
+        )
     }
 }

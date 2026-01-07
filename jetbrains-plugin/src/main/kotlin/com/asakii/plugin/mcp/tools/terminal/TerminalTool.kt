@@ -1,9 +1,10 @@
 package com.asakii.plugin.mcp.tools.terminal
 
+import com.asakii.plugin.mcp.getBoolean
+import com.asakii.plugin.mcp.getLong
 import com.asakii.plugin.mcp.getString
+import com.asakii.settings.AgentSettingsService
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -12,7 +13,7 @@ private val logger = KotlinLogging.logger {}
  * Terminal 工具 - 执行命令
  *
  * 在 IDEA 内置终端中执行命令。
- * 命令执行后立即返回，不等待完成。使用 TerminalRead 读取输出。
+ * 默认立即返回，可通过 wait=true 等待命令完成并返回输出。
  */
 class TerminalTool(private val sessionManager: TerminalSessionManager) {
 
@@ -24,24 +25,43 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
      *   - session_id: String? - 会话 ID，为空时使用当前 AI 会话的默认终端
      *   - session_name: String? - 新会话名称
      *   - shell_type: String? - Shell 类型（如 git-bash, powershell），不传则使用配置的默认终端
+     *   - wait: Boolean? - 是否等待命令完成并返回输出（默认 false）
+     *   - timeout: Long? - 等待超时时间（秒，默认 30，0 表示无限等待）
      */
-    fun execute(arguments: JsonObject): JsonObject {
+    fun execute(arguments: JsonObject): String {
         val command = arguments.getString("command")
-            ?: return buildJsonObject {
-                put("success", false)
-                put("error", "Missing required parameter: command")
-            }
+            ?: return TerminalResultFormatter.formatTerminalResult(
+                success = false,
+                sessionId = null,
+                sessionName = null,
+                message = null,
+                error = "Missing required parameter: command"
+            )
 
         val sessionId = arguments.getString("session_id")
         val sessionName = arguments.getString("session_name")
         val shellName = arguments.getString("shell_type")
+        val wait = arguments.getBoolean("wait") ?: false
+        val settings = AgentSettingsService.getInstance()
+        val defaultTimeoutSec = settings.terminalReadTimeoutMs / 1000
+        val timeoutSec = arguments.getLong("timeout") ?: defaultTimeoutSec
+        // 0 表示无限等待，转换为 null；否则转换为毫秒
+        val timeoutMs = if (timeoutSec <= 0) null else timeoutSec * 1000
 
-        logger.info { "Executing command: $command (session: $sessionId, shellName: $shellName)" }
+        logger.info { "Executing command: $command (session: $sessionId, shellName: $shellName, wait: $wait)" }
 
         // 获取或创建会话
         val session = if (sessionId != null) {
             // 指定了 session_id，验证所有权并获取会话
-            sessionManager.validateSessionOwnership(sessionId)?.let { return it }
+            sessionManager.validateSessionOwnership(sessionId)?.let { errorJson ->
+                return TerminalResultFormatter.formatTerminalResult(
+                    success = false,
+                    sessionId = sessionId,
+                    sessionName = null,
+                    message = null,
+                    error = "Session not found or not owned by current AI session: $sessionId"
+                )
+            }
             sessionManager.getSession(sessionId)!!
         } else {
             // 未指定 session_id，使用当前 AI 会话的默认终端
@@ -51,28 +71,73 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
             } else {
                 // 使用默认终端
                 sessionManager.getOrCreateDefaultTerminal(shellName)
-            } ?: return buildJsonObject {
-                put("success", false)
-                put("error", "Failed to create terminal session")
-            }
+            } ?: return TerminalResultFormatter.formatTerminalResult(
+                success = false,
+                sessionId = null,
+                sessionName = null,
+                message = null,
+                error = "Failed to create terminal session"
+            )
         }
 
-        // 执行命令（始终立即返回，不等待）
-        val result = sessionManager.executeCommandAsync(session.id, command)
+        // 执行命令
+        val execResult = sessionManager.executeCommandAsync(session.id, command)
 
-        return if (result.success) {
-            buildJsonObject {
-                put("success", true)
-                put("session_id", result.sessionId)
-                put("session_name", result.sessionName ?: session.name)
-                put("message", "Command sent. Use TerminalRead to check output.")
-            }
+        if (!execResult.success) {
+            return TerminalResultFormatter.formatTerminalResult(
+                success = false,
+                sessionId = execResult.sessionId,
+                sessionName = execResult.sessionName ?: session.name,
+                message = null,
+                error = execResult.error
+            )
+        }
+
+        // 如果不等待，直接返回
+        if (!wait) {
+            return TerminalResultFormatter.formatTerminalResult(
+                success = true,
+                sessionId = execResult.sessionId,
+                sessionName = execResult.sessionName ?: session.name,
+                message = "Command sent. Use TerminalRead to check output.",
+                error = null
+            )
+        }
+
+        // 等待命令完成并返回输出
+        val readResult = sessionManager.readOutput(
+            sessionId = session.id,
+            maxLines = 1000,
+            search = null,
+            contextLines = 2,
+            waitForIdle = true,
+            timeout = timeoutMs
+        )
+
+        return if (readResult.success) {
+            TerminalResultFormatter.formatReadResult(
+                success = true,
+                sessionId = readResult.sessionId,
+                isRunning = readResult.isRunning,
+                output = readResult.output,
+                lineCount = readResult.lineCount,
+                searchMatches = null,
+                waitTimedOut = readResult.waitTimedOut,
+                waitMessage = readResult.waitMessage,
+                error = null
+            )
         } else {
-            buildJsonObject {
-                put("success", false)
-                put("session_id", result.sessionId)
-                put("error", result.error ?: "Unknown error")
-            }
+            TerminalResultFormatter.formatReadResult(
+                success = false,
+                sessionId = session.id,
+                isRunning = null,
+                output = null,
+                lineCount = null,
+                searchMatches = null,
+                waitTimedOut = null,
+                waitMessage = null,
+                error = readResult.error ?: "Failed to read output"
+            )
         }
     }
 }

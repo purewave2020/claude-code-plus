@@ -2,8 +2,6 @@ package com.asakii.plugin.mcp.tools.terminal
 
 import com.asakii.plugin.mcp.getString
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -31,25 +29,45 @@ class TerminalInterruptTool(private val sessionManager: TerminalSessionManager) 
      *   - session_id: String - 会话 ID（必需）
      *   - signal: String - 信号类型（可选，默认 SIGINT）
      */
-    fun execute(arguments: JsonObject): JsonObject {
+    fun execute(arguments: JsonObject): String {
         val sessionId = arguments.getString("session_id")
-            ?: return buildJsonObject {
-                put("success", false)
-                put("error", "Missing required parameter: session_id")
-            }
+            ?: return TerminalResultFormatter.formatInterruptResult(
+                success = false,
+                sessionId = null,
+                signal = null,
+                wasRunning = null,
+                isStillRunning = null,
+                message = null,
+                error = "Missing required parameter: session_id"
+            )
 
         // 验证会话所有权
-        sessionManager.validateSessionOwnership(sessionId)?.let { return it }
+        sessionManager.validateSessionOwnership(sessionId)?.let {
+            return TerminalResultFormatter.formatInterruptResult(
+                success = false,
+                sessionId = sessionId,
+                signal = null,
+                wasRunning = null,
+                isStillRunning = null,
+                message = null,
+                error = "Session not found or not owned by current AI session: $sessionId"
+            )
+        }
 
         // 解析 signal 参数，默认 SIGINT
         val signal = arguments.getString("signal")?.uppercase() ?: "SIGINT"
 
         // 验证 signal 值
         if (signal !in VALID_SIGNALS) {
-            return buildJsonObject {
-                put("success", false)
-                put("error", "Invalid signal: $signal. Valid values: ${VALID_SIGNALS.joinToString(", ")}")
-            }
+            return TerminalResultFormatter.formatInterruptResult(
+                success = false,
+                sessionId = sessionId,
+                signal = signal,
+                wasRunning = null,
+                isStillRunning = null,
+                message = null,
+                error = "Invalid signal: $signal. Valid values: ${VALID_SIGNALS.joinToString(", ")}"
+            )
         }
 
         logger.info { "Sending $signal to session: $sessionId" }
@@ -57,21 +75,25 @@ class TerminalInterruptTool(private val sessionManager: TerminalSessionManager) 
         val result = sessionManager.interruptCommand(sessionId, signal)
 
         return if (result.success) {
-            buildJsonObject {
-                put("success", true)
-                put("session_id", result.sessionId)
-                result.signal?.let { put("signal", it) }
-                result.wasRunning?.let { put("was_running", it) }
-                result.isStillRunning?.let { put("is_still_running", it) }
-                result.message?.let { put("message", it) }
-            }
+            TerminalResultFormatter.formatInterruptResult(
+                success = true,
+                sessionId = result.sessionId,
+                signal = result.signal,
+                wasRunning = result.wasRunning,
+                isStillRunning = result.isStillRunning,
+                message = result.message,
+                error = null
+            )
         } else {
-            buildJsonObject {
-                put("success", false)
-                put("session_id", result.sessionId)
-                result.signal?.let { put("signal", it) }
-                put("error", result.error ?: "Unknown error")
-            }
+            TerminalResultFormatter.formatInterruptResult(
+                success = false,
+                sessionId = result.sessionId,
+                signal = result.signal,
+                wasRunning = null,
+                isStillRunning = null,
+                message = null,
+                error = result.error ?: "Unknown error"
+            )
         }
     }
 }

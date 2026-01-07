@@ -3,10 +3,6 @@ package com.asakii.plugin.mcp.tools.terminal
 import com.asakii.plugin.mcp.getBoolean
 import com.asakii.plugin.mcp.getStringList
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -26,7 +22,7 @@ class TerminalKillTool(private val sessionManager: TerminalSessionManager) {
      *   - all: Boolean - 是否终止当前 AI 会话的所有终端
      *   至少提供 session_ids 或 all 中的一个
      */
-    fun execute(arguments: JsonObject): JsonObject {
+    fun execute(arguments: JsonObject): String {
         val sessionIds = arguments.getStringList("session_ids")
         val killAll = arguments.getBoolean("all") ?: false
 
@@ -40,19 +36,23 @@ class TerminalKillTool(private val sessionManager: TerminalSessionManager) {
                 // 只允许删除当前 AI 会话的终端
                 sessionIds.filter { it in currentSessionTerminalIds }
             }
-            else -> return buildJsonObject {
-                put("success", false)
-                put("error", "Missing required parameter: session_ids or all")
-            }
+            else -> return TerminalResultFormatter.formatKillResult(
+                success = false,
+                killed = emptyList(),
+                failed = emptyList(),
+                message = null,
+                error = "Missing required parameter: session_ids or all"
+            )
         }
 
         if (idsToKill.isEmpty()) {
-            return buildJsonObject {
-                put("success", true)
-                put("message", "No sessions to terminate")
-                put("killed", buildJsonArray { })
-                put("failed", buildJsonArray { })
-            }
+            return TerminalResultFormatter.formatKillResult(
+                success = true,
+                killed = emptyList(),
+                failed = emptyList(),
+                message = "No sessions to terminate",
+                error = null
+            )
         }
 
         logger.info { "Killing ${idsToKill.size} terminal session(s): $idsToKill" }
@@ -69,15 +69,18 @@ class TerminalKillTool(private val sessionManager: TerminalSessionManager) {
             }
         }
 
-        return buildJsonObject {
-            put("success", failed.isEmpty())
-            put("killed", buildJsonArray { killed.forEach { add(it) } })
-            put("failed", buildJsonArray { failed.forEach { add(it) } })
-            put("message", when {
-                failed.isEmpty() -> "All ${killed.size} session(s) terminated successfully"
-                killed.isEmpty() -> "Failed to terminate all ${failed.size} session(s)"
-                else -> "Terminated ${killed.size} session(s), failed ${failed.size}"
-            })
+        val message = when {
+            failed.isEmpty() -> "All ${killed.size} session(s) terminated successfully"
+            killed.isEmpty() -> "Failed to terminate all ${failed.size} session(s)"
+            else -> "Terminated ${killed.size} session(s), failed ${failed.size}"
         }
+
+        return TerminalResultFormatter.formatKillResult(
+            success = failed.isEmpty(),
+            killed = killed,
+            failed = failed,
+            message = message,
+            error = if (failed.isNotEmpty()) "Some sessions failed to terminate" else null
+        )
     }
 }

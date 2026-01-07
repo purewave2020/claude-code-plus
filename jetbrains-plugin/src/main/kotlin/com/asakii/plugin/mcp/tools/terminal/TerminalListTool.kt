@@ -3,9 +3,6 @@ package com.asakii.plugin.mcp.tools.terminal
 import com.asakii.plugin.mcp.getBoolean
 import com.asakii.plugin.mcp.getInt
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -22,7 +19,7 @@ class TerminalListTool(private val sessionManager: TerminalSessionManager) {
      *   - include_output_preview: Boolean? - 是否包含输出预览（默认 false）
      *   - preview_lines: Int? - 预览行数（默认 5）
      */
-    fun execute(arguments: JsonObject): JsonObject {
+    fun execute(arguments: JsonObject): String {
         val includePreview = arguments.getBoolean("include_output_preview") ?: false
         val previewLines = arguments.getInt("preview_lines") ?: 5
 
@@ -31,29 +28,21 @@ class TerminalListTool(private val sessionManager: TerminalSessionManager) {
         // 只获取当前 AI 会话的终端
         val sessions = sessionManager.getCurrentSessionTerminals()
 
-        val sessionList = buildJsonArray {
-            sessions.forEach { session ->
-                add(buildJsonObject {
-                    put("id", session.id)
-                    put("name", session.name)
-                    put("shell_type", session.shellType)
-                    put("is_running", session.hasRunningCommands())
-                    put("created_at", session.createdAt)
-                    put("last_command_at", session.lastCommandAt)
-                    put("is_background", session.isBackground)
-
-                    if (includePreview) {
-                        val output = session.getOutput(previewLines)
-                        put("output_preview", output)
-                    }
-                })
-            }
+        val sessionInfoList = sessions.map { session ->
+            TerminalResultFormatter.SessionInfo(
+                id = session.id,
+                name = session.name,
+                shellType = session.shellType,
+                isRunning = session.hasRunningCommands(),
+                outputPreview = if (includePreview) session.getOutput(previewLines) else null
+            )
         }
 
-        return buildJsonObject {
-            put("success", true)
-            put("count", sessions.size)
-            put("sessions", sessionList)
-        }
+        return TerminalResultFormatter.formatListResult(
+            success = true,
+            count = sessions.size,
+            sessions = sessionInfoList,
+            error = null
+        )
     }
 }

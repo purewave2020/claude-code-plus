@@ -596,7 +596,7 @@ IMPORTANT: When working with third-party libraries, ALWAYS query Context7 first 
 {
   "Terminal": {
     "type": "object",
-    "description": "Execute commands in IDEA's integrated terminal. Returns immediately after sending the command. Use TerminalRead to get output. If session_id is not provided, uses the default terminal for the current AI session. If the default terminal is busy (running a command), a new overflow terminal is created automatically; subsequent calls will prefer the default terminal when it becomes idle.",
+    "description": "Execute commands in IDEA's integrated terminal. By default returns immediately after sending the command (use TerminalRead to get output). Set wait=true to wait for completion and return output directly. If session_id is not provided, uses the default terminal for the current AI session. If the default terminal is busy (running a command), a new overflow terminal is created automatically; subsequent calls will prefer the default terminal when it becomes idle.",
     "properties": {
       "command": {
         "type": "string",
@@ -613,6 +613,17 @@ IMPORTANT: When working with third-party libraries, ALWAYS query Context7 first 
       "shell_type": {
         "type": "string",
         "description": "Shell type (dynamically detected). If not specified, uses the configured default terminal."
+      },
+      "wait": {
+        "type": "boolean",
+        "description": "If true, wait for command completion and return output directly. Default is false (return immediately, use TerminalRead to get output).",
+        "default": false
+      },
+      "timeout": {
+        "type": "integer",
+        "description": "Timeout in seconds for waiting (only used when wait=true). 0 means wait indefinitely.",
+        "default": 30,
+        "minimum": 0
       }
     },
     "required": ["command"]
@@ -649,9 +660,9 @@ IMPORTANT: When working with third-party libraries, ALWAYS query Context7 first 
       },
       "timeout": {
         "type": "integer",
-        "description": "Timeout in milliseconds for waiting (only used when wait=true)",
-        "default": 30000,
-        "minimum": 1000
+        "description": "Timeout in seconds for waiting (only used when wait=true). 0 means wait indefinitely.",
+        "default": 30,
+        "minimum": 0
       }
     },
     "required": []
@@ -745,30 +756,17 @@ val TERMINAL_INSTRUCTIONS = """
 
 Use IDEA's integrated terminal for command execution instead of the built-in Bash tool.
 
-**Tools:**
-Tool identifiers may vary across providers. Do not assume a fixed prefix or delimiter. Always choose the tool that matches server `terminal` and the tool name below.
-
-- `terminal / Terminal`: Execute commands (returns immediately, use TerminalRead to get output)
-- `terminal / TerminalRead`: Read session output (supports regex search)
-- `terminal / TerminalList`: List all terminal sessions
-- `terminal / TerminalKill`: Close session(s) completely
-- `terminal / TerminalInterrupt`: Stop/pause running command. Supports signals: SIGINT (Ctrl+C, default), SIGQUIT (Ctrl+\\, force quit), SIGTSTP (Ctrl+Z, suspend)
-- `terminal / TerminalTypes`: Get available shell types
-- `terminal / TerminalRename`: Rename a session
+**When to Use:**
+- Execute shell commands, build scripts, package managers (npm, gradle, etc.)
+- Run dev servers, tests, or long-running processes
+- Need to interact with command output or search for patterns
 
 **Best Practices:**
 - **Reuse sessions**: Always reuse existing terminal sessions via `session_id` instead of creating new ones
 - **Multiple terminals**: Only create multiple sessions when you need to run commands concurrently (e.g., a dev server + tests)
 - **Cleanup**: Close sessions with `TerminalKill` when no longer needed to keep IDEA clean
-
-**Usage:**
-1. Execute command: `Terminal(command="npm install")`
-2. Read output (wait for completion): `TerminalRead(session_id="terminal-1", wait=true)`
-3. Read output (immediately): `TerminalRead(session_id="terminal-1")`
-4. Search output: `TerminalRead(session_id="terminal-1", search="error|warning")`
-5. Stop running command: `TerminalInterrupt(session_id="terminal-1")` or `TerminalInterrupt(session_id="terminal-1", signal="SIGQUIT")`
-6. Close session(s): `TerminalKill(session_ids=["terminal-1", "terminal-2"])`
-7. Close all sessions: `TerminalKill(all=true)`
+- **Quick commands**: Use `Terminal(command="...", wait=true)` for fast commands to get output in one call
+- **Long-running**: Use `Terminal(command="...")` then `TerminalRead(wait=true)` for commands that take time
     """.trimIndent()
 
     /**
