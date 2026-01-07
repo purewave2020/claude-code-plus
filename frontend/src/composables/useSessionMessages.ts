@@ -960,15 +960,13 @@ export function useSessionMessages(
         return
       }
 
-      // tool_result 消息：只更新工具状态
+      // tool_result 消息：更新工具状态，并保留消息用于状态解析
       if (hasToolResult) {
         processToolResults(message.content)
-        touchMessages()
-        return
       }
 
       // 纯 tool_use 的 user 消息：忽略
-      if (hasToolUse && !hasText) {
+      if (hasToolUse && !hasText && !hasToolResult) {
         log.debug('[useSessionMessages] 忽略纯 tool_use 的 user 消息')
         return
       }
