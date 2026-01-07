@@ -33,7 +33,7 @@ class TerminalListTool(private val sessionManager: TerminalSessionManager) {
                 id = session.id,
                 name = session.name,
                 shellType = session.shellType,
-                isRunning = session.hasRunningCommands(),
+                isRunning = session.hasRunningCommands() ?: false,
                 outputPreview = if (includePreview) session.getOutput(previewLines) else null
             )
         }

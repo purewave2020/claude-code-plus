@@ -505,88 +505,65 @@ The user's response will be returned to you through the same tool.
 
     /**
      * JetBrains IDE MCP 默认提示词
+     *
+     * 设计原则：不重复 Schema 中已有的工具描述和参数说明，
+     * 只说明"何时使用"、"优先级"和"多工具配合的工作流"
      */
 val JETBRAINS_INSTRUCTIONS = """
-### MCP Tools
-
-Tool identifiers may vary across providers. Do not assume a fixed prefix or delimiter. Always choose the tool that matches server `jetbrains` and the tool name below.
-
-You have access to JetBrains IDE tools that leverage the IDE's powerful indexing and analysis capabilities:
-
-- `jetbrains / DirectoryTree`: Browse project directory structure with filtering options
-- `jetbrains / FileProblems`: Get static analysis results for a file (syntax errors, code errors, warnings, suggestions)
-- `jetbrains / FileIndex`: Search files, classes, and symbols using IDE index (supports scope filtering)
-- `jetbrains / CodeSearch`: Search code content across project files (like Find in Files)
-- `jetbrains / FindUsages`: Find all references/usages of a symbol (class, method, field, variable) in the project
-- `jetbrains / Rename`: Safely rename a symbol and automatically update all references (like Refactor > Rename)
-- `jetbrains / ReadFile`: Read file content using IDE's VFS. Supports JAR/ZIP entries, JDK sources, and .class files (auto-decompiled)
+### When to Use
 
 CRITICAL: For code search and file discovery, prefer JetBrains MCP tools over any built-in search tools:
-- ALWAYS use `jetbrains / CodeSearch` for searching code content (replaces built-in grep/search tools)
-- ALWAYS use `jetbrains / FileIndex` for finding files, classes, and symbols (replaces built-in glob/find tools)
-- Only fall back to built-in tools if JetBrains tools return errors or cannot handle the specific query
+- ALWAYS use `CodeSearch` instead of built-in grep/search tools
+- ALWAYS use `FileIndex` instead of built-in glob/find tools
+- Only fall back to built-in tools if JetBrains tools return errors
 
-IMPORTANT: After completing code modifications, you MUST use `jetbrains / FileProblems` to perform static analysis validation on the modified files to minimize syntax errors.
+IMPORTANT: After completing code modifications, you MUST use `FileProblems` to validate for syntax errors.
 
 ### Refactoring Workflow
 
 When renaming symbols:
-1. Use `jetbrains / FindUsages` or `jetbrains / CodeSearch` to find the symbol and get its line number
-2. Use `jetbrains / Rename` with the line number (required) to safely rename across the project
-3. Use `jetbrains / FileProblems` to validate changes
+1. `FindUsages` or `CodeSearch` → get line number
+2. `Rename(line=N, newName="...")` → safe rename across project
+3. `FileProblems` → validate changes
 
-Example: `FindUsages(symbolName="getUserById")` → line 42 → `Rename(line=42, newName="fetchUserById")`
-
-**Note**: `Rename` requires `line` parameter for precise location. Use `Rename` for symbols (auto-updates all references); use file edit tools for other text changes.
+**Note**: `Rename` requires `line` parameter. Use `Rename` for symbols; use Edit tool for other text changes.
 
 ### Reading Library Source Code
 
-Use `jetbrains / FileIndex` + `jetbrains / ReadFile` to read source code from dependencies (JAR files, JDK sources, decompiled .class files):
+To read dependencies (JAR files, JDK sources, decompiled .class):
+1. `FileIndex(query="ClassName", searchType="Classes", scope="All")`
+2. `ReadFile(filePath="<path from FileIndex>")`
 
-1. Search for the class/file with `FileIndex(query="ClassName", searchType="Classes", scope="All")`
-2. Get the path from search results (e.g., `C:/path/to/lib.jar!/com/example/MyClass.class`)
-3. Read with `ReadFile(filePath="<path from FileIndex>")`
-
-**Key points:**
-- `scope="All"` in FileIndex to include libraries (not just project files)
-- Path from FileIndex can be used directly in ReadFile
-- `.class` files are automatically decompiled by IDEA's built-in decompiler
+**Key**: Use `scope="All"` to include libraries, not just project files.
     """.trimIndent()
 
     /**
      * JetBrains File MCP 默认提示词
+     *
+     * 设计原则：不重复 Schema 中已有的工具描述和参数说明
      */
     val JETBRAINS_FILE_INSTRUCTIONS = """
-### JetBrains File MCP
+### When to Use
 
-Tool identifiers may vary across providers. Do not assume a fixed prefix or delimiter. Always choose the tool that matches server `jetbrains-file` and the tool name below.
+Use for file operations with relative path support (to project root).
 
-You have access to JetBrains file operation tools:
-
-- `jetbrains-file / ReadFile`: Read file content. Supports relative paths (to project root), absolute paths, JAR/ZIP entries, and JDK sources
-- `jetbrains-file / WriteFile`: Write content to a file (create or overwrite). Supports relative and absolute paths
-- `jetbrains-file / EditFile`: Edit a file by replacing text (oldString → newString). Supports replaceAll mode
-
-**Parameter naming**: These tools use camelCase parameters (`filePath`, `oldString`, `newString`, `replaceAll`).
-
-**Note**: For reading library source code (JAR files, decompiled .class), use `jetbrains / ReadFile` from the JetBrains LSP MCP instead.
+**Note**: For reading library source code (JAR files, decompiled .class), use `jetbrains / ReadFile` from JetBrains IDE MCP instead.
     """.trimIndent()
 
     /**
      * Context7 MCP 默认提示词
+     *
+     * 设计原则：只说明使用时机，不重复工具参数说明
      */
     val CONTEXT7_INSTRUCTIONS = """
-# Context7 MCP
+### When to Use
 
 IMPORTANT: When working with third-party libraries, ALWAYS query Context7 first to get up-to-date documentation and prevent hallucinated APIs.
 
-## Tools
+### Workflow
 
-- `resolve-library-id`: Resolve library name → Context7 ID. Call first unless user provides `/org/project` format.
-- `get-library-docs`: Fetch documentation.
-  - `mode`: `code` (API/examples) | `info` (concepts/guides)
-  - `topic`: Focus area (e.g., "hooks", "routing", "authentication")
-  - `page`: Pagination (1-10) if context insufficient
+1. `resolve-library-id` → get Context7 ID (unless user provides `/org/project` format)
+2. `get-library-docs` → fetch documentation
     """.trimIndent()
 
     /**
@@ -750,23 +727,19 @@ IMPORTANT: When working with third-party libraries, ALWAYS query Context7 first 
 
     /**
      * Terminal MCP 默认提示词
+     *
+     * 设计原则：只说明使用时机和最佳实践，不重复参数说明
      */
 val TERMINAL_INSTRUCTIONS = """
-### Terminal MCP
+### When to Use
 
-Use IDEA's integrated terminal for command execution instead of the built-in Bash tool.
+Use IDEA's integrated terminal instead of built-in Bash tool for command execution.
 
-**When to Use:**
-- Execute shell commands, build scripts, package managers (npm, gradle, etc.)
-- Run dev servers, tests, or long-running processes
-- Need to interact with command output or search for patterns
+### Best Practices
 
-**Best Practices:**
-- **Reuse sessions**: Always reuse existing terminal sessions via `session_id` instead of creating new ones
-- **Multiple terminals**: Only create multiple sessions when you need to run commands concurrently (e.g., a dev server + tests)
-- **Cleanup**: Close sessions with `TerminalKill` when no longer needed to keep IDEA clean
-- **Quick commands**: Use `Terminal(command="...", wait=true)` for fast commands to get output in one call
-- **Long-running**: Use `Terminal(command="...")` then `TerminalRead(wait=true)` for commands that take time
+- **Reuse sessions**: Always reuse existing sessions via `session_id`
+- **Multiple terminals**: Only create multiple sessions for concurrent commands (e.g., dev server + tests)
+- **Cleanup**: Close sessions with `TerminalKill` when no longer needed
     """.trimIndent()
 
     /**
@@ -840,23 +813,19 @@ Use IDEA's integrated terminal for command execution instead of the built-in Bas
 
     /**
      * Git MCP 默认提示词
+     *
+     * 设计原则：只说明使用时机和工作流，不重复工具列表和参数说明
      */
 val GIT_INSTRUCTIONS = """
-### Git MCP
+### When to Use
 
-Tools for interacting with IDEA's VCS/Git integration:
+Use for interacting with IDEA's VCS/Git integration: reading changes, setting commit messages, checking status.
 
-Tool identifiers may vary across providers. Do not assume a fixed prefix or delimiter. Always choose the tool that matches server `jetbrains_git` and the tool name below.
+### Workflow
 
-- `jetbrains_git / GetVcsChanges`: Get uncommitted changes (supports selectedOnly for Commit panel selection)
-- `jetbrains_git / GetCommitMessage`: Get current commit message from input field
-- `jetbrains_git / SetCommitMessage`: Set or append commit message
-- `jetbrains_git / GetVcsStatus`: Get VCS status (branch, changes count, etc.)
-
-**Usage:**
-1. Get changes: `GetVcsChanges(selectedOnly=true, includeDiff=true)`
-2. Read message: `GetCommitMessage()`
-3. Set message: `SetCommitMessage(message="feat: add feature", mode="replace")`
+1. `GetVcsChanges(selectedOnly=true)` → get user-selected changes from Commit panel
+2. Analyze changes and generate commit message
+3. `SetCommitMessage(message="...")` → fill into Commit panel
     """.trimIndent()
 }
 

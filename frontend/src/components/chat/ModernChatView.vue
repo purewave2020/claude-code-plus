@@ -71,7 +71,6 @@
         @stop="handleStopGeneration"
         @context-add="handleAddContext"
         @context-remove="handleRemoveContext"
-        @context-toggle="handleToggleContext"
         @auto-cleanup-change="handleAutoCleanupChange"
       />
     </div>
@@ -631,18 +630,6 @@ function handleRemoveContext(context: ContextReference) {
   console.log('Removing context:', context)
   if (sessionStore.currentTab) {
     sessionStore.currentTab.uiState.contexts = currentTabContexts.value.filter(c => c.uri !== context.uri)
-  }
-}
-
-function handleToggleContext(context: ContextReference) {
-  console.log('Toggling context:', context)
-  if (sessionStore.currentTab) {
-    sessionStore.currentTab.uiState.contexts = currentTabContexts.value.map(c => {
-      if (c.uri === context.uri) {
-        return { ...c, disabled: !c.disabled }
-      }
-      return c
-    })
   }
 }
 

@@ -176,6 +176,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             // 创建服务配置提供者（每次 connect 时调用，获取最新的用户设置）
             val serviceConfigProvider: () -> AiAgentServiceConfig = {
                 val settings = AgentSettingsService.getInstance()
+                val defaultProvider = settings.getDefaultBackendProvider()
                 val thinkingLevelName = settings.getThinkingLevelById(settings.defaultThinkingLevelId)?.name ?: "Ultra"
                 val codexPath = settings.codexPath
                     .takeIf { it.isNotBlank() }
@@ -190,7 +191,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 val defaultModelLabel = defaultModelInfo?.displayName ?: settings.defaultModel
                 logger.info(
                     "📦 Loading agent settings: nodePath=${settings.nodePath.ifBlank { "(system PATH)" }}, " +
-                        "model=$defaultModelLabel, thinkingLevel=$thinkingLevelName " +
+                        "model=$defaultModelLabel, thinkingLevel=$thinkingLevelName, defaultBackend=${defaultProvider.name.lowercase()} " +
                         "(${settings.defaultThinkingTokens} tokens), permissionMode=${settings.permissionMode}, " +
                         "userInteractionMcp=${settings.enableUserInteractionMcp}(${userInteractionBackends.joinToString()}), " +
                         "jetbrainsMcp=${settings.enableJetBrainsMcp}(${jetbrainsBackends.joinToString()}), " +
@@ -206,6 +207,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 val fileSyncHooks = IdeaFileSyncHooks.create(project)
 
                 AiAgentServiceConfig(
+                    defaultProvider = defaultProvider,
                     defaultModel = settings.defaultModel,  // 使用模型 ID（内置或自定义）
                     claude = ClaudeDefaults(
                         nodePath = settings.nodePath.takeIf { it.isNotBlank() },

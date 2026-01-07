@@ -698,7 +698,9 @@ class AiAgentRpcServiceImpl(
         val claudeServers: Map<String, McpServerSpec>,
         val mcpSystemPromptAppendix: String,
         val allowedTools: List<String>,
-        val codexConfigOverrides: Map<String, String>
+        val codexConfigOverrides: Map<String, String>,
+        /** 启用 MCP 时需要禁用的 Codex features（如 "shell_tool"） */
+        val codexDisabledFeatures: List<String> = emptyList()
     )
 
     private suspend fun prepareMcpSession(
@@ -827,11 +829,21 @@ class AiAgentRpcServiceImpl(
             sdkLog.info("?? [MCP] Registered servers: ${claudeServers.keys.joinToString()}")
         }
 
+        // 收集 Codex 禁用 features
+        val codexDisabledFeatures = mutableListOf<String>()
+        if (claudeServers.containsKey("jetbrains-terminal")) {
+            codexDisabledFeatures.addAll(terminalMcpServerProvider.getCodexDisabledFeatures())
+        }
+        if (codexDisabledFeatures.isNotEmpty()) {
+            sdkLog.info("🚫 [MCP] Codex disabled features: ${codexDisabledFeatures.joinToString()}")
+        }
+
         return McpSessionSetup(
             claudeServers = claudeServers,
             mcpSystemPromptAppendix = mcpSystemPromptAppendix,
             allowedTools = allowedTools,
-            codexConfigOverrides = codexConfigOverrides
+            codexConfigOverrides = codexConfigOverrides,
+            codexDisabledFeatures = codexDisabledFeatures
         )
     }
 
@@ -1150,6 +1162,10 @@ class AiAgentRpcServiceImpl(
             putAll(mcpSetup.codexConfigOverrides)
             codexDefaults.webSearchEnabled?.let { enabled ->
                 put("features.web_search_request", enabled.toString())
+            }
+            // 禁用 MCP 替代的 Codex 内置工具
+            mcpSetup.codexDisabledFeatures.forEach { feature ->
+                put("features.$feature", "false")
             }
         }
         if (configOverrides.isNotEmpty()) {

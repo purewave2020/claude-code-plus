@@ -111,7 +111,7 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
             search = null,
             contextLines = 2,
             waitForIdle = true,
-            timeout = timeoutMs
+            timeoutMs = timeoutMs ?: 30_000L
         )
 
         return if (readResult.success) {

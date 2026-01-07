@@ -97,6 +97,15 @@ class TerminalMcpServerImpl(private val project: Project) : McpServerBase(), Dis
         }
     }
 
+    fun getCodexDisabledFeatures(): List<String> {
+        val settings = AgentSettingsService.getInstance()
+        return if (settings.enableTerminalMcp && settings.terminalDisableBuiltinBash) {
+            listOf("shell_tool")
+        } else {
+            emptyList()
+        }
+    }
+
     companion object {
         private val BASE_SCHEMAS: Map<String, JsonObject> = loadBaseSchemas()
 
@@ -245,6 +254,15 @@ class TerminalMcpServerProviderImpl(private val project: Project) : TerminalMcpS
         val settings = AgentSettingsService.getInstance()
         return if (settings.enableTerminalMcp && settings.terminalDisableBuiltinBash) {
             listOf("Bash")
+        } else {
+            emptyList()
+        }
+    }
+
+    override fun getCodexDisabledFeatures(): List<String> {
+        val settings = AgentSettingsService.getInstance()
+        return if (settings.enableTerminalMcp && settings.terminalDisableBuiltinBash) {
+            listOf("shell_tool")
         } else {
             emptyList()
         }

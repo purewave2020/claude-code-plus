@@ -70,8 +70,8 @@ class TerminalReadTool(private val sessionManager: TerminalSessionManager) {
         val settings = AgentSettingsService.getInstance()
         val defaultTimeoutSec = settings.terminalReadTimeoutMs / 1000
         val timeoutSec = arguments.getLong("timeout") ?: defaultTimeoutSec
-        // 0 表示无限等待，转换为 null；否则转换为毫秒
-        val timeoutMs = if (timeoutSec <= 0) null else timeoutSec * 1000
+        // 0 表示无限等待，使用一个很大的值；否则转换为毫秒
+        val timeoutMs = if (timeoutSec <= 0) Long.MAX_VALUE else timeoutSec * 1000
 
         logger.info { "Reading output from session: $sessionId (maxLines: $maxLines, search: $search, waitForIdle: $waitForIdle)" }
 

@@ -126,14 +126,22 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 cellRenderer = LevelCellRenderer()
             }
 
-            // 双击编辑
+            // 鼠标点击处理
             addMouseListener(object : MouseAdapter() {
                 override fun mouseClicked(e: MouseEvent) {
+                    val row = rowAtPoint(e.point)
+                    val col = columnAtPoint(e.point)
+                    if (row < 0) return
+
+                    // 单击 Backends 列（第 3 列）时弹出后端选择
+                    if (e.clickCount == 1 && col == 3) {
+                        editBackends(row, e)
+                        return
+                    }
+
+                    // 双击编辑完整配置
                     if (e.clickCount == 2) {
-                        val row = rowAtPoint(e.point)
-                        if (row >= 0) {
-                            editServer(row)
-                        }
+                        editServer(row)
                     }
                 }
             })
@@ -216,6 +224,98 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 refreshTable()
             }
         }
+    }
+
+    /**
+     * 快速编辑 Backends（单击 Backends 列时弹出）
+     */
+    private fun editBackends(row: Int, e: MouseEvent) {
+        if (row < 0) return
+
+        val entry = if (row < builtInServers.size) {
+            builtInServers[row]
+        } else {
+            customServers.getOrNull(row - builtInServers.size) ?: return
+        }
+
+        // 创建弹出菜单
+        val popup = JPopupMenu()
+        val currentKeys = entry.enabledBackends
+
+        val allItem = JCheckBoxMenuItem("All").apply {
+            isSelected = currentKeys.contains(AgentSettingsService.MCP_BACKEND_ALL)
+            addActionListener {
+                updateBackends(row, setOf(AgentSettingsService.MCP_BACKEND_ALL))
+            }
+        }
+
+        val claudeItem = JCheckBoxMenuItem("Claude Code").apply {
+            isSelected = !currentKeys.contains(AgentSettingsService.MCP_BACKEND_ALL) &&
+                currentKeys.contains(AgentSettingsService.MCP_BACKEND_CLAUDE)
+            isEnabled = !allItem.isSelected
+            addActionListener {
+                val newKeys = mutableSetOf<String>()
+                if (isSelected) newKeys.add(AgentSettingsService.MCP_BACKEND_CLAUDE)
+                if (popup.components.filterIsInstance<JCheckBoxMenuItem>()
+                        .find { it.text == "Codex" }?.isSelected == true) {
+                    newKeys.add(AgentSettingsService.MCP_BACKEND_CODEX)
+                }
+                if (newKeys.isEmpty()) newKeys.add(AgentSettingsService.MCP_BACKEND_ALL)
+                updateBackends(row, newKeys)
+            }
+        }
+
+        val codexItem = JCheckBoxMenuItem("Codex").apply {
+            isSelected = !currentKeys.contains(AgentSettingsService.MCP_BACKEND_ALL) &&
+                currentKeys.contains(AgentSettingsService.MCP_BACKEND_CODEX)
+            isEnabled = !allItem.isSelected
+            addActionListener {
+                val newKeys = mutableSetOf<String>()
+                if (isSelected) newKeys.add(AgentSettingsService.MCP_BACKEND_CODEX)
+                if (popup.components.filterIsInstance<JCheckBoxMenuItem>()
+                        .find { it.text == "Claude Code" }?.isSelected == true) {
+                    newKeys.add(AgentSettingsService.MCP_BACKEND_CLAUDE)
+                }
+                if (newKeys.isEmpty()) newKeys.add(AgentSettingsService.MCP_BACKEND_ALL)
+                updateBackends(row, newKeys)
+            }
+        }
+
+        // All 选中时禁用其他选项
+        allItem.addActionListener {
+            if (allItem.isSelected) {
+                claudeItem.isSelected = false
+                claudeItem.isEnabled = false
+                codexItem.isSelected = false
+                codexItem.isEnabled = false
+            } else {
+                claudeItem.isEnabled = true
+                codexItem.isEnabled = true
+            }
+        }
+
+        popup.add(allItem)
+        popup.addSeparator()
+        popup.add(claudeItem)
+        popup.add(codexItem)
+
+        // 在点击位置显示弹出菜单
+        popup.show(e.component, e.x, e.y)
+    }
+
+    /**
+     * 更新服务器的 Backends 配置
+     */
+    private fun updateBackends(row: Int, newBackends: Set<String>) {
+        if (row < builtInServers.size) {
+            builtInServers[row] = builtInServers[row].copy(enabledBackends = newBackends)
+        } else {
+            val customIndex = row - builtInServers.size
+            if (customIndex < customServers.size) {
+                customServers[customIndex] = customServers[customIndex].copy(enabledBackends = newBackends)
+            }
+        }
+        refreshTable()
     }
 
     /**
@@ -563,6 +663,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             instructions = settings.terminalInstructions,
             defaultInstructions = McpDefaults.TERMINAL_INSTRUCTIONS,
             disabledTools = if (settings.terminalDisableBuiltinBash) listOf("Bash") else emptyList(),
+            codexDisabledFeatures = if (settings.terminalDisableBuiltinBash) listOf("shell_tool") else emptyList(),
             hasDisableToolsToggle = true,
             terminalMaxOutputLines = settings.terminalMaxOutputLines,
             terminalMaxOutputChars = settings.terminalMaxOutputChars,
@@ -837,8 +938,10 @@ data class McpServerEntry(
     val jsonConfig: String = "",
     val instructions: String = "",
     val apiKey: String = "",
-    /** 启用此 MCP 时禁用的内置工具列表 */
+    /** 启用此 MCP 时禁用的 Claude Code 内置工具列表 */
     val disabledTools: List<String> = emptyList(),
+    /** 启用此 MCP 时禁用的 Codex features（如 "shell_tool"） */
+    val codexDisabledFeatures: List<String> = emptyList(),
     /** 默认系统提示词（内置 MCP 使用，只读） */
     val defaultInstructions: String = "",
     /** 是否有关联的禁用工具开关（如 JetBrains Terminal MCP 的 terminalDisableBuiltinBash） */

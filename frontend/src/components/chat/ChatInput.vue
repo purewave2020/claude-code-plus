@@ -55,23 +55,18 @@
 
       <!-- Active File Tag (当前打开的文件 - 由 IDEA 推送) -->
       <el-tooltip
-        v-if="shouldShowActiveFile"
+        v-if="hasActiveFile"
         :content="activeFileTooltip"
         placement="top"
         :show-after="300"
       >
         <div
           class="context-tag active-file-tag"
+          :class="{ 'active-file-disabled': activeFileDisabled }"
+          @click.stop="toggleActiveFileEnabled"
         >
           <span class="tag-file-name">{{ activeFileName }}</span>
           <span v-if="activeFileLineRange" class="tag-line-range">{{ activeFileLineRange }}</span>
-          <button
-            class="tag-remove"
-            :title="t('common.remove')"
-            @click.stop="dismissActiveFile"
-          >
-            ×
-          </button>
         </div>
       </el-tooltip>
 
@@ -86,16 +81,15 @@
         <div
           class="context-tag"
           :class="{
-            'image-tag': isImageContext(context),
-            'context-disabled': context.disabled
+            'image-tag': isImageContext(context)
           }"
-          @click.stop="handleContextClick(context)"
         >
           <!-- 图片：只显示缩略图，点击可预览 -->
           <template v-if="isImageContext(context)">
             <img
               :src="getContextImagePreviewUrl(context)"
               class="tag-image-preview"
+              @click.stop="openContextImagePreview(context)"
               alt="图片"
             >
           </template>
@@ -291,6 +285,7 @@
           :label="t('permission.mode.bypass')"
           :enabled="skipPermissionsValue"
           :disabled="!enabled"
+          :show-icon="false"
           :tooltip="t('permission.mode.bypassTooltip')"
           @toggle="handleSkipPermissionsChange"
         />
@@ -554,7 +549,6 @@ interface Emits {
   (e: 'stop'): void
   (e: 'context-add', context: ContextReference): void
   (e: 'context-remove', context: ContextReference): void
-  (e: 'context-toggle', context: ContextReference): void  // 切换启用/禁用
   (e: 'auto-cleanup-change', value: boolean): void
   (e: 'skip-permissions-change', skip: boolean): void
   (e: 'cancel'): void  // 取消编辑（仅 inline 模式）
@@ -936,14 +930,14 @@ const placeholderText = computed(() => {
   return props.placeholderText || ''
 })
 
-// 是否应该显示当前打开的文件标签（当有活跃文件且未被关闭时显示）
-const shouldShowActiveFile = computed(() => {
-  return currentActiveFile.value !== null && !activeFileDisabled.value
+// Active file tag is shown whenever we have an active file.
+const hasActiveFile = computed(() => {
+  return currentActiveFile.value !== null
 })
 
-// 当前活跃文件是否启用（显示时即启用）
+// Current active file enabled/disabled for sending.
 const activeFileEnabled = computed(() => {
-  return shouldShowActiveFile.value
+  return hasActiveFile.value && !activeFileDisabled.value
 })
 
 // 从路径中提取文件名
@@ -1352,23 +1346,10 @@ function removeContext(context: ContextReference) {
   emit('context-remove', context)
 }
 
-function handleContextClick(context: ContextReference) {
-  // 图片类型：打开预览
-  if (isImageContext(context)) {
-    openContextImagePreview(context)
-    return
-  }
-  // 非图片类型：切换启用/禁用状态
-  emit('context-toggle', context)
-}
-
-function toggleContext(context: ContextReference) {
-  emit('context-toggle', context)
-}
-
-// 关闭当前活跃文件标签
-function dismissActiveFile() {
-  activeFileDisabled.value = true
+// Toggle active file enabled/disabled
+function toggleActiveFileEnabled() {
+  if (!currentActiveFile.value) return
+  activeFileDisabled.value = !activeFileDisabled.value
 }
 
 function handleAutoCleanupChange(value: boolean) {
@@ -1968,6 +1949,16 @@ onUnmounted(() => {
   font-weight: 600;
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+.context-tag.active-file-tag.active-file-disabled {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.context-tag.active-file-tag.active-file-disabled .tag-file-name,
+.context-tag.active-file-tag.active-file-disabled .tag-line-range {
+  text-decoration: line-through;
 }
 
 /* 禁用状态的 context 标签 */
