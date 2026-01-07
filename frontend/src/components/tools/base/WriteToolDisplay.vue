@@ -35,7 +35,6 @@ import type { GenericToolCall } from '@/types/display'
 import CompactToolCard from '../CompactToolCard.vue'
 import { extractToolDisplayInfo } from '@/utils/toolDisplayInfo'
 import CodeSnippet from '../CodeSnippet.vue'
-import { isIdeEnvironment } from '@/services/jetbrainsApi'
 
 const { t } = useI18n()
 
@@ -44,8 +43,8 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-// IDE 环境默认折叠（可点击调用 IDEA），浏览器环境默认展开
-const expanded = ref(!isIdeEnvironment())
+// 默认折叠
+const expanded = ref(false)
 
 // 提取工具显示信息
 const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall, props.toolCall.result))

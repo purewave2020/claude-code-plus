@@ -83,7 +83,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-// 默认折叠，点击后展开查看详情
+// 默认折叠
 const expanded = ref(false)
 const expandedEdits = ref<Set<number>>(new Set())
 
