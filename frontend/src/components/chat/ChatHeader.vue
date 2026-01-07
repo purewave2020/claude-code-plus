@@ -212,10 +212,7 @@ async function handleReconnect() {
 
 async function handleResetSession() {
   closeSessionMenu()
-  // 确认对话框
-  if (!confirm(t('session.resetSessionConfirm'))) {
-    return
-  }
+  // IDEA 插件环境不支持 confirm 弹窗，直接执行重置
   await sessionStore.resetCurrentTab()
 }
 
