@@ -158,14 +158,15 @@ class JetBrainsFileMcpServerProviderImpl(private val project: Project) : JetBrai
     /**
      * 获取需要禁用的内置工具列表
      *
-     * 当 JetBrains File MCP 启用时，禁用内置的 Read、Write、Edit 工具，
+     * 当 JetBrains File MCP 启用且 jetbrainsFileDisableBuiltinTools 为 true 时，
+     * 禁用配置的内置工具（默认为 Read、Write、Edit），
      * 因为 JetBrains File MCP 提供相同功能且支持文件历史记录和 Diff 显示。
      */
     override fun getDisallowedBuiltinTools(): List<String> {
         val settings = AgentSettingsService.getInstance()
-        // 只有当 JetBrains File MCP 启用时才禁用内置文件操作工具
-        return if (settings.enableJetBrainsFileMcp) {
-            listOf("Read", "Write", "Edit")
+        // 只有当 JetBrains File MCP 启用且 jetbrainsFileDisableBuiltinTools 为 true 时才禁用内置工具
+        return if (settings.enableJetBrainsFileMcp && settings.jetbrainsFileDisableBuiltinTools) {
+            settings.getJetbrainsFileDisabledToolsList()
         } else {
             emptyList()
         }

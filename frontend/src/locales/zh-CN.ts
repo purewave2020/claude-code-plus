@@ -20,6 +20,7 @@ export default {
     yes: '是',
     no: '否',
     ok: '确定',
+    reset: '重置',
     pending: '等待',
     cancelled: '已取消',
     copyFailed: '复制失败',
@@ -221,6 +222,9 @@ export default {
   session: {
     defaultName: '会话 {time}',
     close: '关闭会话',
+    reloadSession: '重载会话',
+    resetSession: '清空会话',
+    resetSessionConfirm: '确定要清空当前会话吗？所有消息将被清除。',
     sessionId: '会话 ID',
     copyHint: '再次单击或双击复制',
     copySuccess: '会话 ID 已复制',

@@ -20,6 +20,7 @@ export default {
     yes: '예',
     no: '아니오',
     ok: '확인',
+    reset: '초기화',
     pending: '대기 중',
     cancelled: '취소됨',
     copyFailed: '복사 실패',
@@ -202,6 +203,9 @@ export default {
   },
   session: {
     defaultName: '세션 {time}',
+    reloadSession: '세션 다시 로드',
+    resetSession: '세션 초기화',
+    resetSessionConfirm: '이 세션을 초기화하시겠습니까? 모든 메시지가 삭제됩니다.',
     group: {
       today: '오늘',
       yesterday: '어제',

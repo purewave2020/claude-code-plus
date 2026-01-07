@@ -65,6 +65,13 @@
         >
           <span class="tag-file-name">{{ activeFileName }}</span>
           <span v-if="activeFileLineRange" class="tag-line-range">{{ activeFileLineRange }}</span>
+          <button
+            class="tag-remove"
+            :title="t('common.remove')"
+            @click.stop="dismissActiveFile"
+          >
+            ×
+          </button>
         </div>
       </el-tooltip>
 
@@ -79,7 +86,8 @@
         <div
           class="context-tag"
           :class="{
-            'image-tag': isImageContext(context)
+            'image-tag': isImageContext(context),
+            'context-disabled': context.disabled
           }"
           @click.stop="handleContextClick(context)"
         >
@@ -546,6 +554,7 @@ interface Emits {
   (e: 'stop'): void
   (e: 'context-add', context: ContextReference): void
   (e: 'context-remove', context: ContextReference): void
+  (e: 'context-toggle', context: ContextReference): void  // 切换启用/禁用
   (e: 'auto-cleanup-change', value: boolean): void
   (e: 'skip-permissions-change', skip: boolean): void
   (e: 'cancel'): void  // 取消编辑（仅 inline 模式）
@@ -927,12 +936,12 @@ const placeholderText = computed(() => {
   return props.placeholderText || ''
 })
 
-// 是否应该显示当前打开的文件标签（始终显示，禁用时仅影响发送）
+// 是否应该显示当前打开的文件标签（当有活跃文件且未被关闭时显示）
 const shouldShowActiveFile = computed(() => {
-  return currentActiveFile.value !== null
+  return currentActiveFile.value !== null && !activeFileDisabled.value
 })
 
-// 当前活跃文件是否启用（始终启用，只要有活跃文件）
+// 当前活跃文件是否启用（显示时即启用）
 const activeFileEnabled = computed(() => {
   return shouldShowActiveFile.value
 })
@@ -1349,13 +1358,17 @@ function handleContextClick(context: ContextReference) {
     openContextImagePreview(context)
     return
   }
-  // 文件类型：在 IDEA 中打开文件（使用与 Read 工具相同的 API）
-  if (isFileReference(context)) {
-    const filePath = context.fullPath || context.path || context.uri
-    if (filePath) {
-      jetbrainsBridge.openFile({ filePath })
-    }
-  }
+  // 非图片类型：切换启用/禁用状态
+  emit('context-toggle', context)
+}
+
+function toggleContext(context: ContextReference) {
+  emit('context-toggle', context)
+}
+
+// 关闭当前活跃文件标签
+function dismissActiveFile() {
+  activeFileDisabled.value = true
 }
 
 function handleAutoCleanupChange(value: boolean) {
@@ -1955,6 +1968,21 @@ onUnmounted(() => {
   font-weight: 600;
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+/* 禁用状态的 context 标签 */
+.context-tag.context-disabled {
+  opacity: 0.5;
+  border-style: dashed;
+  background: var(--theme-hover-background, #f6f8fa);
+}
+
+.context-tag.context-disabled .tag-text {
+  text-decoration: line-through;
+}
+
+.context-tag.context-disabled .tag-icon {
+  opacity: 0.6;
 }
 
 /* 图片标签的删除按钮 - 右上角叠加 */

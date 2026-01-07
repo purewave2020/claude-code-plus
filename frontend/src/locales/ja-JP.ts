@@ -20,6 +20,7 @@ export default {
     yes: 'はい',
     no: 'いいえ',
     ok: 'OK',
+    reset: 'リセット',
     pending: '保留中',
     cancelled: 'キャンセル済み',
     copyFailed: 'コピー失敗',
@@ -202,6 +203,9 @@ export default {
   },
   session: {
     defaultName: 'セッション {time}',
+    reloadSession: 'セッションを再読み込み',
+    resetSession: 'セッションをクリア',
+    resetSessionConfirm: 'このセッションをクリアしますか？すべてのメッセージが削除されます。',
     group: {
       today: '今日',
       yesterday: '昨日',

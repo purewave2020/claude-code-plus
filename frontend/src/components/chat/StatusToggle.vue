@@ -1,28 +1,34 @@
 <template>
-  <div
-    class="status-toggle"
-    :class="{
-      'is-enabled': enabled,
-      'is-disabled': disabled
-    }"
-    :title="tooltip"
-    @click="handleClick"
+  <el-tooltip
+    :content="tooltip"
+    placement="top"
+    :show-after="300"
+    :disabled="!tooltip"
   >
-    <span v-if="showIcon" class="toggle-icon">
-      <!-- 支持自定义图标 slot -->
-      <slot name="icon">
-        <!-- 默认图标 -->
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-          <path v-if="enabled" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-          <path v-else d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-        </svg>
-      </slot>
-    </span>
-    <span class="toggle-label">{{ label }}</span>
-    <span class="toggle-indicator">
-      <span :class="['dot', enabled ? 'active' : 'inactive']" />
-    </span>
-  </div>
+    <div
+      class="status-toggle"
+      :class="{
+        'is-enabled': enabled,
+        'is-disabled': disabled
+      }"
+      @click="handleClick"
+    >
+      <span v-if="showIcon" class="toggle-icon">
+        <!-- 支持自定义图标 slot -->
+        <slot name="icon">
+          <!-- 默认图标 -->
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path v-if="enabled" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            <path v-else d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+          </svg>
+        </slot>
+      </span>
+      <span class="toggle-label">{{ label }}</span>
+      <span class="toggle-switch" :class="{ on: enabled }">
+        <span class="toggle-thumb" />
+      </span>
+    </div>
+  </el-tooltip>
 </template>
 
 <script setup lang="ts">
@@ -101,25 +107,35 @@ function handleClick() {
   font-weight: 500;
 }
 
-.toggle-indicator {
-  display: flex;
-  align-items: center;
-  margin-left: 2px;
-}
-
-.dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
+/* Toggle Switch 样式 */
+.toggle-switch {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  background: var(--theme-border, #d0d7de);
+  border-radius: 8px;
+  margin-left: 4px;
   transition: background-color 0.2s ease;
+  flex-shrink: 0;
 }
 
-.dot.active {
+.toggle-switch.on {
   background: var(--theme-success, #22c55e);
 }
 
-.dot.inactive {
-  background: var(--theme-secondary-foreground, #9ca3af);
-  opacity: 0.5;
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.toggle-switch.on .toggle-thumb {
+  transform: translateX(12px);
 }
 </style>

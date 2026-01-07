@@ -90,6 +90,57 @@ const hasDetails = computed(() => Object.keys(params.value).length > 0 || hasRes
   gap: 12px;
 }
 
+/* 确保 Markdown 样式正确应用 */
+.result-content :deep(h1),
+.result-content :deep(h2),
+.result-content :deep(h3) {
+  margin-top: 8px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.result-content :deep(h2) {
+  font-size: 1.1em;
+  border-bottom: 1px solid var(--theme-border, #e1e4e8);
+  padding-bottom: 4px;
+}
+
+.result-content :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.result-content :deep(th),
+.result-content :deep(td) {
+  padding: 6px 10px;
+  border: 1px solid var(--theme-border, #e1e4e8);
+  text-align: left;
+}
+
+.result-content :deep(th) {
+  background: var(--theme-panel-background, #f6f8fa);
+  font-weight: 600;
+}
+
+.result-content :deep(tr:nth-child(2n)) {
+  background: var(--theme-panel-background, #f6f8fa);
+}
+
+.result-content :deep(strong) {
+  font-weight: 600;
+}
+
+.result-content :deep(em) {
+  font-style: italic;
+}
+
+.result-content :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--theme-border, #e1e4e8);
+  margin: 8px 0;
+}
+
 .section-title {
   font-size: 11px;
   font-weight: 600;

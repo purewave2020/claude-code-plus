@@ -88,6 +88,9 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var terminalReadTimeout: Int = 10,             // TerminalRead 默认超时时间（秒）
         var terminalDisableInteractive: Boolean = true, // 是否禁用交互式终端（TERM=dumb）
         var enableGitMcp: Boolean = false,             // Git MCP（VCS 集成，默认禁用）
+        // JetBrains File MCP 禁用内置工具配置
+        var jetbrainsFileDisableBuiltinTools: Boolean = true, // 启用 JetBrains File MCP 时禁用内置工具
+        var jetbrainsFileDisabledTools: String = "Read,Write,Edit", // 禁用的内置工具列表（逗号分隔）
         // MCP 工具调用超时配置（秒），0 表示永不超时
         var userInteractionMcpTimeout: Int = 0,        // User Interaction MCP 默认永不超时
         var jetbrainsMcpTimeout: Int = 60,             // JetBrains MCP 默认 60 秒
@@ -254,6 +257,32 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     var enableJetBrainsFileMcp: Boolean
         get() = state.enableJetBrainsFileMcp
         set(value) { state.enableJetBrainsFileMcp = value }
+
+    var jetbrainsFileDisableBuiltinTools: Boolean
+        get() = state.jetbrainsFileDisableBuiltinTools
+        set(value) { state.jetbrainsFileDisableBuiltinTools = value }
+
+    var jetbrainsFileDisabledTools: String
+        get() = state.jetbrainsFileDisabledTools
+        set(value) { state.jetbrainsFileDisabledTools = value }
+
+    /**
+     * 获取 JetBrains File MCP 需要禁用的内置工具列表
+     * @return 工具名称列表
+     */
+    fun getJetbrainsFileDisabledToolsList(): List<String> {
+        return state.jetbrainsFileDisabledTools
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
+
+    /**
+     * 设置 JetBrains File MCP 需要禁用的内置工具列表
+     */
+    fun setJetbrainsFileDisabledToolsList(tools: List<String>) {
+        state.jetbrainsFileDisabledTools = tools.joinToString(",")
+    }
 
     var enableContext7Mcp: Boolean
         get() = state.enableContext7Mcp
@@ -565,6 +594,13 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         state.jetbrainsMcpBackends = formatBackendKeys(keys)
     }
 
+    fun getJetbrainsFileMcpBackendKeys(): Set<String> =
+        resolveBackendKeys(state.jetbrainsFileMcpBackends)
+
+    fun setJetbrainsFileMcpBackendKeys(keys: Set<String>) {
+        state.jetbrainsFileMcpBackends = formatBackendKeys(keys)
+    }
+
     fun getContext7McpBackendKeys(): Set<String> =
         resolveBackendKeys(state.context7McpBackends)
 
@@ -602,6 +638,9 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
 
     fun getJetbrainsMcpProviders(): Set<AiAgentProvider> =
         toProviders(getJetbrainsMcpBackendKeys())
+
+    fun getJetbrainsFileMcpProviders(): Set<AiAgentProvider> =
+        toProviders(getJetbrainsFileMcpBackendKeys())
 
     fun getContext7McpProviders(): Set<AiAgentProvider> =
         toProviders(getContext7McpBackendKeys())

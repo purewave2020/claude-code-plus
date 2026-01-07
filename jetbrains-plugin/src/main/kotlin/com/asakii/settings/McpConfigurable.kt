@@ -311,29 +311,36 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         // 检查内置服务器配置
         val userInteractionEntry = builtInServers.find { it.name == "User Interaction MCP" }
         val jetbrainsEntry = builtInServers.find { it.name == "JetBrains IDE MCP" }
+        val jetbrainsFileEntry = builtInServers.find { it.name == "JetBrains File MCP" }
         val context7Entry = builtInServers.find { it.name == "Context7 MCP" }
-        val terminalEntry = builtInServers.find { it.name == "Terminal MCP" }
+        val terminalEntry = builtInServers.find { it.name == "JetBrains Terminal MCP" }
         val gitEntry = builtInServers.find { it.name == "JetBrains Git MCP" }
 
         if (userInteractionEntry?.enabled != settings.enableUserInteractionMcp ||
             jetbrainsEntry?.enabled != settings.enableJetBrainsMcp ||
+            jetbrainsFileEntry?.enabled != settings.enableJetBrainsFileMcp ||
             context7Entry?.enabled != settings.enableContext7Mcp ||
             terminalEntry?.enabled != settings.enableTerminalMcp ||
             gitEntry?.enabled != settings.enableGitMcp ||
             userInteractionEntry?.enabledBackends != settings.getUserInteractionMcpBackendKeys() ||
             jetbrainsEntry?.enabledBackends != settings.getJetbrainsMcpBackendKeys() ||
+            jetbrainsFileEntry?.enabledBackends != settings.getJetbrainsFileMcpBackendKeys() ||
             context7Entry?.enabledBackends != settings.getContext7McpBackendKeys() ||
             terminalEntry?.enabledBackends != settings.getTerminalMcpBackendKeys() ||
             gitEntry?.enabledBackends != settings.getGitMcpBackendKeys() ||
             context7Entry?.apiKey != settings.context7ApiKey ||
             userInteractionEntry?.instructions != settings.userInteractionInstructions ||
             jetbrainsEntry?.instructions != settings.jetbrainsInstructions ||
+            jetbrainsFileEntry?.instructions != settings.jetbrainsFileInstructions ||
             context7Entry?.instructions != settings.context7Instructions ||
             terminalEntry?.instructions != settings.terminalInstructions ||
             gitEntry?.instructions != settings.gitInstructions ||
             terminalEntry?.terminalMaxOutputLines != settings.terminalMaxOutputLines ||
             terminalEntry?.terminalMaxOutputChars != settings.terminalMaxOutputChars ||
-            terminalEntry?.terminalReadTimeout != settings.terminalReadTimeout
+            terminalEntry?.terminalReadTimeout != settings.terminalReadTimeout ||
+            // JetBrains File MCP 禁用工具配置
+            (jetbrainsFileEntry?.disabledTools?.isNotEmpty() ?: false) != settings.jetbrainsFileDisableBuiltinTools ||
+            jetbrainsFileEntry?.disabledTools != settings.getJetbrainsFileDisabledToolsList()
         ) {
             return true
         }
@@ -376,12 +383,14 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         // 保存内置服务器配置
         val userInteractionEntry = builtInServers.find { it.name == "User Interaction MCP" }
         val jetbrainsEntry = builtInServers.find { it.name == "JetBrains IDE MCP" }
+        val jetbrainsFileEntry = builtInServers.find { it.name == "JetBrains File MCP" }
         val context7Entry = builtInServers.find { it.name == "Context7 MCP" }
-        val terminalEntry = builtInServers.find { it.name == "Terminal MCP" }
+        val terminalEntry = builtInServers.find { it.name == "JetBrains Terminal MCP" }
         val gitEntry = builtInServers.find { it.name == "JetBrains Git MCP" }
 
         settings.enableUserInteractionMcp = userInteractionEntry?.enabled ?: true
         settings.enableJetBrainsMcp = jetbrainsEntry?.enabled ?: true
+        settings.enableJetBrainsFileMcp = jetbrainsFileEntry?.enabled ?: true
         settings.enableContext7Mcp = context7Entry?.enabled ?: false
         settings.enableGitMcp = gitEntry?.enabled ?: false
         settings.gitInstructions = gitEntry?.instructions ?: ""
@@ -391,6 +400,9 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         )
         settings.setJetbrainsMcpBackendKeys(
             jetbrainsEntry?.enabledBackends ?: setOf(AgentSettingsService.MCP_BACKEND_ALL)
+        )
+        settings.setJetbrainsFileMcpBackendKeys(
+            jetbrainsFileEntry?.enabledBackends ?: setOf(AgentSettingsService.MCP_BACKEND_ALL)
         )
         settings.setContext7McpBackendKeys(
             context7Entry?.enabledBackends ?: setOf(AgentSettingsService.MCP_BACKEND_ALL)
@@ -404,6 +416,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         settings.context7ApiKey = context7Entry?.apiKey ?: ""
         settings.userInteractionInstructions = userInteractionEntry?.instructions ?: ""
         settings.jetbrainsInstructions = jetbrainsEntry?.instructions ?: ""
+        settings.jetbrainsFileInstructions = jetbrainsFileEntry?.instructions ?: ""
         settings.context7Instructions = context7Entry?.instructions ?: ""
         settings.terminalInstructions = terminalEntry?.instructions ?: ""
         settings.terminalMaxOutputLines = terminalEntry?.terminalMaxOutputLines ?: 500
@@ -411,9 +424,13 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         settings.terminalDefaultShell = terminalEntry?.terminalDefaultShell ?: ""
         settings.terminalAvailableShells = terminalEntry?.terminalAvailableShells ?: ""
         settings.terminalReadTimeout = terminalEntry?.terminalReadTimeout ?: 30
+        // 保存 JetBrains File MCP 禁用工具配置
+        settings.jetbrainsFileDisableBuiltinTools = (jetbrainsFileEntry?.disabledTools?.isNotEmpty() ?: false)
+        settings.setJetbrainsFileDisabledToolsList(jetbrainsFileEntry?.disabledTools ?: listOf("Read", "Write", "Edit"))
         // 保存超时配置
         settings.userInteractionMcpTimeout = userInteractionEntry?.toolTimeoutSec ?: 0
         settings.jetbrainsMcpTimeout = jetbrainsEntry?.toolTimeoutSec ?: 60
+        settings.jetbrainsFileMcpTimeout = jetbrainsFileEntry?.toolTimeoutSec ?: 60
         settings.context7McpTimeout = context7Entry?.toolTimeoutSec ?: 60
         settings.terminalMcpTimeout = terminalEntry?.toolTimeoutSec ?: 60
         settings.gitMcpTimeout = gitEntry?.toolTimeoutSec ?: 60
@@ -481,6 +498,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
 
         val userInteractionBackends = settings.getUserInteractionMcpBackendKeys()
         val jetbrainsBackends = settings.getJetbrainsMcpBackendKeys()
+        val jetbrainsFileBackends = settings.getJetbrainsFileMcpBackendKeys()
         val context7Backends = settings.getContext7McpBackendKeys()
         val terminalBackends = settings.getTerminalMcpBackendKeys()
         val gitBackends = settings.getGitMcpBackendKeys()
@@ -511,6 +529,19 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             toolTimeoutSec = settings.jetbrainsMcpTimeout
         ))
         builtInServers.add(McpServerEntry(
+            name = "JetBrains File MCP",
+            enabled = settings.enableJetBrainsFileMcp,
+            enabledBackends = jetbrainsFileBackends,
+            level = McpServerLevel.BUILTIN,
+            configSummary = "File read/write/edit operations",
+            isBuiltIn = true,
+            instructions = settings.jetbrainsFileInstructions,
+            defaultInstructions = McpDefaults.JETBRAINS_FILE_INSTRUCTIONS,
+            disabledTools = if (settings.jetbrainsFileDisableBuiltinTools) settings.getJetbrainsFileDisabledToolsList() else emptyList(),
+            hasDisableToolsToggle = true,
+            toolTimeoutSec = settings.jetbrainsFileMcpTimeout
+        ))
+        builtInServers.add(McpServerEntry(
             name = "Context7 MCP",
             enabled = settings.enableContext7Mcp,
             enabledBackends = context7Backends,
@@ -523,7 +554,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             toolTimeoutSec = settings.context7McpTimeout
         ))
         builtInServers.add(McpServerEntry(
-            name = "Terminal MCP",
+            name = "JetBrains Terminal MCP",
             enabled = settings.enableTerminalMcp,
             enabledBackends = terminalBackends,
             level = McpServerLevel.BUILTIN,
@@ -810,17 +841,17 @@ data class McpServerEntry(
     val disabledTools: List<String> = emptyList(),
     /** 默认系统提示词（内置 MCP 使用，只读） */
     val defaultInstructions: String = "",
-    /** 是否有关联的禁用工具开关（如 Terminal MCP 的 terminalDisableBuiltinBash） */
+    /** 是否有关联的禁用工具开关（如 JetBrains Terminal MCP 的 terminalDisableBuiltinBash） */
     val hasDisableToolsToggle: Boolean = false,
-    /** Terminal MCP: 输出最大行数 */
+    /** JetBrains Terminal MCP: 输出最大行数 */
     val terminalMaxOutputLines: Int = 500,
-    /** Terminal MCP: 输出最大字符数 */
+    /** JetBrains Terminal MCP: 输出最大字符数 */
     val terminalMaxOutputChars: Int = 50000,
-    /** Terminal MCP: 默认 shell（空字符串表示使用系统默认） */
+    /** JetBrains Terminal MCP: 默认 shell（空字符串表示使用系统默认） */
     val terminalDefaultShell: String = "",
-    /** Terminal MCP: 可用 shell 列表（逗号分隔） */
+    /** JetBrains Terminal MCP: 可用 shell 列表（逗号分隔） */
     val terminalAvailableShells: String = "",
-    /** Terminal MCP: TerminalRead 默认超时时间（秒） */
+    /** JetBrains Terminal MCP: TerminalRead 默认超时时间（秒） */
     val terminalReadTimeout: Int = 30,
     /** 工具调用超时时间（秒），0 表示永不超时，默认 60 秒 */
     val toolTimeoutSec: Int = 60
@@ -939,16 +970,16 @@ class BuiltInMcpServerDialog(
     private var disabledToolsPanel: JPanel? = null
     private val disabledToolInput = JBTextField(20)
 
-    // Terminal MCP 截断配置
+    // JetBrains Terminal MCP 截断配置
     private val maxOutputLinesField = JBTextField(entry.terminalMaxOutputLines.toString(), 8)
     private val maxOutputCharsField = JBTextField(entry.terminalMaxOutputChars.toString(), 8)
-    // Terminal MCP 超时配置
+    // JetBrains Terminal MCP 超时配置
     private val readTimeoutField = JBTextField(entry.terminalReadTimeout.toString(), 6)
 
     // 通用工具调用超时配置（0 表示永不超时）
     private val toolTimeoutField = JBTextField(entry.toolTimeoutSec.toString(), 6)
 
-    // Terminal MCP Shell 配置
+    // JetBrains Terminal MCP Shell 配置
     // 动态检测已安装的 shell
     private val allShellTypes = AgentSettingsService.getInstance().detectInstalledShells()
     private val defaultShellCombo = ComboBox<String>()
@@ -1090,8 +1121,8 @@ class BuiltInMcpServerDialog(
             topPanel.add(Box.createVerticalStrut(8))
         }
 
-        // Terminal MCP 的 Shell 配置
-        if (entry.name == "Terminal MCP") {
+        // JetBrains Terminal MCP 的 Shell 配置
+        if (entry.name == "JetBrains Terminal MCP") {
             val shellConfigLabel = JBLabel("Shell Configuration:").apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
             }
@@ -1155,8 +1186,8 @@ class BuiltInMcpServerDialog(
             topPanel.add(Box.createVerticalStrut(8))
         }
 
-        // Terminal MCP 的截断配置
-        if (entry.name == "Terminal MCP") {
+        // JetBrains Terminal MCP 的截断配置
+        if (entry.name == "JetBrains Terminal MCP") {
             val truncateLabel = JBLabel("Output Truncation:").apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
             }
@@ -1291,7 +1322,7 @@ class BuiltInMcpServerDialog(
         }
 
         // 获取选中的可用 shells
-        val selectedShells = if (entry.name == "Terminal MCP") {
+        val selectedShells = if (entry.name == "JetBrains Terminal MCP") {
             availableShellCheckboxes
                 .filter { it.value.isSelected }
                 .keys
@@ -1299,7 +1330,7 @@ class BuiltInMcpServerDialog(
         } else emptyList()
 
         // 如果全部选中，存储空字符串（表示使用全部）
-        val availableShellsValue = if (entry.name == "Terminal MCP") {
+        val availableShellsValue = if (entry.name == "JetBrains Terminal MCP") {
             if (selectedShells.size == allShellTypes.size) "" else selectedShells.joinToString(",")
         } else entry.terminalAvailableShells
 
@@ -1309,17 +1340,17 @@ class BuiltInMcpServerDialog(
             instructions = customInstructions,
             apiKey = if (entry.name == "Context7 MCP") apiKeyField.text else entry.apiKey,
             disabledTools = if (defaultDisabledTools.isNotEmpty()) disabledToolsList.toList() else entry.disabledTools,
-            terminalMaxOutputLines = if (entry.name == "Terminal MCP") {
+            terminalMaxOutputLines = if (entry.name == "JetBrains Terminal MCP") {
                 maxOutputLinesField.text.toIntOrNull() ?: 500
             } else entry.terminalMaxOutputLines,
-            terminalMaxOutputChars = if (entry.name == "Terminal MCP") {
+            terminalMaxOutputChars = if (entry.name == "JetBrains Terminal MCP") {
                 maxOutputCharsField.text.toIntOrNull() ?: 50000
             } else entry.terminalMaxOutputChars,
-            terminalDefaultShell = if (entry.name == "Terminal MCP") {
+            terminalDefaultShell = if (entry.name == "JetBrains Terminal MCP") {
                 defaultShellCombo.selectedItem as? String ?: ""
             } else entry.terminalDefaultShell,
             terminalAvailableShells = availableShellsValue,
-            terminalReadTimeout = if (entry.name == "Terminal MCP") {
+            terminalReadTimeout = if (entry.name == "JetBrains Terminal MCP") {
                 readTimeoutField.text.toIntOrNull() ?: 30
             } else entry.terminalReadTimeout,
             toolTimeoutSec = (toolTimeoutField.text.toIntOrNull() ?: 60).coerceAtLeast(0)

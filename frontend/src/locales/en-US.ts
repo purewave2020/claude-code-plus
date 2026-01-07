@@ -20,6 +20,7 @@ export default {
     yes: 'Yes',
     no: 'No',
     ok: 'OK',
+    reset: 'Reset',
     pending: 'Pending',
     cancelled: 'Cancelled',
     copyFailed: 'Copy failed',
@@ -221,6 +222,9 @@ export default {
   session: {
     defaultName: 'Session {time}',
     close: 'Close session',
+    reloadSession: 'Reload Session',
+    resetSession: 'Reset Session',
+    resetSessionConfirm: 'Are you sure you want to reset this session? All messages will be cleared.',
     sessionId: 'Session ID',
     copyHint: 'Click again or double-click to copy',
     copySuccess: 'Session ID copied',

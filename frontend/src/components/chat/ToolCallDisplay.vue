@@ -20,7 +20,9 @@ interface Props {
 const props = defineProps<Props>()
 
 const isJetBrainsMcpTool = computed(() => {
-  return props.toolCall.toolName?.startsWith('mcp__jetbrains__')
+  const name = props.toolCall.toolName || ''
+  // 匹配所有 jetbrains 相关的 MCP 工具：jetbrains-lsp、jetbrains-file、jetbrains-git 等
+  return name.startsWith('mcp__jetbrains-') || name.startsWith('mcp__jetbrains__')
 })
 
 const isTerminalMcpTool = computed(() => {

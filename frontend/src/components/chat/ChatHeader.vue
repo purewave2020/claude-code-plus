@@ -57,23 +57,47 @@
           </div>
         </div>
       </div>
-      <el-tooltip content="重载会话" placement="bottom" :show-after="200">
-        <span class="icon-tooltip-wrapper">
-          <button
-            class="icon-btn"
-            type="button"
-            aria-label="重载会话"
-            :disabled="!canReconnect"
-            :class="{ loading: isReconnecting }"
-            @click="handleReconnect"
+      <!-- 会话操作下拉菜单 -->
+      <div class="session-menu-trigger" @click="toggleSessionMenu">
+        <button
+          class="icon-btn"
+          type="button"
+          :class="{ loading: isReconnecting }"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 1 1-3-6.7"/>
+            <polyline points="21 3 21 9 15 9"/>
+          </svg>
+        </button>
+        <svg class="dropdown-arrow" width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
+          <path d="M1 2.5L4 5.5L7 2.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        </svg>
+        <!-- 下拉菜单 -->
+        <div v-if="showSessionMenu" class="session-menu">
+          <div
+            class="session-menu-item"
+            :class="{ disabled: !canReconnect }"
+            @click.stop="canReconnect && handleReconnect()"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 12a9 9 0 1 1-3-6.7"/>
               <polyline points="21 3 21 9 15 9"/>
             </svg>
-          </button>
-        </span>
-      </el-tooltip>
+            <span>{{ t('session.reloadSession') }}</span>
+          </div>
+          <div
+            class="session-menu-item danger"
+            @click.stop="handleResetSession"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18"/>
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+            </svg>
+            <span>{{ t('session.resetSession') }}</span>
+          </div>
+        </div>
+      </div>
       <button
         class="icon-btn server-btn"
         type="button"
@@ -116,6 +140,7 @@ import BackendIcon from '@/components/icons/BackendIcon.vue'
 import ThemeSwitcher from '@/components/toolbar/ThemeSwitcher.vue'
 import LanguageSwitcher from '@/components/toolbar/LanguageSwitcher.vue'
 import McpStatusPopup from '@/components/toolbar/McpStatusPopup.vue'
+import { useI18n } from '@/composables/useI18n'
 
 // MCP 状态弹窗
 const showMcpStatus = ref(false)
@@ -123,10 +148,16 @@ const fetchedMcpServers = ref<Array<{ name: string; status: string }> | null>(nu
 const mcpRefreshIntervalMs = 5000
 let mcpRefreshTimer: ReturnType<typeof setInterval> | null = null
 
+// i18n
+const { t } = useI18n()
+
 // 后端切换菜单
 const showBackendMenu = ref(false)
 const availableBackends = computed(() => getAvailableBackends())
 const isReconnecting = ref(false)
+
+// 会话操作菜单
+const showSessionMenu = ref(false)
 
 const canReconnect = computed(() => {
   const tab = sessionStore.currentTab
@@ -141,6 +172,14 @@ function toggleBackendMenu() {
 
 function closeBackendMenu() {
   showBackendMenu.value = false
+}
+
+function toggleSessionMenu() {
+  showSessionMenu.value = !showSessionMenu.value
+}
+
+function closeSessionMenu() {
+  showSessionMenu.value = false
 }
 
 async function handleSwitchBackend(newBackend: BackendType) {
@@ -159,6 +198,7 @@ async function handleSwitchBackend(newBackend: BackendType) {
 }
 
 async function handleReconnect() {
+  closeSessionMenu()
   const tab = sessionStore.currentTab
   if (!tab || isReconnecting.value) return
   isReconnecting.value = true
@@ -170,11 +210,23 @@ async function handleReconnect() {
   }
 }
 
+async function handleResetSession() {
+  closeSessionMenu()
+  // 确认对话框
+  if (!confirm(t('session.resetSessionConfirm'))) {
+    return
+  }
+  await sessionStore.resetCurrentTab()
+}
+
 // 点击外部关闭菜单
 function handleClickOutside(event: MouseEvent) {
   const target = event.target as HTMLElement
   if (!target.closest('.backend-switcher')) {
     closeBackendMenu()
+  }
+  if (!target.closest('.session-menu-trigger')) {
+    closeSessionMenu()
   }
 }
 
@@ -551,5 +603,71 @@ function handleRename(tabId: string, newName: string) {
   margin-left: auto;
   color: var(--theme-accent, #0366d6);
   font-weight: bold;
+}
+
+/* 会话操作菜单 */
+.session-menu-trigger {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.session-menu-trigger:hover {
+  background: var(--theme-hover-background, rgba(0, 0, 0, 0.04));
+}
+
+.session-menu-trigger .dropdown-arrow {
+  color: var(--theme-muted-foreground, #656d76);
+}
+
+.session-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  background: var(--theme-card-background, #ffffff);
+  border: 1px solid var(--theme-border, #d0d7de);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow: hidden;
+  animation: menuFadeIn 0.15s ease;
+}
+
+.session-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--theme-foreground, #24292e);
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.session-menu-item:hover {
+  background: var(--theme-hover-background, rgba(0, 0, 0, 0.04));
+}
+
+.session-menu-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.session-menu-item.disabled:hover {
+  background: transparent;
+}
+
+.session-menu-item.danger {
+  color: var(--theme-error, #dc3545);
+}
+
+.session-menu-item.danger:hover {
+  background: rgba(220, 53, 69, 0.08);
 }
 </style>
