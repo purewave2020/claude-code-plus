@@ -32,6 +32,11 @@ class CodexAppServerStreamAdapter(
     private var currentSessionId: String? = null
     private var lastUsage: ThreadTokenUsage? = null
 
+    // 累积文本和思考内容，用于在 TurnCompleted 时发送 AssistantMessageEvent
+    private val accumulatedText = StringBuilder()
+    private val accumulatedThinking = StringBuilder()
+    private var currentMessageId: String? = null
+
     fun convert(event: AppServerEvent): List<NormalizedStreamEvent> {
         val result = mutableListOf<NormalizedStreamEvent>()
         when (event) {
@@ -45,6 +50,10 @@ class CodexAppServerStreamAdapter(
                 indexCounter = 0
                 itemIdToIndex.clear()
                 lastUsage = null
+                // 重置累积器
+                accumulatedText.clear()
+                accumulatedThinking.clear()
+                currentMessageId = event.turn.id
 
                 val sessionId = resolveSessionId()
                 result += MessageStartedEvent(
@@ -89,6 +98,8 @@ class CodexAppServerStreamAdapter(
                         contentType = "text"
                     )
                 }
+                // 累积文本内容
+                accumulatedText.append(event.delta)
                 result += ContentDeltaEvent(
                     provider = AiAgentProvider.CODEX,
                     index = index,
@@ -105,6 +116,8 @@ class CodexAppServerStreamAdapter(
                         contentType = "thinking"
                     )
                 }
+                // 累积思考内容
+                accumulatedThinking.append(event.delta)
                 result += ContentDeltaEvent(
                     provider = AiAgentProvider.CODEX,
                     index = index,
@@ -156,6 +169,16 @@ class CodexAppServerStreamAdapter(
                     }
                     TurnStatus.Completed,
                     TurnStatus.InProgress -> {
+                        // 发送 AssistantMessageEvent，包含累积的文本和思考内容
+                        val contentBlocks = buildContentBlocks()
+                        if (contentBlocks.isNotEmpty()) {
+                            result += AssistantMessageEvent(
+                                provider = AiAgentProvider.CODEX,
+                                id = currentMessageId,
+                                content = contentBlocks,
+                                tokenUsage = usage
+                            )
+                        }
                         result += TurnCompletedEvent(
                             provider = AiAgentProvider.CODEX,
                             usage = usage
@@ -548,6 +571,22 @@ class CodexAppServerStreamAdapter(
         if (existing != null) return existing to false
         val index = nextIndexForItem(itemId)
         return index to true
+    }
+
+    /**
+     * 构建内容块列表，包含累积的思考内容和文本内容
+     */
+    private fun buildContentBlocks(): List<UnifiedContentBlock> {
+        val blocks = mutableListOf<UnifiedContentBlock>()
+        // 思考内容放在前面
+        if (accumulatedThinking.isNotEmpty()) {
+            blocks.add(ThinkingContent(accumulatedThinking.toString()))
+        }
+        // 文本内容
+        if (accumulatedText.isNotEmpty()) {
+            blocks.add(TextContent(accumulatedText.toString()))
+        }
+        return blocks
     }
 }
 

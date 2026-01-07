@@ -958,6 +958,11 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     fun getCodexBuiltInModels(): List<ModelInfo> {
         return listOf(
             ModelInfo(
+                modelId = "gpt-5.2-codex-max",
+                displayName = "gpt-5.2-codex-max",
+                isBuiltIn = true
+            ),
+            ModelInfo(
                 modelId = "gpt-5.2-codex",
                 displayName = "gpt-5.2-codex",
                 isBuiltIn = true

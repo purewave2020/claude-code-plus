@@ -25,6 +25,7 @@ import java.awt.event.MouseEvent
 import javax.swing.*
 import javax.swing.table.AbstractTableModel
 import javax.swing.table.DefaultTableCellRenderer
+import com.asakii.ai.agent.sdk.CodexFeatures
 
 /**
  * MCP 配置页面 - 列表形式
@@ -438,6 +439,9 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             terminalEntry?.terminalMaxOutputLines != settings.terminalMaxOutputLines ||
             terminalEntry?.terminalMaxOutputChars != settings.terminalMaxOutputChars ||
             terminalEntry?.terminalReadTimeout != settings.terminalReadTimeout ||
+            // Terminal MCP 禁用工具配置（Bash 对应 Claude Code，shell_tool 对应 Codex）
+            ((terminalEntry?.disabledTools?.contains("Bash") == true) ||
+                (terminalEntry?.codexDisabledFeatures?.contains(CodexFeatures.SHELL_TOOL) == true)) != settings.terminalDisableBuiltinBash ||
             // JetBrains File MCP 禁用工具配置
             (jetbrainsFileEntry?.disabledTools?.isNotEmpty() ?: false) != settings.jetbrainsFileDisableBuiltinTools ||
             jetbrainsFileEntry?.disabledTools != settings.getJetbrainsFileDisabledToolsList()
@@ -524,6 +528,10 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         settings.terminalDefaultShell = terminalEntry?.terminalDefaultShell ?: ""
         settings.terminalAvailableShells = terminalEntry?.terminalAvailableShells ?: ""
         settings.terminalReadTimeout = terminalEntry?.terminalReadTimeout ?: 30
+        // 保存 Terminal MCP 禁用工具配置（Bash 对应 Claude Code，shell_tool 对应 Codex）
+        // 如果任一列表包含相应的禁用项，则启用禁用开关
+        settings.terminalDisableBuiltinBash = (terminalEntry?.disabledTools?.contains("Bash") == true) ||
+            (terminalEntry?.codexDisabledFeatures?.contains(CodexFeatures.SHELL_TOOL) == true)
         // 保存 JetBrains File MCP 禁用工具配置
         settings.jetbrainsFileDisableBuiltinTools = (jetbrainsFileEntry?.disabledTools?.isNotEmpty() ?: false)
         settings.setJetbrainsFileDisabledToolsList(jetbrainsFileEntry?.disabledTools ?: listOf("Read", "Write", "Edit"))
@@ -638,6 +646,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             instructions = settings.jetbrainsFileInstructions,
             defaultInstructions = McpDefaults.JETBRAINS_FILE_INSTRUCTIONS,
             disabledTools = if (settings.jetbrainsFileDisableBuiltinTools) settings.getJetbrainsFileDisabledToolsList() else emptyList(),
+            codexDisabledFeatures = if (settings.jetbrainsFileDisableBuiltinTools) listOf(CodexFeatures.APPLY_PATCH_FREEFORM) else emptyList(),
             hasDisableToolsToggle = true,
             toolTimeoutSec = settings.jetbrainsFileMcpTimeout
         ))
@@ -663,7 +672,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             instructions = settings.terminalInstructions,
             defaultInstructions = McpDefaults.TERMINAL_INSTRUCTIONS,
             disabledTools = if (settings.terminalDisableBuiltinBash) listOf("Bash") else emptyList(),
-            codexDisabledFeatures = if (settings.terminalDisableBuiltinBash) listOf("shell_tool") else emptyList(),
+            codexDisabledFeatures = if (settings.terminalDisableBuiltinBash) listOf(CodexFeatures.SHELL_TOOL) else emptyList(),
             hasDisableToolsToggle = true,
             terminalMaxOutputLines = settings.terminalMaxOutputLines,
             terminalMaxOutputChars = settings.terminalMaxOutputChars,
@@ -1073,6 +1082,12 @@ class BuiltInMcpServerDialog(
     private var disabledToolsPanel: JPanel? = null
     private val disabledToolInput = JBTextField(20)
 
+    // Codex 禁用 features 配置（标签选择）
+    private val defaultCodexDisabledFeatures = entry.codexDisabledFeatures.toList()
+    private val codexDisabledFeaturesList = entry.codexDisabledFeatures.toMutableList()
+    private var codexDisabledFeaturesPanel: JPanel? = null
+    private val codexDisabledFeaturesInput = JBTextField(20)
+
     // JetBrains Terminal MCP 截断配置
     private val maxOutputLinesField = JBTextField(entry.terminalMaxOutputLines.toString(), 8)
     private val maxOutputCharsField = JBTextField(entry.terminalMaxOutputChars.toString(), 8)
@@ -1134,6 +1149,25 @@ class BuiltInMcpServerDialog(
         topPanel.add(enablePanel)
         topPanel.add(Box.createVerticalStrut(8))
 
+        // Backends 选择器
+        val backendLabel = JBLabel("Enabled Backends:").apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+        }
+        topPanel.add(backendLabel)
+        topPanel.add(Box.createVerticalStrut(4))
+        topPanel.add(backendSelection.panel.apply { alignmentX = JPanel.LEFT_ALIGNMENT })
+        topPanel.add(Box.createVerticalStrut(4))
+        topPanel.add(backendSelection.hint.apply { alignmentX = JPanel.LEFT_ALIGNMENT })
+        topPanel.add(Box.createVerticalStrut(8))
+
+        // 根据启用状态更新 Backends 选择器
+        fun updateBackendSelectionState(enabled: Boolean) {
+            backendSelection.panel.components.forEach { it.isEnabled = enabled }
+            backendSelection.hint.isEnabled = enabled
+        }
+        updateBackendSelectionState(enableCheckbox.isSelected)
+        enableCheckbox.addActionListener { updateBackendSelectionState(enableCheckbox.isSelected) }
+
         // Context7 的 API Key
         if (entry.name == "Context7 MCP") {
             val apiKeyPanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
@@ -1145,8 +1179,8 @@ class BuiltInMcpServerDialog(
             topPanel.add(Box.createVerticalStrut(8))
         }
 
-        // 禁用工具配置（标签选择界面）
-        if (defaultDisabledTools.isNotEmpty()) {
+        // 禁用工具配置（标签选择界面）- Claude Code built-in tools
+        if (defaultDisabledTools.isNotEmpty() || entry.hasDisableToolsToggle) {
             val disabledToolsLabel = JBLabel("Disables Claude Code built-in tools when enabled:").apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 foreground = JBColor(0x1976D2, 0x6BA3D6)
@@ -1221,6 +1255,85 @@ class BuiltInMcpServerDialog(
                 add(JBLabel("<html><font color='#666666' size='2'>Leave empty to not disable any built-in tools</font></html>"))
             }
             topPanel.add(toolsButtonPanel)
+            topPanel.add(Box.createVerticalStrut(8))
+        }
+
+        // Codex disabled features 配置（标签选择界面）
+        if (defaultCodexDisabledFeatures.isNotEmpty() || entry.hasDisableToolsToggle) {
+            val codexLabel = JBLabel("Disables Codex features when enabled:").apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                foreground = JBColor(0x388E3C, 0x81C784)  // 绿色主题，区别于 Claude Code 的蓝色
+            }
+            topPanel.add(codexLabel)
+            topPanel.add(Box.createVerticalStrut(4))
+
+            // 标签容器
+            val codexContainer = JPanel(BorderLayout()).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+            }
+
+            // 标签流式布局面板
+            codexDisabledFeaturesPanel = JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+            }
+
+            // 初始化已有的标签
+            codexDisabledFeaturesList.forEach { addCodexDisabledFeatureTag(it) }
+
+            // 添加 feature 的输入行
+            val addCodexButton = JButton("+").apply {
+                preferredSize = Dimension(40, codexDisabledFeaturesInput.preferredSize.height)
+                toolTipText = "Add Codex feature to disable"
+            }
+
+            val addCodexAction = {
+                val featureName = codexDisabledFeaturesInput.text.trim()
+                if (featureName.isNotEmpty() && !codexDisabledFeaturesList.contains(featureName)) {
+                    addCodexDisabledFeatureTag(featureName)
+                    codexDisabledFeaturesInput.text = ""
+                }
+            }
+
+            addCodexButton.addActionListener { addCodexAction() }
+            codexDisabledFeaturesInput.addActionListener { addCodexAction() }
+
+            val codexInputRow = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(codexDisabledFeaturesInput)
+                add(addCodexButton)
+                add(JBLabel("<html><font color='gray' size='-1'>Type feature name, then click + or press Enter</font></html>"))
+            }
+
+            codexContainer.add(codexDisabledFeaturesPanel!!, BorderLayout.CENTER)
+            codexContainer.add(codexInputRow, BorderLayout.SOUTH)
+
+            val codexScrollPane = JBScrollPane(codexContainer).apply {
+                preferredSize = Dimension(500, 70)
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                border = BorderFactory.createLineBorder(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground())
+                horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+            }
+            topPanel.add(codexScrollPane)
+            topPanel.add(Box.createVerticalStrut(4))
+
+            // Reset 按钮
+            val resetCodexButton = JButton("Reset").apply {
+                toolTipText = "Reset to default: ${defaultCodexDisabledFeatures.joinToString(", ").ifEmpty { "(none)" }}"
+                addActionListener {
+                    codexDisabledFeaturesList.clear()
+                    codexDisabledFeaturesPanel?.removeAll()
+                    defaultCodexDisabledFeatures.forEach { addCodexDisabledFeatureTag(it) }
+                    codexDisabledFeaturesPanel?.revalidate()
+                    codexDisabledFeaturesPanel?.repaint()
+                }
+            }
+            val codexButtonPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(resetCodexButton)
+                add(Box.createHorizontalStrut(8))
+                add(JBLabel("<html><font color='#666666' size='2'>Leave empty to not disable any Codex features</font></html>"))
+            }
+            topPanel.add(codexButtonPanel)
             topPanel.add(Box.createVerticalStrut(8))
         }
 
@@ -1416,6 +1529,48 @@ class BuiltInMcpServerDialog(
         disabledToolsPanel?.repaint()
     }
 
+    /**
+     * 添加 Codex 禁用 feature 标签
+     */
+    private fun addCodexDisabledFeatureTag(featureName: String) {
+        if (!codexDisabledFeaturesList.contains(featureName)) {
+            codexDisabledFeaturesList.add(featureName)
+        }
+
+        val tagPanel = JPanel(FlowLayout(FlowLayout.LEFT, 2, 0)).apply {
+            border = BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(JBColor(0x388E3C, 0x81C784), 1, true),  // 绿色边框
+                JBUI.Borders.empty(2, 6, 2, 4)
+            )
+            background = JBColor(0xE8F5E9, 0x1B3B1B)  // 浅绿色背景
+            isOpaque = true
+        }
+
+        val label = JBLabel(featureName).apply {
+            font = font.deriveFont(11f)
+        }
+
+        val removeBtn = JBLabel("×").apply {
+            font = font.deriveFont(Font.BOLD, 12f)
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            toolTipText = "Remove"
+        }
+        removeBtn.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) {
+                codexDisabledFeaturesList.remove(featureName)
+                codexDisabledFeaturesPanel?.remove(tagPanel)
+                codexDisabledFeaturesPanel?.revalidate()
+                codexDisabledFeaturesPanel?.repaint()
+            }
+        })
+
+        tagPanel.add(label)
+        tagPanel.add(removeBtn)
+        codexDisabledFeaturesPanel?.add(tagPanel)
+        codexDisabledFeaturesPanel?.revalidate()
+        codexDisabledFeaturesPanel?.repaint()
+    }
+
     fun getServerEntry(): McpServerEntry {
         // 如果内容与默认值相同，存储空字符串（表示使用默认值）
         val customInstructions = if (instructionsArea.text.trim() == entry.defaultInstructions.trim()) {
@@ -1442,7 +1597,8 @@ class BuiltInMcpServerDialog(
             enabledBackends = backendSelection.getSelectedKeys(),
             instructions = customInstructions,
             apiKey = if (entry.name == "Context7 MCP") apiKeyField.text else entry.apiKey,
-            disabledTools = if (defaultDisabledTools.isNotEmpty()) disabledToolsList.toList() else entry.disabledTools,
+            disabledTools = if (defaultDisabledTools.isNotEmpty() || entry.hasDisableToolsToggle) disabledToolsList.toList() else entry.disabledTools,
+            codexDisabledFeatures = if (defaultCodexDisabledFeatures.isNotEmpty() || entry.hasDisableToolsToggle) codexDisabledFeaturesList.toList() else entry.codexDisabledFeatures,
             terminalMaxOutputLines = if (entry.name == "JetBrains Terminal MCP") {
                 maxOutputLinesField.text.toIntOrNull() ?: 500
             } else entry.terminalMaxOutputLines,
