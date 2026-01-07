@@ -46,6 +46,7 @@ export type { ContextDisplayType } from './display'
  * 图片引用（扩展 ContextReference）
  */
 export interface ImageReference {
+  id?: string  // 唯一标识符，用于区分相同 uri 的图片
   type: 'image'
   uri: string
   displayType: 'TAG' | 'INLINE'

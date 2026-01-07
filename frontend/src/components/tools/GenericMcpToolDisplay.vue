@@ -83,28 +83,53 @@ const paramsFormatted = computed(() => {
   }
 })
 
-const MCP_CONTENT_TYPES = new Set(['text', 'image', 'audio', 'resource', 'resource_link'])
+type JsonMcpBlock = {
+  type: 'json'
+  value: {
+    content: any[]
+  }
+}
+
+function isJsonMcpBlock(block: any): block is JsonMcpBlock {
+  return (
+    block &&
+    typeof block === 'object' &&
+    block.type === 'json' &&
+    block.value &&
+    typeof block.value === 'object' &&
+    Array.isArray(block.value.content)
+  )
+}
+
+function unwrapMcpBlocks(blocks: any[]): any[] {
+  const unwrapped: any[] = []
+  for (const block of blocks) {
+    if (block?.type === 'json') {
+      if (isJsonMcpBlock(block)) {
+        unwrapped.push(...block.value.content)
+      }
+      continue
+    }
+    unwrapped.push(block)
+  }
+  return unwrapped
+}
 
 const resultBlocks = computed<any[]>(() => {
   const r = props.toolCall.result
   if (!r) return []
   const content = (r as any).content
-  if (!content) return []
-  if (Array.isArray(content)) return content as any[]
   if (typeof content === 'string') {
     return [{ type: 'text', text: content }]
   }
-  if (typeof content === 'object') {
-    const type = (content as any).type
-    if (typeof type === 'string' && MCP_CONTENT_TYPES.has(type)) {
-      return [content]
+  if (Array.isArray(content)) {
+    return unwrapMcpBlocks(content)
+  }
+  if (content?.type === 'json') {
+    if (isJsonMcpBlock(content)) {
+      return content.value.content
     }
-    if (Array.isArray((content as any).content)) {
-      return (content as any).content
-    }
-    if (typeof (content as any).text === 'string') {
-      return [{ type: 'text', text: (content as any).text }]
-    }
+    return []
   }
   return []
 })

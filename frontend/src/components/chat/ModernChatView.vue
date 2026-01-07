@@ -629,7 +629,13 @@ function handleAddContext(context: ContextReference) {
 function handleRemoveContext(context: ContextReference) {
   console.log('Removing context:', context)
   if (sessionStore.currentTab) {
-    sessionStore.currentTab.uiState.contexts = currentTabContexts.value.filter(c => c.uri !== context.uri)
+    // 优先使用 id 进行过滤（解决同名图片删除问题），如果没有 id 则回退到 uri
+    sessionStore.currentTab.uiState.contexts = currentTabContexts.value.filter(c => {
+      if (context.id && c.id) {
+        return c.id !== context.id
+      }
+      return c.uri !== context.uri
+    })
   }
 }
 

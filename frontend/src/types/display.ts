@@ -43,6 +43,7 @@ export type ContextDisplayType = 'TAG' | 'INLINE'
  * 上下文引用
  */
 export interface ContextReference {
+  id?: string  // 唯一标识符，用于区分相同 uri 的上下文
   type: 'file' | 'web' | 'folder' | 'image'
   uri: string
   displayType: ContextDisplayType

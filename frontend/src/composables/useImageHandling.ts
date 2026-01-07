@@ -69,8 +69,9 @@ export function useImageHandling(options: UseImageHandlingOptions = {}) {
       const base64Data = await readImageAsBase64(file)
       console.log(`🖼️ [addImageToContext] base64 长度: ${base64Data.length}`)
 
-      // 创建图片引用
+      // 创建图片引用（生成唯一 ID 以区分同名图片）
       const imageRef: ImageReference = {
+        id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         type: 'image',
         displayType: 'TAG' as ContextDisplayType,
         uri: `image://${file.name}`,
