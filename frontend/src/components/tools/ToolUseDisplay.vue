@@ -241,7 +241,7 @@ const asMcpToolCall = computed(() => {
     toolName: mcpToolName,
     // Codex 使用 arguments 字段存储实际参数
     input: input.arguments || {},
-    result: adaptCodexResultToClaudeFormat(props.toolCall.result)
+    result: adaptCodexMcpResultToClaudeFormat(props.toolCall.result)
   }
 })
 
@@ -254,6 +254,13 @@ function adaptCodexResultToClaudeFormat(codexResult: any, fallbackOutput?: strin
   if (!codexResult) {
     return {
       content: fallbackOutput || '',
+      is_error: false
+    }
+  }
+
+  if (typeof codexResult === 'string' || Array.isArray(codexResult)) {
+    return {
+      content: codexResult,
       is_error: false
     }
   }
@@ -271,8 +278,113 @@ function adaptCodexResultToClaudeFormat(codexResult: any, fallbackOutput?: strin
     }
   }
 
-  // 已经是 Claude 格式或其他格式，直接返回
   return codexResult
+}
+
+function adaptCodexMcpResultToClaudeFormat(codexResult: any) {
+  if (!codexResult) {
+    return {
+      content: '',
+      is_error: false
+    }
+  }
+
+  if (typeof codexResult === 'string' || Array.isArray(codexResult)) {
+    return {
+      content: codexResult,
+      is_error: false
+    }
+  }
+
+  if ('success' in codexResult || 'error' in codexResult) {
+    const isError = codexResult.success === false || !!codexResult.error
+    const rawContent = isError
+      ? (codexResult.error || 'Unknown error')
+      : (codexResult.output || codexResult.result || '')
+    const content = normalizeCodexMcpResultContent(rawContent)
+    if (content === undefined) {
+      return {
+        content: MCP_RESULT_UNSUPPORTED,
+        is_error: true
+      }
+    }
+
+    return {
+      content,
+      is_error: isError
+    }
+  }
+
+  if (typeof codexResult === 'object') {
+    const normalizedContent = normalizeCodexMcpResultContent(
+      'content' in codexResult ? codexResult.content : codexResult
+    )
+
+    if (normalizedContent === undefined) {
+      return {
+        content: MCP_RESULT_UNSUPPORTED,
+        is_error: true
+      }
+    }
+
+    return {
+      ...codexResult,
+      content: normalizedContent ?? '',
+      is_error: codexResult.is_error ?? false
+    }
+  }
+
+  return {
+    content: MCP_RESULT_UNSUPPORTED,
+    is_error: true
+  }
+}
+
+const MCP_RESULT_UNSUPPORTED = 'Unsupported MCP result content'
+const MCP_CONTENT_TYPES = new Set(['text', 'image', 'audio', 'resource', 'resource_link'])
+
+function normalizeCodexMcpResultContent(content: any, depth = 0): any {
+  if (depth > 4 || content === null || content === undefined) {
+    return undefined
+  }
+  if (typeof content === 'string' || Array.isArray(content)) {
+    return content
+  }
+  if (typeof content !== 'object') {
+    return undefined
+  }
+
+  const contentType = (content as any).type
+  if (typeof contentType === 'string') {
+    if (contentType === 'json' && 'value' in content) {
+      return normalizeCodexMcpResultContent((content as any).value, depth + 1)
+    }
+    if (MCP_CONTENT_TYPES.has(contentType)) {
+      return [content]
+    }
+  }
+
+  if (typeof (content as any).text === 'string') {
+    return (content as any).text
+  }
+  if (typeof (content as any).output === 'string') {
+    return (content as any).output
+  }
+
+  if (Array.isArray((content as any).content)) {
+    return (content as any).content
+  }
+  if ('content' in content) {
+    return normalizeCodexMcpResultContent((content as any).content, depth + 1)
+  }
+  if ('value' in content) {
+    return normalizeCodexMcpResultContent((content as any).value, depth + 1)
+  }
+  if ('result' in content) {
+    return normalizeCodexMcpResultContent((content as any).result, depth + 1)
+  }
+
+  return undefined
 }
 
 // ============================================================================

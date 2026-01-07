@@ -83,21 +83,34 @@ const paramsFormatted = computed(() => {
   }
 })
 
+const MCP_CONTENT_TYPES = new Set(['text', 'image', 'audio', 'resource', 'resource_link'])
+
 const resultBlocks = computed<any[]>(() => {
   const r = props.toolCall.result
-  if (!r || r.is_error) return []
+  if (!r) return []
   const content = (r as any).content
   if (!content) return []
   if (Array.isArray(content)) return content as any[]
   if (typeof content === 'string') {
     return [{ type: 'text', text: content }]
   }
-  return [{ type: 'json', value: content }]
+  if (typeof content === 'object') {
+    const type = (content as any).type
+    if (typeof type === 'string' && MCP_CONTENT_TYPES.has(type)) {
+      return [content]
+    }
+    if (Array.isArray((content as any).content)) {
+      return (content as any).content
+    }
+    if (typeof (content as any).text === 'string') {
+      return [{ type: 'text', text: (content as any).text }]
+    }
+  }
+  return []
 })
 
 const hasResult = computed(() => {
-  const r = props.toolCall.result
-  return r && !r.is_error && resultBlocks.value.length > 0
+  return resultBlocks.value.length > 0
 })
 
 const hasDetails = computed(() => Object.keys(params.value).length > 0 || hasResult.value)
