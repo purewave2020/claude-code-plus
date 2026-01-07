@@ -625,6 +625,9 @@ watch(
       }
     } else {
       // follow 模式：滚动到底部
+      // 先强制更新虚拟列表，确保所有项目都已渲染
+      forceUpdateScroller()
+      await nextTick()
       // 使用可靠的滚动方法，因为虚拟列表可能还没完全渲染
       await scrollToBottomReliably()
       const el = scrollerRef.value?.$el as HTMLElement | undefined
