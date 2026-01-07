@@ -959,17 +959,17 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         return listOf(
             ModelInfo(
                 modelId = "gpt-5.2-codex-max",
-                displayName = "gpt-5.2-codex-max",
+                displayName = "GPT-5.2-Codex-Max",
                 isBuiltIn = true
             ),
             ModelInfo(
                 modelId = "gpt-5.2-codex",
-                displayName = "gpt-5.2-codex",
+                displayName = "GPT-5.2-Codex",
                 isBuiltIn = true
             ),
             ModelInfo(
                 modelId = "gpt-5.2",
-                displayName = "gpt-5.2",
+                displayName = "GPT-5.2",
                 isBuiltIn = true
             )
         )

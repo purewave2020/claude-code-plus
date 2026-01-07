@@ -161,18 +161,18 @@ export class CodexSession extends BaseBackendSession {
     availableModels: [
       {
         id: 'gpt-5.2-codex-max',
-        displayName: 'gpt-5.2-codex-max',
+        displayName: 'GPT-5.2-Codex-Max',
         isDefault: true,
         supportsThinking: true,
       },
       {
         id: 'gpt-5.2-codex',
-        displayName: 'gpt-5.2-codex',
+        displayName: 'GPT-5.2-Codex',
         supportsThinking: true,
       },
       {
         id: 'gpt-5.2',
-        displayName: 'gpt-5.2',
+        displayName: 'GPT-5.2',
         supportsThinking: true,
       },
     ],

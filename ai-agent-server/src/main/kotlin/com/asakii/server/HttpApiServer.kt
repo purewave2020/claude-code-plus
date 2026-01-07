@@ -547,7 +547,7 @@ class HttpApiServer(
                                         data = mapOf(
                                             "defaultBackendType" to JsonPrimitive(config.defaultProvider.name.lowercase()),
                                             "claudeDefaultModelId" to JsonPrimitive(config.defaultModel ?: ""),
-                                            "codexDefaultModelId" to JsonPrimitive(config.codex.defaultModelId ?: "gpt-5.2-codex"),
+                                            "codexDefaultModelId" to JsonPrimitive(config.codex.defaultModelId ?: "gpt-5.2-codex-max"),
                                             "codexReasoningEffort" to JsonPrimitive(config.codex.defaultReasoningEffort ?: "medium"),
                                             "codexReasoningSummary" to JsonPrimitive(config.codex.defaultReasoningSummary ?: "auto"),
                                             "codexSandboxMode" to JsonPrimitive(config.codex.sandboxMode ?: "workspace-write"),
@@ -595,13 +595,19 @@ class HttpApiServer(
 
                                     val builtInCodexModels = listOf(
                                         mapOf(
-                                            "displayName" to JsonPrimitive("gpt-5.2-codex"),
+                                            "displayName" to JsonPrimitive("GPT-5.2-Codex-Max"),
+                                            "modelId" to JsonPrimitive("gpt-5.2-codex-max"),
+                                            "isBuiltIn" to JsonPrimitive(true),
+                                            "supportsThinking" to JsonPrimitive(true)
+                                        ),
+                                        mapOf(
+                                            "displayName" to JsonPrimitive("GPT-5.2-Codex"),
                                             "modelId" to JsonPrimitive("gpt-5.2-codex"),
                                             "isBuiltIn" to JsonPrimitive(true),
                                             "supportsThinking" to JsonPrimitive(true)
                                         ),
                                         mapOf(
-                                            "displayName" to JsonPrimitive("gpt-5.2"),
+                                            "displayName" to JsonPrimitive("GPT-5.2"),
                                             "modelId" to JsonPrimitive("gpt-5.2"),
                                             "isBuiltIn" to JsonPrimitive(true),
                                             "supportsThinking" to JsonPrimitive(true)
@@ -624,7 +630,7 @@ class HttpApiServer(
                                             "codexModels" to JsonArray((builtInCodexModels + codexCustomModels).map { JsonObject(it) }),
                                             "defaultBackendType" to JsonPrimitive(config.defaultProvider.name.lowercase()),
                                             "defaultClaudeModelId" to JsonPrimitive(config.defaultModel),
-                                            "defaultCodexModelId" to JsonPrimitive(config.codex.defaultModelId ?: "gpt-5.2-codex")
+                                            "defaultCodexModelId" to JsonPrimitive(config.codex.defaultModelId ?: "gpt-5.2-codex-max")
                                         )
                                     )
                                     call.respondText(json.encodeToString(response), ContentType.Application.Json)
