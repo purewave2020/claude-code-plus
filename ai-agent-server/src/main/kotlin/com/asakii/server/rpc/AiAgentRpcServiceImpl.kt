@@ -821,7 +821,7 @@ class AiAgentRpcServiceImpl(
         }
 
         val allowedTools = buildMcpAllowedTools(internalServers)
-        val codexConfigOverrides = buildCodexMcpConfigOverrides(claudeServers)
+        val codexConfigOverrides = buildCodexMcpConfigOverrides(claudeServers, internalServers)
         if (codexConfigOverrides.isNotEmpty()) {
             sdkLog.info("[MCP] Codex config overrides keys: ${codexConfigOverrides.keys.sorted().joinToString()}")
         }
@@ -1046,24 +1046,33 @@ class AiAgentRpcServiceImpl(
         }.toMap()
     }
 
-    private fun buildCodexMcpConfigOverrides(mcpServers: Map<String, McpServerSpec>): Map<String, String> {
+    private fun buildCodexMcpConfigOverrides(
+        mcpServers: Map<String, McpServerSpec>,
+        internalServers: Map<String, McpServer>
+    ): Map<String, String> {
         if (mcpServers.isEmpty()) return emptyMap()
 
         val overrides = mutableMapOf<String, String>()
-        mcpServers.forEach { (name, server) ->
-            // 从 MCP server 读取超时配置（如果 server 是 McpServer 实例）
-            // timeout 为 null 或 0 或负数表示无限超时
-            if (server is McpServer) {
-                val timeout = server.timeout
-                if (timeout == null || timeout <= 0) {
-                    overrides["mcp_servers.$name.tool_timeout_sec"] = "0"
-                } else {
-                    // 将毫秒转换为秒（Codex 使用秒）
-                    val timeoutSec = timeout / 1000
-                    if (timeoutSec > 0) {
-                        overrides["mcp_servers.$name.tool_timeout_sec"] = timeoutSec.toString()
-                    }
+        fun applyTimeoutOverride(serverName: String, timeout: Long?) {
+            if (timeout == null || timeout <= 0) {
+                overrides["mcp_servers.$serverName.tool_timeout_sec"] = "0"
+            } else {
+                // 将毫秒转换为秒（Codex 使用秒）
+                val timeoutSec = timeout / 1000
+                if (timeoutSec > 0) {
+                    overrides["mcp_servers.$serverName.tool_timeout_sec"] = timeoutSec.toString()
                 }
+            }
+        }
+
+        // 先处理内部 MCP 服务（即便被包装成 HTTP 配置也要保留超时设置）
+        internalServers.forEach { (name, server) ->
+            applyTimeoutOverride(name, server.timeout)
+        }
+
+        mcpServers.forEach { (name, server) ->
+            if (server is McpServer) {
+                applyTimeoutOverride(name, server.timeout)
             }
             when (server) {
                 is McpHttpServerConfig -> {
