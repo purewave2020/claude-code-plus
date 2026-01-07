@@ -1,6 +1,6 @@
 # Claude CLI Control Endpoints Analysis
 
-This document analyzes all control request endpoints supported by Claude CLI (v2.0.73) and their implementation status in our SDK.
+This document analyzes all control request endpoints supported by Claude CLI (v2.0.77) and their implementation status in our SDK.
 
 ## Overview
 
@@ -801,5 +801,9 @@ This ensures:
 
 ## Version History
 
-- **v2.0.73** - Current analyzed version
-- Patches applied: 001-run-in-background, 002-chrome-status, 003-parent-uuid, 004-mcp-reconnect, 005-mcp-tools, 006-mcp-disable-enable
+- **v2.0.77** - Current analyzed version (updated 2026-01-07)
+  - All 6 patches successfully applied
+  - 001-run-in-background v6: Uses CLI's built-in Map (`v71`) for background resolvers
+- **v2.0.73** - Previous version
+  - 001-run-in-background v5: Used custom `__sdkBackgroundResolvers` Map
+- Patches: 001-run-in-background, 002-chrome-status, 003-parent-uuid, 004-mcp-reconnect, 005-mcp-tools, 006-mcp-disable-enable
