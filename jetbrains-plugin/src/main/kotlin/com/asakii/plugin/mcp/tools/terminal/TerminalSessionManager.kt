@@ -369,12 +369,16 @@ class TerminalSessionManager(private val project: Project) {
 
             var wrapper: TerminalWidgetWrapper? = null
 
+            // 获取终端环境变量配置（如 TERM=dumb 禁用交互式命令）
+            val envVariables = AgentSettingsService.getInstance().getTerminalEnvVariables()
+            logger.info("  envVariables: $envVariables")
+
             ApplicationManager.getApplication().invokeAndWait {
                 try {
                     val basePath = project.basePath ?: System.getProperty("user.home")
 
-                    // 使用兼容层创建终端（传递 shellCommand 以指定 shell 类型）
-                    wrapper = createShellWidget(project, basePath, sessionName, shellCommand)
+                    // 使用兼容层创建终端（传递 shellCommand 和 envVariables）
+                    wrapper = createShellWidget(project, basePath, sessionName, shellCommand, envVariables)
 
                     if (wrapper == null) {
                         logger.warn("Failed to create TerminalWidgetWrapper")

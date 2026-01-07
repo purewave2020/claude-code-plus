@@ -86,6 +86,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var terminalDefaultShell: String = "",          // Terminal 默认 shell（空 = 使用系统默认）
         var terminalAvailableShells: String = "",      // Terminal 可用 shell 列表（逗号分隔，空 = 全部）
         var terminalReadTimeout: Int = 10,             // TerminalRead 默认超时时间（秒）
+        var terminalDisableInteractive: Boolean = true, // 是否禁用交互式终端（TERM=dumb）
         var enableGitMcp: Boolean = false,             // Git MCP（VCS 集成，默认禁用）
         // MCP 工具调用超时配置（秒），0 表示永不超时
         var userInteractionMcpTimeout: Int = 0,        // User Interaction MCP 默认永不超时
@@ -314,6 +315,28 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     /** 获取 TerminalRead 超时时间（毫秒） */
     val terminalReadTimeoutMs: Long
         get() = state.terminalReadTimeout * 1000L
+
+    var terminalDisableInteractive: Boolean
+        get() = state.terminalDisableInteractive
+        set(value) { state.terminalDisableInteractive = value }
+
+    /**
+     * 获取终端环境变量
+     *
+     * 如果启用了禁用交互式终端功能，则返回 TERM=dumb 等环境变量，
+     * 用于禁止 less/more 等分页器和交互式命令。
+     */
+    fun getTerminalEnvVariables(): Map<String, String> {
+        return if (state.terminalDisableInteractive) {
+            mapOf(
+                "TERM" to "dumb",        // 禁用大多数交互式功能
+                "GIT_PAGER" to "cat",    // Git 专用：禁用 less
+                "PAGER" to "cat"         // 通用分页器：禁用 less
+            )
+        } else {
+            emptyMap()
+        }
+    }
 
     /**
      * 获取生效的默认 shell
@@ -562,31 +585,6 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     fun setGitMcpBackendKeys(keys: Set<String>) {
         state.gitMcpBackends = formatBackendKeys(keys)
     }
-
-    // MCP 工具调用超时配置（秒），0 表示永不超时
-    var userInteractionMcpTimeout: Int
-        get() = state.userInteractionMcpTimeout
-        set(value) { state.userInteractionMcpTimeout = value.coerceAtLeast(0) }
-
-    var jetbrainsMcpTimeout: Int
-        get() = state.jetbrainsMcpTimeout
-        set(value) { state.jetbrainsMcpTimeout = value.coerceAtLeast(0) }
-
-    var jetbrainsFileMcpTimeout: Int
-        get() = state.jetbrainsFileMcpTimeout
-        set(value) { state.jetbrainsFileMcpTimeout = value.coerceAtLeast(0) }
-
-    var context7McpTimeout: Int
-        get() = state.context7McpTimeout
-        set(value) { state.context7McpTimeout = value.coerceAtLeast(0) }
-
-    var terminalMcpTimeout: Int
-        get() = state.terminalMcpTimeout
-        set(value) { state.terminalMcpTimeout = value.coerceAtLeast(0) }
-
-    var gitMcpTimeout: Int
-        get() = state.gitMcpTimeout
-        set(value) { state.gitMcpTimeout = value.coerceAtLeast(0) }
 
     fun toProviders(keys: Set<String>): Set<AiAgentProvider> {
         val normalized = normalizeMcpBackendKeys(keys)
