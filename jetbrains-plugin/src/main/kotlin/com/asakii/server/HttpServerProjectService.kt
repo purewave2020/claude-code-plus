@@ -20,6 +20,7 @@ import com.asakii.settings.AgentSettingsService
 import com.asakii.settings.McpDefaults
 import com.asakii.settings.McpSettingsService
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.Logger
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -45,7 +46,6 @@ import java.net.JarURLConnection
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.util.logging.Logger
 
 /**
  * HTTP 服务器项目级服务
@@ -53,7 +53,7 @@ import java.util.logging.Logger
  */
 @Service(Service.Level.PROJECT)
 class HttpServerProjectService(private val project: Project) : Disposable {
-    private val logger = Logger.getLogger(javaClass.name)
+    private val logger = Logger.getInstance(HttpServerProjectService::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private var httpServer: HttpApiServer? = null
@@ -103,10 +103,10 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 StandaloneLogging.configureWithDir(logDir)
                 logger.info("📝 Development mode: Logging configured to: $logDir")
             } else {
-                logger.warning("⚠️ Project base path is null, logging configuration skipped")
+                logger.warn("⚠️ Project base path is null, logging configuration skipped")
             }
         } catch (e: Exception) {
-            logger.warning("⚠️ Failed to configure logging: ${e.message}")
+            logger.warn("⚠️ Failed to configure logging: ${e.message}", e)
         }
     }
 
@@ -133,7 +133,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                             jetbrainsRSocketHandler.pushThemeChanged(theme)
                         }
                     } catch (e: Exception) {
-                        logger.warning("⚠️ Failed to push theme change: ${e.message}")
+                        logger.warn("⚠️ Failed to push theme change: ${e.message}", e)
                     }
                 }
             }
@@ -146,7 +146,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                             jetbrainsRSocketHandler.pushSessionCommand(command)
                         }
                     } catch (e: Exception) {
-                        logger.warning("⚠️ Failed to push session command: ${e.message}")
+                        logger.warn("⚠️ Failed to push session command: ${e.message}", e)
                     }
                 }
             }
@@ -159,7 +159,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                             jetbrainsRSocketHandler.pushSettingsChanged(settings)
                         }
                     } catch (e: Exception) {
-                        logger.warning("⚠️ Failed to push settings change: ${e.message}")
+                        logger.warn("⚠️ Failed to push settings change: ${e.message}", e)
                     }
                 }
             }
@@ -183,6 +183,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                     ?: AgentSettingsService.detectCodexPath().takeIf { it.isNotBlank() }
                 val userInteractionBackends = settings.getUserInteractionMcpProviders()
                 val jetbrainsBackends = settings.getJetbrainsMcpProviders()
+                val jetbrainsFileBackends = settings.getJetbrainsFileMcpProviders()
                 val context7Backends = settings.getContext7McpProviders()
                 val terminalBackends = settings.getTerminalMcpProviders()
                 val gitBackends = settings.getGitMcpProviders()
@@ -195,6 +196,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         "(${settings.defaultThinkingTokens} tokens), permissionMode=${settings.permissionMode}, " +
                         "userInteractionMcp=${settings.enableUserInteractionMcp}(${userInteractionBackends.joinToString()}), " +
                         "jetbrainsMcp=${settings.enableJetBrainsMcp}(${jetbrainsBackends.joinToString()}), " +
+                        "jetbrainsFileMcp=${settings.enableJetBrainsFileMcp}(${jetbrainsFileBackends.joinToString()}), " +
                         "context7Mcp=${settings.enableContext7Mcp}(${context7Backends.joinToString()}), " +
                         "terminalMcp=${settings.enableTerminalMcp}(${terminalBackends.joinToString()}), " +
                         "gitMcp=${settings.enableGitMcp}(${gitBackends.joinToString()}), " +
@@ -215,12 +217,14 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         includePartialMessages = settings.includePartialMessages,
                         enableUserInteractionMcp = settings.enableUserInteractionMcp,
                         enableJetBrainsMcp = settings.enableJetBrainsMcp,
+                        enableJetBrainsFileMcp = settings.enableJetBrainsFileMcp,
                         enableContext7Mcp = settings.enableContext7Mcp,
                         context7ApiKey = settings.context7ApiKey.takeIf { it.isNotBlank() },
                         enableTerminalMcp = settings.enableTerminalMcp,
                         enableGitMcp = settings.enableGitMcp,
                         userInteractionMcpBackends = userInteractionBackends,
                         jetbrainsMcpBackends = jetbrainsBackends,
+                        jetbrainsFileMcpBackends = jetbrainsFileBackends,
                         context7McpBackends = context7Backends,
                         terminalMcpBackends = terminalBackends,
                         gitMcpBackends = gitBackends,
@@ -268,8 +272,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             logger.info("🚀 HTTP Server started at: $url")
             logger.info("✅ HTTP Server Project Service initialized successfully")
         } catch (e: Exception) {
-            logger.severe("❌ Failed to start HTTP server: ${e.message}")
-            e.printStackTrace()
+            logger.error("❌ Failed to start HTTP server: ${e.message}", e)
         }
     }
 
@@ -512,7 +515,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                     logger.info("✅ Loaded custom MCP Server: $serverName (type=$serverType)")
                 }
             } catch (e: Exception) {
-                logger.warning("⚠️ Failed to parse custom MCP config: ${e.message}")
+                logger.warn("⚠️ Failed to parse custom MCP config: ${e.message}", e)
             }
         }
 
@@ -603,7 +606,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                     jetbrainsRSocketHandler.pushActiveFileChanged(activeFile)
                 }
             } catch (e: Exception) {
-                logger.warning("⚠️ Failed to push active file update: ${e.message}")
+                logger.warn("⚠️ Failed to push active file update: ${e.message}", e)
             }
         }
     }

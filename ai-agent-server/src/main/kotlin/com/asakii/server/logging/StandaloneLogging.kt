@@ -84,8 +84,7 @@ object StandaloneLogging {
     if (isIdeaPluginEnvironment()) {
       println("📝 [StandaloneLogging] Running in IDEA plugin environment, using IDEA's built-in SLF4J implementation")
       println("📝 [StandaloneLogging] Logs will be written to idea.log")
-      // Bridge java.util.logging -> SLF4J if the bridge is available in the IDE classpath
-      bridgeJulToSlf4jIfAvailable()
+      // Do not bridge JUL in IDEA plugin environment to avoid missing dependency failures.
 
       configured = true
       return
