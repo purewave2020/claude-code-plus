@@ -73,15 +73,14 @@ import type { GenericToolCall } from '@/types/display'
 import CompactToolCard from './CompactToolCard.vue'
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer.vue'
 import { extractToolDisplayInfo } from '@/utils/toolDisplayInfo'
-import { isIdeEnvironment } from '@/services/jetbrainsApi'
 
 interface Props {
   toolCall: GenericToolCall
 }
 
 const props = defineProps<Props>()
-// IDE 环境默认折叠（可点击调用 IDEA），浏览器环境默认展开
-const expanded = ref(!isIdeEnvironment())
+// 默认折叠，与其他工具保持一致
+const expanded = ref(false)
 
 const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall as any, props.toolCall.result as any))
 

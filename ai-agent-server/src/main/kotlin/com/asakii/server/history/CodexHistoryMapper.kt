@@ -452,7 +452,8 @@ object CodexHistoryMapper {
     private fun McpToolCallResult?.toResultJson(): JsonElement? {
         if (this == null) return null
         if (structuredContent != null) return structuredContent
-        return json.encodeToJsonElement(McpToolCallResult.serializer(), this)
+        // 直接返回 content 数组，避免嵌套 { content: { content: [...] } }
+        return buildJsonArray { content.forEach { add(it) } }
     }
 
     private fun extractDiffOldNew(diff: String): Pair<String, String> {
