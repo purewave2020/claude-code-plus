@@ -7,7 +7,8 @@ import {
   isAttachmentEndTag,
   escapeXml,
   parseCurrentOpenFileTag,
-  hasCurrentOpenFileTag
+  hasCurrentOpenFileTag,
+  removeSystemReminderTags
 } from './xmlTagParser'
 
 describe('parseXmlTag', () => {
@@ -309,5 +310,46 @@ describe('hasCurrentOpenFileTag', () => {
 
   it('应该拒绝新格式标签', () => {
     expect(hasCurrentOpenFileTag('<system-reminder type="open-file" path="test.ts"/>')).toBe(false)
+  })
+})
+
+describe('removeSystemReminderTags', () => {
+  it('应该移除自闭合标签', () => {
+    expect(removeSystemReminderTags('<system-reminder type="attachment-start"/>')).toBe('')
+    expect(removeSystemReminderTags('<system-reminder type="attachment-end"/>')).toBe('')
+    expect(removeSystemReminderTags('<system-reminder type="open-file" path="test.ts"/>')).toBe('')
+  })
+
+  it('应该移除带内容的标签', () => {
+    expect(removeSystemReminderTags('<system-reminder type="select-lines" path="test.ts" start="1" end="3">some content</system-reminder>')).toBe('')
+  })
+
+  it('应该保留普通文本', () => {
+    expect(removeSystemReminderTags('hello world')).toBe('hello world')
+    expect(removeSystemReminderTags('模型串台了是啥原因？')).toBe('模型串台了是啥原因？')
+  })
+
+  it('应该从混合内容中移除标签', () => {
+    const input = '模型串台了是啥原因？\n<system-reminder type="attachment-start"/>\n<system-reminder type="open-file" path="gradle.properties"/>'
+    const expected = '模型串台了是啥原因？\n\n'
+    expect(removeSystemReminderTags(input)).toBe(expected)
+  })
+
+  it('应该移除所有标签类型', () => {
+    const input = `用户问题
+<system-reminder type="open-file" path="test.ts"/>
+<system-reminder type="select-lines" path="test.ts" start="1" end="5">selected text</system-reminder>
+<system-reminder type="attachment-start"/>
+@file://path/to/file
+<system-reminder type="attachment-end"/>`
+    const expected = `用户问题
+
+\n@file://path/to/file
+`
+    expect(removeSystemReminderTags(input)).toBe(expected)
+  })
+
+  it('应该正确处理空字符串', () => {
+    expect(removeSystemReminderTags('')).toBe('')
   })
 })

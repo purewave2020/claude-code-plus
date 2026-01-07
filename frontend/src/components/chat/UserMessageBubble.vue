@@ -155,7 +155,7 @@ import { useI18n } from '@/composables/useI18n'
 import type { ImageBlock, ContentBlock } from '@/types/message'
 import type { ContextReference } from '@/types/display'
 import type { ParsedCurrentOpenFile, ParsedOpenFileReminder, ParsedSelectLinesReminder } from '@/utils/xmlTagParser'
-import { hasCurrentOpenFileTag, parseCurrentOpenFileTag, removeCurrentOpenFileTag, isSystemReminderTag } from '@/utils/xmlTagParser'
+import { hasCurrentOpenFileTag, parseCurrentOpenFileTag, removeCurrentOpenFileTag, isSystemReminderTag, removeSystemReminderTags } from '@/utils/xmlTagParser'
 import { isFileReference } from '@/utils/userMessageBuilder'
 import { linkifyText, getLinkFromEvent, handleLinkClick } from '@/utils/linkify'
 import ImagePreviewModal from '@/components/common/ImagePreviewModal.vue'
@@ -381,13 +381,13 @@ const messageText = computed(() => {
   }
 
   // 从用户输入内容块中提取文本（排除文件引用和系统提醒标签）
-  return content
+  const result = content
     .filter(block => {
       if (block.type === 'text' && 'text' in block) {
         const text = (block as any).text?.trim() || ''
         // 排除文件引用格式的文本
         if (isFileReference(text)) return false
-        // 排除 system-reminder 标签（新格式）
+        // 排除纯 system-reminder 标签（新格式）
         if (isSystemReminderTag(text)) return false
         // 排除 diff 内容标签
         if (text.startsWith('<diff-old-content>') || text.startsWith('<diff-new-content>')) return false
@@ -402,11 +402,16 @@ const messageText = computed(() => {
         if (hasCurrentOpenFileTag(text)) {
           text = removeCurrentOpenFileTag(text)
         }
+        // 移除混合在文本中的 system-reminder 标签（重载会话时可能出现）
+        text = removeSystemReminderTags(text)
         return text
       }
       return ''
     })
     .join('\n')
+
+  // 清理多余的空行
+  return result.replace(/\n{3,}/g, '\n\n').trim()
 })
 
 // 从消息文本中解析 currentOpenFile（用于非 replay 消息）

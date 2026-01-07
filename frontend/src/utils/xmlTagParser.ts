@@ -387,6 +387,24 @@ export function isAttachmentEndTag(text: string): boolean {
 }
 
 /**
+ * 移除文本中的所有 system-reminder 标签
+ *
+ * 支持移除：
+ * - 自闭合标签：<system-reminder type="..." .../>
+ * - 带内容标签：<system-reminder ...>内容</system-reminder>
+ *
+ * @param text 要处理的文本
+ * @returns 移除标签后的文本
+ */
+export function removeSystemReminderTags(text: string): string {
+  // 先移除带内容的标签（非贪婪匹配）
+  let result = text.replace(/<system-reminder[^>]*>[\s\S]*?<\/system-reminder>/g, '')
+  // 再移除自闭合标签
+  result = result.replace(/<system-reminder[^>]*\/>/g, '')
+  return result
+}
+
+/**
  * XML 转义
  */
 export function escapeXml(str: string): string {
