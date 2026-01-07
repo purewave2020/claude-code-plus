@@ -73,33 +73,37 @@
             id="com.asakii.settings"
             displayName="Claude Code Plus"/>
 
-        <!-- MCP Settings (child of Claude Code Plus) -->
-        <applicationConfigurable
-            parentId="com.asakii.settings"
-            instance="com.asakii.settings.McpConfigurable"
-            id="com.asakii.settings.mcp"
-            displayName="MCP"/>
-
         <!-- Claude Code Settings (child of Claude Code Plus) -->
         <applicationConfigurable
             parentId="com.asakii.settings"
             instance="com.asakii.settings.ClaudeCodeConfigurable"
             id="com.asakii.settings.claudecode"
-            displayName="Claude Code"/>
+            displayName="Claude Code"
+            order="first"/>
 
         <!-- Codex Settings (child of Claude Code Plus) -->
         <applicationConfigurable
             parentId="com.asakii.settings"
             instance="com.asakii.settings.CodexConfigurable"
             id="com.asakii.settings.codex"
-            displayName="Codex"/>
+            displayName="Codex"
+            order="after com.asakii.settings.claudecode"/>
+
+        <!-- MCP Settings (child of Claude Code Plus) -->
+        <applicationConfigurable
+            parentId="com.asakii.settings"
+            instance="com.asakii.settings.McpConfigurable"
+            id="com.asakii.settings.mcp"
+            displayName="MCP"
+            order="after com.asakii.settings.codex"/>
 
         <!-- Git Generate Settings (child of Claude Code Plus) -->
         <applicationConfigurable
             parentId="com.asakii.settings"
             instance="com.asakii.settings.GitGenerateConfigurable"
             id="com.asakii.settings.gitgenerate"
-            displayName="Git Generate"/>
+            displayName="Git Generate"
+            order="last"/>
 
         <applicationService
             serviceImplementation="com.asakii.plugin.services.ClaudeCodePlusBackgroundService"/>
