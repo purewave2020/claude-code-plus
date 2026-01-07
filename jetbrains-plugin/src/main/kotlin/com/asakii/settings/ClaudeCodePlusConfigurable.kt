@@ -1,6 +1,7 @@
 package com.asakii.settings
 
 import com.intellij.openapi.options.SearchableConfigurable
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
@@ -9,13 +10,23 @@ import javax.swing.*
 /**
  * Claude Code Plus 主配置页
  *
- * 作为父配置页，包含两个子页面（在 plugin.xml 中注册）：
+ * 作为父配置页，包含两个子页面（在 plugin.xml 中注册）�?
  * - MCP: MCP 服务器配置（内置 + 自定义）
- * - Claude Code: 通用配置（Node.js、模型、思考级别、权限、Agents）
+ * - Claude Code: 通用配置（Node.js、模型、思考级别、权限、Agents�?
  */
 class ClaudeCodePlusConfigurable : SearchableConfigurable {
 
+    private data class BackendOption(val key: String, val label: String) {
+        override fun toString(): String = label
+    }
+
+    private val backendOptions = listOf(
+        BackendOption(AgentSettingsService.MCP_BACKEND_CLAUDE, "Claude Code"),
+        BackendOption(AgentSettingsService.MCP_BACKEND_CODEX, "Codex")
+    )
+
     private var mainPanel: JPanel? = null
+    private var defaultBackendCombo: ComboBox<BackendOption>? = null
 
     override fun getId(): String = "com.asakii.settings"
 
@@ -32,6 +43,37 @@ class ClaudeCodePlusConfigurable : SearchableConfigurable {
         val titleLabel = JBLabel("<html><h2>Claude Code Plus</h2></html>")
         titleLabel.alignmentX = JPanel.LEFT_ALIGNMENT
         contentPanel.add(titleLabel)
+        contentPanel.add(Box.createVerticalStrut(20))
+
+        val settings = AgentSettingsService.getInstance()
+
+        val backendPanel = JPanel()
+        backendPanel.layout = BoxLayout(backendPanel, BoxLayout.Y_AXIS)
+        backendPanel.alignmentX = JPanel.LEFT_ALIGNMENT
+
+        val backendTitle = JBLabel("<html><b>Default Backend</b></html>")
+        backendTitle.alignmentX = JPanel.LEFT_ALIGNMENT
+        backendPanel.add(backendTitle)
+        backendPanel.add(Box.createVerticalStrut(6))
+
+        val backendRow = JPanel()
+        backendRow.layout = BoxLayout(backendRow, BoxLayout.X_AXIS)
+        backendRow.alignmentX = JPanel.LEFT_ALIGNMENT
+        backendRow.add(JBLabel("Use for new sessions:"))
+        backendRow.add(Box.createHorizontalStrut(8))
+        defaultBackendCombo = ComboBox(DefaultComboBoxModel(backendOptions.toTypedArray()))
+        defaultBackendCombo!!.alignmentX = JPanel.LEFT_ALIGNMENT
+        backendRow.add(defaultBackendCombo)
+        backendPanel.add(backendRow)
+        backendPanel.add(Box.createVerticalStrut(6))
+
+        val backendHint = JBLabel("Applies when initializing or creating new sessions.")
+        backendHint.alignmentX = JPanel.LEFT_ALIGNMENT
+        backendPanel.add(backendHint)
+
+        selectBackend(settings.defaultBackendType)
+
+        contentPanel.add(backendPanel)
         contentPanel.add(Box.createVerticalStrut(20))
 
         // 说明
@@ -62,17 +104,39 @@ class ClaudeCodePlusConfigurable : SearchableConfigurable {
         return mainPanel!!
     }
 
-    override fun isModified(): Boolean = false
+    override fun isModified(): Boolean {
+        val selected = getSelectedBackendKey()
+        val settings = AgentSettingsService.getInstance()
+        return selected != settings.defaultBackendType
+    }
 
     override fun apply() {
-        // 主页面不需要保存任何配置
+        val settings = AgentSettingsService.getInstance()
+        val selected = getSelectedBackendKey()
+        if (selected != settings.defaultBackendType) {
+            settings.defaultBackendType = selected
+            settings.notifyChange()
+        }
     }
 
     override fun reset() {
-        // 主页面不需要重置任何配置
+        selectBackend(AgentSettingsService.getInstance().defaultBackendType)
     }
 
     override fun disposeUIResources() {
         mainPanel = null
+        defaultBackendCombo = null
+    }
+
+    private fun getSelectedBackendKey(): String {
+        val option = defaultBackendCombo?.selectedItem as? BackendOption
+        return option?.key ?: AgentSettingsService.MCP_BACKEND_CLAUDE
+    }
+
+    private fun selectBackend(key: String) {
+        val normalized = key.trim().lowercase()
+        val target = backendOptions.firstOrNull { it.key == normalized } ?: backendOptions.first()
+        defaultBackendCombo?.selectedItem = target
     }
 }
+
