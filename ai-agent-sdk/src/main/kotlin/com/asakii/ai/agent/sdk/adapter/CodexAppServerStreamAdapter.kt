@@ -425,13 +425,7 @@ class CodexAppServerStreamAdapter(
     }
 
     private fun buildMcpToolInput(item: ThreadItem.McpToolCall): JsonElement =
-        buildJsonObject {
-            put("type", "McpToolCall")
-            put("server", item.server)
-            put("tool", item.tool)
-            put("toolName", buildMcpToolName(item.server, item.tool))
-            put("arguments", item.arguments)
-        }
+        item.arguments
 
     private fun buildWebSearchInput(item: ThreadItem.WebSearch): JsonElement =
         buildJsonObject {
@@ -460,7 +454,7 @@ class CodexAppServerStreamAdapter(
             is ThreadItem.Reasoning -> "thinking"
             is ThreadItem.CommandExecution -> "command_execution"
             is ThreadItem.FileChange -> "file_change"
-            is ThreadItem.McpToolCall -> "mcp_tool_call"
+            is ThreadItem.McpToolCall -> "tool_use"
             is ThreadItem.WebSearch -> "web_search"
             is ThreadItem.UserMessage -> "text"
             is ThreadItem.EnteredReviewMode -> "text"
