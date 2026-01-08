@@ -542,7 +542,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         settings.jetbrainsFileDisableBuiltinTools = (jetbrainsFileEntry?.disabledTools?.isNotEmpty() ?: false)
         settings.setJetbrainsFileDisabledToolsList(jetbrainsFileEntry?.disabledTools ?: listOf("Read", "Write", "Edit"))
         // 保存超时配置
-        settings.userInteractionMcpTimeout = userInteractionEntry?.toolTimeoutSec ?: 0
+        settings.userInteractionMcpTimeout = userInteractionEntry?.toolTimeoutSec ?: 3600
         settings.jetbrainsMcpTimeout = jetbrainsEntry?.toolTimeoutSec ?: 60
         settings.jetbrainsFileMcpTimeout = jetbrainsFileEntry?.toolTimeoutSec ?: 60
         // 保存 JetBrains File MCP 外部文件配置
@@ -976,7 +976,7 @@ data class McpServerEntry(
     val terminalAvailableShells: String = "",
     /** JetBrains Terminal MCP: TerminalRead 默认超时时间（秒） */
     val terminalReadTimeout: Int = 30,
-    /** 工具调用超时时间（秒），0 表示永不超时，默认 60 秒 */
+    /** 工具调用超时时间（秒），最小 1 秒，默认 60 秒 */
     val toolTimeoutSec: Int = 60,
     /** JetBrains File MCP: 是否允许访问外部文件 */
     val fileAllowExternal: Boolean = true,
@@ -1644,7 +1644,7 @@ class BuiltInMcpServerDialog(
             add(toolTimeoutField)
             add(JBLabel("seconds"))
             add(Box.createHorizontalStrut(8))
-            add(JBLabel("<html><font color='gray' size='-1'>(0 = never timeout)</font></html>"))
+            add(JBLabel("<html><font color='gray' size='-1'>(minimum 1 second)</font></html>"))
         }
         topPanel.add(toolTimeoutPanel)
         topPanel.add(Box.createVerticalStrut(8))
@@ -1803,7 +1803,7 @@ class BuiltInMcpServerDialog(
             terminalReadTimeout = if (entry.name == "JetBrains Terminal MCP") {
                 readTimeoutField.text.toIntOrNull() ?: 30
             } else entry.terminalReadTimeout,
-            toolTimeoutSec = (toolTimeoutField.text.toIntOrNull() ?: 60).coerceAtLeast(0),
+            toolTimeoutSec = (toolTimeoutField.text.toIntOrNull() ?: 60).coerceAtLeast(1),
             fileAllowExternal = if (entry.name == "JetBrains File MCP") {
                 fileAllowExternalCheckbox.isSelected
             } else entry.fileAllowExternal,
@@ -1976,7 +1976,7 @@ class McpServerDialog(
             add(toolTimeoutField)
             add(JBLabel("seconds"))
             add(Box.createHorizontalStrut(8))
-            add(JBLabel("<html><font color='gray' size='-1'>(0 = never timeout)</font></html>"))
+            add(JBLabel("<html><font color='gray' size='-1'>(minimum 1 second)</font></html>"))
         }
         contentPanel.add(timeoutPanel)
         contentPanel.add(Box.createVerticalStrut(15))
@@ -2134,7 +2134,7 @@ class McpServerDialog(
             isBuiltIn = false,
             jsonConfig = jsonText,
             instructions = instructionsArea.text.trim(),
-            toolTimeoutSec = (toolTimeoutField.text.toIntOrNull() ?: 60).coerceAtLeast(0)
+            toolTimeoutSec = (toolTimeoutField.text.toIntOrNull() ?: 60).coerceAtLeast(1)
         )
     }
 }

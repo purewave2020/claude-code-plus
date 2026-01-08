@@ -120,8 +120,8 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var jetbrainsFileExternalDir2: String = "", // 外部目录 2（已废弃）
         @Deprecated("Use jetbrainsFileExternalRules instead")
         var jetbrainsFileExternalDir3: String = "", // 外部目录 3（已废弃）
-        // MCP 工具调用超时配置（秒），0 表示永不超时
-        var userInteractionMcpTimeout: Int = 0,        // User Interaction MCP 默认永不超时
+        // MCP 工具调用超时配置（秒）
+        var userInteractionMcpTimeout: Int = 3600,     // User Interaction MCP 默认 1 小时（用户交互需要较长等待时间）
         var jetbrainsMcpTimeout: Int = 60,             // JetBrains MCP 默认 60 秒
         var jetbrainsFileMcpTimeout: Int = 60,         // JetBrains File MCP 默认 60 秒
         var context7McpTimeout: Int = 60,              // Context7 MCP 默认 60 秒
@@ -717,35 +717,35 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
 
     // ==================== MCP 超时配置 ====================
 
-    /** User Interaction MCP 超时时间（秒），0 = 永不超时 */
+    /** User Interaction MCP 超时时间（秒），最小 1 秒 */
     var userInteractionMcpTimeout: Int
         get() = state.userInteractionMcpTimeout
-        set(value) { state.userInteractionMcpTimeout = value.coerceAtLeast(0) }
+        set(value) { state.userInteractionMcpTimeout = value.coerceAtLeast(1) }
 
-    /** JetBrains MCP 超时时间（秒），0 = 永不超时 */
+    /** JetBrains MCP 超时时间（秒），最小 1 秒 */
     var jetbrainsMcpTimeout: Int
         get() = state.jetbrainsMcpTimeout
-        set(value) { state.jetbrainsMcpTimeout = value.coerceAtLeast(0) }
+        set(value) { state.jetbrainsMcpTimeout = value.coerceAtLeast(1) }
 
-    /** JetBrains File MCP 超时时间（秒），0 = 永不超时 */
+    /** JetBrains File MCP 超时时间（秒），最小 1 秒 */
     var jetbrainsFileMcpTimeout: Int
         get() = state.jetbrainsFileMcpTimeout
-        set(value) { state.jetbrainsFileMcpTimeout = value.coerceAtLeast(0) }
+        set(value) { state.jetbrainsFileMcpTimeout = value.coerceAtLeast(1) }
 
-    /** Context7 MCP 超时时间（秒），0 = 永不超时 */
+    /** Context7 MCP 超时时间（秒），最小 1 秒 */
     var context7McpTimeout: Int
         get() = state.context7McpTimeout
-        set(value) { state.context7McpTimeout = value.coerceAtLeast(0) }
+        set(value) { state.context7McpTimeout = value.coerceAtLeast(1) }
 
-    /** Terminal MCP 超时时间（秒），0 = 永不超时 */
+    /** Terminal MCP 超时时间（秒），最小 1 秒 */
     var terminalMcpTimeout: Int
         get() = state.terminalMcpTimeout
-        set(value) { state.terminalMcpTimeout = value.coerceAtLeast(0) }
+        set(value) { state.terminalMcpTimeout = value.coerceAtLeast(1) }
 
-    /** Git MCP 超时时间（秒），0 = 永不超时 */
+    /** Git MCP 超时时间（秒），最小 1 秒 */
     var gitMcpTimeout: Int
         get() = state.gitMcpTimeout
-        set(value) { state.gitMcpTimeout = value.coerceAtLeast(0) }
+        set(value) { state.gitMcpTimeout = value.coerceAtLeast(1) }
 
     private fun normalizeMcpBackendKeys(keys: Set<String>): Set<String> {
         val normalized = keys.map { it.trim().lowercase() }
