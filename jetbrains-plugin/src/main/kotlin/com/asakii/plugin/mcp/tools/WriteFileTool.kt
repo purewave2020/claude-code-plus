@@ -3,10 +3,12 @@ package com.asakii.plugin.mcp.tools
 import com.asakii.claude.agent.sdk.mcp.ToolResult
 import com.asakii.claude.agent.sdk.mcp.currentToolUseId
 import com.asakii.plugin.mcp.getString
+import com.asakii.settings.AgentSettingsService
 import com.intellij.history.LocalHistory
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import kotlinx.serialization.json.JsonObject
@@ -20,6 +22,7 @@ private val logger = KotlinLogging.logger {}
  *
  * 支持创建新文件或覆盖现有文件内容。
  * 支持相对路径（相对于项目根目录）和绝对路径。
+ * 支持写入项目外部的指定目录（需要在设置中配置）。
  */
 class WriteFileTool(private val project: Project) {
 
@@ -38,9 +41,16 @@ class WriteFileTool(private val project: Project) {
         // 解析路径（支持相对路径和绝对路径）
         val absolutePath = resolvePath(filePath, projectBasePath)
 
-        // 安全检查：确保文件在项目目录内
-        if (!absolutePath.startsWith(File(projectBasePath).canonicalPath)) {
-            return ToolResult.error("File path must be within project directory")
+        // 安全检查：确保文件在允许的范围内（项目内或配置的外部目录内）
+        val settings = AgentSettingsService.getInstance()
+        if (!settings.isFilePathAllowed(absolutePath, projectBasePath)) {
+            val externalDirs = settings.getJetbrainsFileExternalDirs()
+            val hint = if (externalDirs.isEmpty()) {
+                "Enable 'Allow external files' in settings to access files outside the project."
+            } else {
+                "Allowed external directories: ${externalDirs.joinToString(", ")}"
+            }
+            return ToolResult.error("File path must be within project directory or allowed external directories. $hint")
         }
 
         // 从协程上下文获取 toolUseId，使用 LocalHistory 打标签并缓存（仅对已存在的文件）
@@ -53,11 +63,13 @@ class WriteFileTool(private val project: Project) {
             logger.info { "WriteFile: created LocalHistory label for toolUseId=$toolUseId" }
         }
 
+        val isExternalFile = !absolutePath.startsWith(File(projectBasePath).canonicalPath)
+
         return try {
             var result: Any = ""
             ApplicationManager.getApplication().invokeAndWait {
                 result = WriteAction.compute<Any, Exception> {
-                    writeFileContent(absolutePath, content, filePath)
+                    writeFileContent(absolutePath, content, filePath, isExternalFile)
                 }
             }
             result
@@ -94,9 +106,9 @@ class WriteFileTool(private val project: Project) {
     }
 
     /**
-     * 写入文件内容
+     * 写入文件内容（使用 VirtualFile API）
      */
-    private fun writeFileContent(absolutePath: String, content: String, originalPath: String): Any {
+    private fun writeFileContent(absolutePath: String, content: String, originalPath: String, isExternalFile: Boolean): Any {
         val file = File(absolutePath)
         val isNewFile = !file.exists()
 
@@ -110,13 +122,34 @@ class WriteFileTool(private val project: Project) {
             }
         }
 
-        // 写入文件
-        file.writeText(content, Charsets.UTF_8)
+        // 使用 VirtualFile API 写入文件
+        val virtualFile: VirtualFile?
+        
+        if (isNewFile) {
+            // 新文件：先用 Java IO 创建，然后刷新 VFS
+            file.writeText(content, Charsets.UTF_8)
+            virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
+        } else {
+            // 已存在的文件：尝试使用 VirtualFile API
+            virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
+            if (virtualFile != null) {
+                // 使用 VirtualFile API 写入（自动同步 VFS 和索引）
+                virtualFile.setBinaryContent(content.toByteArray(virtualFile.charset))
+            } else {
+                // 回退到 Java IO
+                file.writeText(content, Charsets.UTF_8)
+            }
+        }
 
-        // 刷新 VFS 以便 IDE 能看到变更
-        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
+        // 外部文件：立即刷新到磁盘
+        if (isExternalFile && virtualFile != null) {
+            val document = FileDocumentManager.getInstance().getDocument(virtualFile)
+            if (document != null) {
+                FileDocumentManager.getInstance().saveDocument(document)
+            }
+        }
 
-        return formatOutput(originalPath, absolutePath, content, isNewFile, virtualFile)
+        return formatOutput(originalPath, absolutePath, content, isNewFile, isExternalFile, virtualFile)
     }
 
     /**
@@ -127,12 +160,14 @@ class WriteFileTool(private val project: Project) {
         absolutePath: String,
         content: String,
         isNewFile: Boolean,
+        isExternalFile: Boolean,
         virtualFile: VirtualFile?
     ): String {
         val sb = StringBuilder()
 
         val action = if (isNewFile) "Created" else "Updated"
-        sb.appendLine("## $action File: `$originalPath`")
+        val locationHint = if (isExternalFile) " (external)" else ""
+        sb.appendLine("## $action File$locationHint: `$originalPath`")
         sb.appendLine()
         sb.appendLine("**Path:** `$absolutePath`")
         sb.appendLine("**Size:** ${content.length} characters, ${content.lines().size} lines")

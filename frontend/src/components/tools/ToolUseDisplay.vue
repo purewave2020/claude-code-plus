@@ -237,7 +237,7 @@ const asMcpToolCall = computed(() => {
   const mcpToolName = input.toolName || `mcp__${input.server}__${input.tool}`
   return {
     ...props.toolCall,
-    toolType: OTHER_TOOL_TYPE.MCP,
+    toolType: OTHER_TOOL_TYPE.GENERIC,
     toolName: mcpToolName,
     // Codex 使用 arguments 字段存储实际参数
     input: input.arguments || {},

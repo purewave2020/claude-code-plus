@@ -342,7 +342,7 @@ export function convertFileEditToEdit(toolCall: CodexFileChangeToolCall) {
 export function convertMcpToolCall(toolCall: CodexMcpToolCall) {
   return {
     ...toolCall,
-    toolType: 'MCP' as const,
+    toolType: 'GENERIC' as const,
     toolName: `mcp__${toolCall.input.server ? toolCall.input.server + '__' : ''}${toolCall.input.toolName}`,
     input: toolCall.input.parameters,
     result: convertCodexResultToClaudeFormat(toolCall.result)

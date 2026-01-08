@@ -481,21 +481,13 @@ export interface ClaudeReadMcpResourceToolCall extends BaseToolCall {
   }
 }
 
-// ============ 其他工具类型 ============
+// ============ 通用工具类型 ============
 
 /**
- * MCP 工具调用
+ * 通用工具调用（包括 MCP 工具和其他未识别工具）
  */
-export interface McpToolCall extends BaseToolCall {
-  toolType: typeof OTHER_TOOL_TYPE.MCP
-  input: Record<string, any>
-}
-
-/**
- * 未知工具调用
- */
-export interface UnknownToolCall extends BaseToolCall {
-  toolType: typeof OTHER_TOOL_TYPE.UNKNOWN
+export interface GenericToolCall extends BaseToolCall {
+  toolType: typeof OTHER_TOOL_TYPE.GENERIC
   input: Record<string, any>
 }
 
@@ -526,8 +518,7 @@ export type ToolCall =
   | ClaudeSlashCommandToolCall
   | ClaudeListMcpResourcesToolCall
   | ClaudeReadMcpResourceToolCall
-  | McpToolCall
-  | UnknownToolCall
+  | GenericToolCall
 
 /**
  * 所有显示项的联合类型（使用 displayType 作为判别器）

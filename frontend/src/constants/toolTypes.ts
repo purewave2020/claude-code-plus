@@ -3,8 +3,8 @@
  *
  * 命名规范:
  * - Claude SDK 工具: CLAUDE_<TOOL> (如 CLAUDE_READ, CLAUDE_EDIT)
- * - MCP 工具: MCP
- * - 未知工具: UNKNOWN
+ * - Codex 工具: CODEX_<TOOL> (如 CODEX_BASH, CODEX_EDIT)
+ * - 通用工具: GENERIC (包括 MCP 工具和其他未识别工具)
  */
 
 /**
@@ -41,17 +41,14 @@ export const CODEX_TOOL_TYPE = {
   BASH: 'CODEX_BASH',
   WRITE: 'CODEX_WRITE',
   EDIT: 'CODEX_EDIT',
-  MCP: 'CODEX_MCP',
   WEB_SEARCH: 'CODEX_WEB_SEARCH',
-  UNKNOWN: 'CODEX_UNKNOWN',
 } as const
 
 /**
- * 其他工具类型常量
+ * 通用工具类型常量（包括 MCP 工具和其他未识别工具）
  */
 export const OTHER_TOOL_TYPE = {
-  MCP: 'MCP',
-  UNKNOWN: 'UNKNOWN',
+  GENERIC: 'GENERIC',
 } as const
 
 /**
@@ -101,11 +98,8 @@ export const TOOL_NAME_TO_TYPE: Record<string, ToolType> = {
  * 辅助函数：根据工具名称解析类型
  *
  * @param name 工具名称（如 "Read", "mcp__excel__read"）
- * @returns 工具类型标识（如 "CLAUDE_READ", "MCP"）
+ * @returns 工具类型标识（如 "CLAUDE_READ", "GENERIC"）
  */
 export function resolveToolType(name: string): ToolType {
-  if (name.startsWith('mcp__')) {
-    return OTHER_TOOL_TYPE.MCP
-  }
-  return TOOL_NAME_TO_TYPE[name] || OTHER_TOOL_TYPE.UNKNOWN
+  return TOOL_NAME_TO_TYPE[name] || OTHER_TOOL_TYPE.GENERIC
 }

@@ -91,6 +91,11 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         // JetBrains File MCP 禁用内置工具配置
         var jetbrainsFileDisableBuiltinTools: Boolean = true, // 启用 JetBrains File MCP 时禁用内置工具
         var jetbrainsFileDisabledTools: String = "Read,Write,Edit", // 禁用的内置工具列表（逗号分隔）
+        // JetBrains File MCP 外部文件配置
+        var jetbrainsFileAllowExternal: Boolean = false, // 是否允许访问项目外部文件
+        var jetbrainsFileExternalDir1: String = "", // 外部目录 1
+        var jetbrainsFileExternalDir2: String = "", // 外部目录 2
+        var jetbrainsFileExternalDir3: String = "", // 外部目录 3
         // MCP 工具调用超时配置（秒），0 表示永不超时
         var userInteractionMcpTimeout: Int = 0,        // User Interaction MCP 默认永不超时
         var jetbrainsMcpTimeout: Int = 60,             // JetBrains MCP 默认 60 秒
@@ -303,6 +308,64 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
      */
     fun setJetbrainsFileDisabledToolsList(tools: List<String>) {
         state.jetbrainsFileDisabledTools = tools.joinToString(",")
+    }
+
+    // JetBrains File MCP 外部文件配置
+    var jetbrainsFileAllowExternal: Boolean
+        get() = state.jetbrainsFileAllowExternal
+        set(value) { state.jetbrainsFileAllowExternal = value }
+
+    var jetbrainsFileExternalDir1: String
+        get() = state.jetbrainsFileExternalDir1
+        set(value) { state.jetbrainsFileExternalDir1 = value }
+
+    var jetbrainsFileExternalDir2: String
+        get() = state.jetbrainsFileExternalDir2
+        set(value) { state.jetbrainsFileExternalDir2 = value }
+
+    var jetbrainsFileExternalDir3: String
+        get() = state.jetbrainsFileExternalDir3
+        set(value) { state.jetbrainsFileExternalDir3 = value }
+
+    /**
+     * 获取 JetBrains File MCP 允许的外部目录列表
+     * @return 非空的外部目录路径列表
+     */
+    fun getJetbrainsFileExternalDirs(): List<String> {
+        if (!state.jetbrainsFileAllowExternal) return emptyList()
+        return listOfNotNull(
+            state.jetbrainsFileExternalDir1.takeIf { it.isNotBlank() },
+            state.jetbrainsFileExternalDir2.takeIf { it.isNotBlank() },
+            state.jetbrainsFileExternalDir3.takeIf { it.isNotBlank() }
+        )
+    }
+
+    /**
+     * 检查文件路径是否在允许的范围内（项目内或允许的外部目录内）
+     * @param filePath 文件的绝对路径
+     * @param projectBasePath 项目根目录
+     * @return true 如果文件在允许的范围内
+     */
+    fun isFilePathAllowed(filePath: String, projectBasePath: String): Boolean {
+        val normalizedPath = java.io.File(filePath).canonicalPath
+        val normalizedProjectPath = java.io.File(projectBasePath).canonicalPath
+
+        // 项目内文件始终允许
+        if (normalizedPath.startsWith(normalizedProjectPath)) {
+            return true
+        }
+
+        // 检查是否在允许的外部目录内
+        if (state.jetbrainsFileAllowExternal) {
+            for (externalDir in getJetbrainsFileExternalDirs()) {
+                val normalizedExternalDir = java.io.File(externalDir).canonicalPath
+                if (normalizedPath.startsWith(normalizedExternalDir)) {
+                    return true
+                }
+            }
+        }
+
+        return false
     }
 
     var enableContext7Mcp: Boolean

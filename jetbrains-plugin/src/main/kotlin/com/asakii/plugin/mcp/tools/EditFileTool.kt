@@ -4,10 +4,12 @@ import com.asakii.claude.agent.sdk.mcp.ToolResult
 import com.asakii.claude.agent.sdk.mcp.currentToolUseId
 import com.asakii.plugin.mcp.getBoolean
 import com.asakii.plugin.mcp.getString
+import com.asakii.settings.AgentSettingsService
 import com.intellij.history.LocalHistory
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import kotlinx.serialization.json.JsonObject
 import mu.KotlinLogging
@@ -20,6 +22,7 @@ private val logger = KotlinLogging.logger {}
  *
  * 通过字符串替换来编辑文件内容。
  * 支持相对路径（相对于项目根目录）和绝对路径。
+ * 支持编辑项目外部的指定目录（需要在设置中配置）。
  */
 class EditFileTool(private val project: Project) {
 
@@ -43,9 +46,16 @@ class EditFileTool(private val project: Project) {
         // 解析路径（支持相对路径和绝对路径）
         val absolutePath = resolvePath(filePath, projectBasePath)
 
-        // 安全检查：确保文件在项目目录内
-        if (!absolutePath.startsWith(File(projectBasePath).canonicalPath)) {
-            return ToolResult.error("File path must be within project directory")
+        // 安全检查：确保文件在允许的范围内（项目内或配置的外部目录内）
+        val settings = AgentSettingsService.getInstance()
+        if (!settings.isFilePathAllowed(absolutePath, projectBasePath)) {
+            val externalDirs = settings.getJetbrainsFileExternalDirs()
+            val hint = if (externalDirs.isEmpty()) {
+                "Enable 'Allow external files' in settings to access files outside the project."
+            } else {
+                "Allowed external directories: ${externalDirs.joinToString(", ")}"
+            }
+            return ToolResult.error("File path must be within project directory or allowed external directories. $hint")
         }
 
         val file = File(absolutePath)
@@ -62,11 +72,13 @@ class EditFileTool(private val project: Project) {
             logger.info { "EditFile: created LocalHistory label for toolUseId=$toolUseId" }
         }
 
+        val isExternalFile = !absolutePath.startsWith(File(projectBasePath).canonicalPath)
+
         return try {
             var result: Any = ""
             ApplicationManager.getApplication().invokeAndWait {
                 result = WriteAction.compute<Any, Exception> {
-                    editFileContent(file, oldString, newString, replaceAll, filePath)
+                    editFileContent(file, oldString, newString, replaceAll, filePath, isExternalFile)
                 }
             }
             result
@@ -111,16 +123,25 @@ class EditFileTool(private val project: Project) {
     }
 
     /**
-     * 编辑文件内容
+     * 编辑文件内容（使用 VirtualFile API）
      */
     private fun editFileContent(
         file: File,
         oldString: String,
         newString: String,
         replaceAll: Boolean,
-        originalPath: String
+        originalPath: String,
+        isExternalFile: Boolean
     ): Any {
-        val originalContent = file.readText(Charsets.UTF_8)
+        // 尝试获取 VirtualFile
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
+        
+        // 读取文件内容
+        val originalContent = if (virtualFile != null) {
+            String(virtualFile.contentsToByteArray(), virtualFile.charset)
+        } else {
+            file.readText(Charsets.UTF_8)
+        }
 
         // 标准化换行符用于匹配（解决 CRLF vs LF 问题）
         val normalizedContent = normalizeLineEndings(originalContent)
@@ -171,10 +192,23 @@ class EditFileTool(private val project: Project) {
         } else {
             newNormalizedContent
         }
-        file.writeText(finalContent, Charsets.UTF_8)
 
-        // 刷新 VFS
-        LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
+        // 使用 VirtualFile API 写入（如果可用）
+        if (virtualFile != null) {
+            virtualFile.setBinaryContent(finalContent.toByteArray(virtualFile.charset))
+            
+            // 外部文件：立即刷新到磁盘
+            if (isExternalFile) {
+                val document = FileDocumentManager.getInstance().getDocument(virtualFile)
+                if (document != null) {
+                    FileDocumentManager.getInstance().saveDocument(document)
+                }
+            }
+        } else {
+            file.writeText(finalContent, Charsets.UTF_8)
+            // 刷新 VFS
+            LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
+        }
 
         // 统计替换次数（使用标准化内容）
         val replacementCount = if (replaceAll) {
@@ -183,7 +217,7 @@ class EditFileTool(private val project: Project) {
             1
         }
 
-        return formatOutput(originalPath, oldString, newString, replacementCount, replaceAll)
+        return formatOutput(originalPath, oldString, newString, replacementCount, replaceAll, isExternalFile)
     }
 
     /**
@@ -209,11 +243,13 @@ class EditFileTool(private val project: Project) {
         oldString: String,
         newString: String,
         replacementCount: Int,
-        replaceAll: Boolean
+        replaceAll: Boolean,
+        isExternalFile: Boolean
     ): String {
         val sb = StringBuilder()
 
-        sb.appendLine("## Edited File: `$originalPath`")
+        val locationHint = if (isExternalFile) " (external)" else ""
+        sb.appendLine("## Edited File$locationHint: `$originalPath`")
         sb.appendLine()
         sb.appendLine("**Replacements:** $replacementCount occurrence(s)")
         sb.appendLine("**Mode:** ${if (replaceAll) "Replace All" else "Replace First"}")

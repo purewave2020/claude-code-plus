@@ -9,7 +9,7 @@ import { computed } from 'vue'
 import type { ToolCall } from '@/types/display'
 import { CLAUDE_TOOL_COMPONENTS } from '@/components/chat/tool-displays/claudeRegistry'
 import { CODEX_TOOL_COMPONENTS } from '@/components/chat/tool-displays/codexRegistry'
-import GenericMcpToolDisplay from '@/components/tools/GenericMcpToolDisplay.vue'
+import GenericToolDisplay from '@/components/tools/GenericToolDisplay.vue'
 import JetBrainsMcpToolDisplay from '@/components/tools/JetBrainsMcpToolDisplay.vue'
 import TerminalMcpToolDisplay from '@/components/tools/TerminalMcpToolDisplay.vue'
 
@@ -42,7 +42,7 @@ const resolvedComponent = computed(() => {
   }
 
   const registry = isCodexToolType.value ? CODEX_TOOL_COMPONENTS : CLAUDE_TOOL_COMPONENTS
-  return registry[props.toolCall.toolType] ?? GenericMcpToolDisplay
+  return registry[props.toolCall.toolType] ?? GenericToolDisplay
 })
 </script>
 

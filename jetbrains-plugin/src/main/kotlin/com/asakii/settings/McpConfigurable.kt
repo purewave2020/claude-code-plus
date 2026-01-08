@@ -444,7 +444,12 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 (terminalEntry?.codexDisabledFeatures?.contains(CodexFeatures.SHELL_TOOL) == true)) != settings.terminalDisableBuiltinBash ||
             // JetBrains File MCP 禁用工具配置
             (jetbrainsFileEntry?.disabledTools?.isNotEmpty() ?: false) != settings.jetbrainsFileDisableBuiltinTools ||
-            jetbrainsFileEntry?.disabledTools != settings.getJetbrainsFileDisabledToolsList()
+            jetbrainsFileEntry?.disabledTools != settings.getJetbrainsFileDisabledToolsList() ||
+            // JetBrains File MCP 外部文件配置
+            jetbrainsFileEntry?.fileAllowExternal != settings.jetbrainsFileAllowExternal ||
+            jetbrainsFileEntry?.fileExternalDir1 != settings.jetbrainsFileExternalDir1 ||
+            jetbrainsFileEntry?.fileExternalDir2 != settings.jetbrainsFileExternalDir2 ||
+            jetbrainsFileEntry?.fileExternalDir3 != settings.jetbrainsFileExternalDir3
         ) {
             return true
         }
@@ -539,6 +544,11 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         settings.userInteractionMcpTimeout = userInteractionEntry?.toolTimeoutSec ?: 0
         settings.jetbrainsMcpTimeout = jetbrainsEntry?.toolTimeoutSec ?: 60
         settings.jetbrainsFileMcpTimeout = jetbrainsFileEntry?.toolTimeoutSec ?: 60
+        // 保存 JetBrains File MCP 外部文件配置
+        settings.jetbrainsFileAllowExternal = jetbrainsFileEntry?.fileAllowExternal ?: false
+        settings.jetbrainsFileExternalDir1 = jetbrainsFileEntry?.fileExternalDir1 ?: ""
+        settings.jetbrainsFileExternalDir2 = jetbrainsFileEntry?.fileExternalDir2 ?: ""
+        settings.jetbrainsFileExternalDir3 = jetbrainsFileEntry?.fileExternalDir3 ?: ""
         settings.context7McpTimeout = context7Entry?.toolTimeoutSec ?: 60
         settings.terminalMcpTimeout = terminalEntry?.toolTimeoutSec ?: 60
         settings.gitMcpTimeout = gitEntry?.toolTimeoutSec ?: 60
@@ -648,7 +658,11 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             disabledTools = if (settings.jetbrainsFileDisableBuiltinTools) settings.getJetbrainsFileDisabledToolsList() else emptyList(),
             codexDisabledFeatures = if (settings.jetbrainsFileDisableBuiltinTools) listOf(CodexFeatures.APPLY_PATCH_FREEFORM) else emptyList(),
             hasDisableToolsToggle = true,
-            toolTimeoutSec = settings.jetbrainsFileMcpTimeout
+            toolTimeoutSec = settings.jetbrainsFileMcpTimeout,
+            fileAllowExternal = settings.jetbrainsFileAllowExternal,
+            fileExternalDir1 = settings.jetbrainsFileExternalDir1,
+            fileExternalDir2 = settings.jetbrainsFileExternalDir2,
+            fileExternalDir3 = settings.jetbrainsFileExternalDir3
         ))
         builtInServers.add(McpServerEntry(
             name = "Context7 MCP",
@@ -966,7 +980,15 @@ data class McpServerEntry(
     /** JetBrains Terminal MCP: TerminalRead 默认超时时间（秒） */
     val terminalReadTimeout: Int = 30,
     /** 工具调用超时时间（秒），0 表示永不超时，默认 60 秒 */
-    val toolTimeoutSec: Int = 60
+    val toolTimeoutSec: Int = 60,
+    /** JetBrains File MCP: 是否允许访问外部文件 */
+    val fileAllowExternal: Boolean = false,
+    /** JetBrains File MCP: 外部目录 1 */
+    val fileExternalDir1: String = "",
+    /** JetBrains File MCP: 外部目录 2 */
+    val fileExternalDir2: String = "",
+    /** JetBrains File MCP: 外部目录 3 */
+    val fileExternalDir3: String = ""
 )
 
 private class McpBackendSelection(initialKeys: Set<String>) {
@@ -1097,6 +1119,12 @@ class BuiltInMcpServerDialog(
     // 通用工具调用超时配置（0 表示永不超时）
     private val toolTimeoutField = JBTextField(entry.toolTimeoutSec.toString(), 6)
 
+    // JetBrains File MCP 外部文件配置
+    private val fileAllowExternalCheckbox = JBCheckBox("Allow external files", entry.fileAllowExternal)
+    private val fileExternalDir1Field = JBTextField(entry.fileExternalDir1, 40)
+    private val fileExternalDir2Field = JBTextField(entry.fileExternalDir2, 40)
+    private val fileExternalDir3Field = JBTextField(entry.fileExternalDir3, 40)
+
     // JetBrains Terminal MCP Shell 配置
     // 动态检测已安装的 shell
     private val allShellTypes = AgentSettingsService.getInstance().detectInstalledShells()
@@ -1124,6 +1152,33 @@ class BuiltInMcpServerDialog(
             defaultShellCombo.selectedItem = currentSelection
         } else if (enabledShells.isNotEmpty()) {
             defaultShellCombo.selectedIndex = 0
+        }
+    }
+
+    /**
+     * 创建目录选择按钮
+     */
+    private fun createBrowseButton(targetField: JBTextField): JButton {
+        return JButton("...").apply {
+            preferredSize = Dimension(30, targetField.preferredSize.height)
+            toolTipText = "Browse for directory"
+            addActionListener {
+                val fileChooser = JFileChooser().apply {
+                    fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+                    dialogTitle = "Select Directory"
+                    // 如果当前有路径，从该路径开始
+                    val currentPath = targetField.text.trim()
+                    if (currentPath.isNotEmpty()) {
+                        val currentDir = java.io.File(currentPath)
+                        if (currentDir.exists()) {
+                            currentDirectory = currentDir
+                        }
+                    }
+                }
+                if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    targetField.text = fileChooser.selectedFile.absolutePath
+                }
+            }
         }
     }
 
@@ -1335,6 +1390,89 @@ class BuiltInMcpServerDialog(
             }
             topPanel.add(codexButtonPanel)
             topPanel.add(Box.createVerticalStrut(8))
+        }
+
+        // JetBrains File MCP 的外部文件配置
+        if (entry.name == "JetBrains File MCP") {
+            val externalFilesLabel = JBLabel("External Files Access:").apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+            }
+            topPanel.add(externalFilesLabel)
+            topPanel.add(Box.createVerticalStrut(4))
+
+            // 允许外部文件复选框
+            val allowExternalPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(fileAllowExternalCheckbox)
+            }
+            topPanel.add(allowExternalPanel)
+            topPanel.add(Box.createVerticalStrut(4))
+
+            // 外部目录输入框面板
+            val externalDirsPanel = JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                alignmentX = JPanel.LEFT_ALIGNMENT
+            }
+
+            val dirLabel = JBLabel("Allowed external directories:").apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                foreground = JBColor(0x666666, 0x999999)
+                font = font.deriveFont(11f)
+            }
+            externalDirsPanel.add(dirLabel)
+            externalDirsPanel.add(Box.createVerticalStrut(4))
+
+            // 目录 1
+            val dir1Panel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(JBLabel("Dir 1: "))
+                add(fileExternalDir1Field)
+                add(Box.createHorizontalStrut(4))
+                add(createBrowseButton(fileExternalDir1Field))
+            }
+            externalDirsPanel.add(dir1Panel)
+            externalDirsPanel.add(Box.createVerticalStrut(2))
+
+            // 目录 2
+            val dir2Panel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(JBLabel("Dir 2: "))
+                add(fileExternalDir2Field)
+                add(Box.createHorizontalStrut(4))
+                add(createBrowseButton(fileExternalDir2Field))
+            }
+            externalDirsPanel.add(dir2Panel)
+            externalDirsPanel.add(Box.createVerticalStrut(2))
+
+            // 目录 3
+            val dir3Panel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(JBLabel("Dir 3: "))
+                add(fileExternalDir3Field)
+                add(Box.createHorizontalStrut(4))
+                add(createBrowseButton(fileExternalDir3Field))
+            }
+            externalDirsPanel.add(dir3Panel)
+
+            topPanel.add(externalDirsPanel)
+            topPanel.add(Box.createVerticalStrut(4))
+
+            val externalHintLabel = JBLabel(
+                "<html><font color='#666666' size='2'>Leave directories empty to only allow project files. " +
+                "Files must be within specified directories.</font></html>"
+            ).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+            }
+            topPanel.add(externalHintLabel)
+            topPanel.add(Box.createVerticalStrut(8))
+
+            // 根据复选框状态启用/禁用目录输入框
+            fun updateExternalDirsState() {
+                val enabled = fileAllowExternalCheckbox.isSelected
+                setEnabledRecursively(externalDirsPanel, enabled)
+            }
+            updateExternalDirsState()
+            fileAllowExternalCheckbox.addActionListener { updateExternalDirsState() }
         }
 
         // JetBrains Terminal MCP 的 Shell 配置
@@ -1612,7 +1750,19 @@ class BuiltInMcpServerDialog(
             terminalReadTimeout = if (entry.name == "JetBrains Terminal MCP") {
                 readTimeoutField.text.toIntOrNull() ?: 30
             } else entry.terminalReadTimeout,
-            toolTimeoutSec = (toolTimeoutField.text.toIntOrNull() ?: 60).coerceAtLeast(0)
+            toolTimeoutSec = (toolTimeoutField.text.toIntOrNull() ?: 60).coerceAtLeast(0),
+            fileAllowExternal = if (entry.name == "JetBrains File MCP") {
+                fileAllowExternalCheckbox.isSelected
+            } else entry.fileAllowExternal,
+            fileExternalDir1 = if (entry.name == "JetBrains File MCP") {
+                fileExternalDir1Field.text.trim()
+            } else entry.fileExternalDir1,
+            fileExternalDir2 = if (entry.name == "JetBrains File MCP") {
+                fileExternalDir2Field.text.trim()
+            } else entry.fileExternalDir2,
+            fileExternalDir3 = if (entry.name == "JetBrains File MCP") {
+                fileExternalDir3Field.text.trim()
+            } else entry.fileExternalDir3
         )
     }
 }

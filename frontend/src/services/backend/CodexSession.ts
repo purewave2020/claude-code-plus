@@ -139,6 +139,8 @@ export class CodexSession extends BaseBackendSession {
     }
   >()
   private pendingItems = new Map<string, CodexItem>()
+  // 记录活跃的工具调用 item.id，用于 item/completed 时判断是否为工具
+  private activeToolCalls = new Set<string>()
 
   // Process management
   private backendUrl: string | null = null
@@ -606,34 +608,19 @@ export class CodexSession extends BaseBackendSession {
         if (item?.id) {
           this.pendingItems.set(item.id, item)
         }
-        if (item.type === 'commandExecution') {
+
+        // Codex item -> Claude tool_use 格式（类型映射只在这里）
+        const toolInfo = this.mapCodexItemToTool(item)
+        if (toolInfo) {
+          // 记录这是一个工具调用，供 item/completed 使用
+          this.activeToolCalls.add(item.id)
           this.emitEvent({
             type: 'tool_started',
             sessionId,
             timestamp,
             itemId: item.id,
-            toolType: 'bash',
-            toolName: 'commandExecution',
-            parameters: params as Record<string, unknown>,
-          })
-        } else if (item.type === 'fileChange') {
-          this.emitEvent({
-            type: 'tool_started',
-            sessionId,
-            timestamp,
-            itemId: item.id,
-            toolType: 'edit',
-            toolName: 'fileChange',
-            parameters: params as Record<string, unknown>,
-          })
-        } else if (item.type === 'mcpToolCall') {
-          this.emitEvent({
-            type: 'tool_started',
-            sessionId,
-            timestamp,
-            itemId: item.id,
-            toolType: 'mcp',
-            toolName: 'mcpToolCall',
+            toolType: toolInfo.type,
+            toolName: toolInfo.name,
             parameters: params as Record<string, unknown>,
           })
         }
@@ -665,14 +652,34 @@ export class CodexSession extends BaseBackendSession {
         if (item?.id) {
           this.pendingItems.delete(item.id)
         }
-        this.emitEvent({
-          type: 'tool_completed',
-          sessionId,
-          timestamp,
-          itemId: item.id,
-          success: item.status === 'Completed' || item.status === 'Applied',
-          result: params,
-        })
+
+        // 通过 activeToolCalls 判断是否为工具（不再检查 Codex 类型）
+        if (this.activeToolCalls.has(item.id)) {
+          this.activeToolCalls.delete(item.id)
+
+          const toolItem = item as {
+            id: string
+            result?: { content?: unknown; structured_content?: unknown }
+            output?: string
+            error?: { message: string }
+            status?: string
+          }
+
+          // 统一的 tool_result 格式
+          this.emitEvent({
+            type: 'tool_completed',
+            sessionId,
+            timestamp,
+            itemId: item.id,
+            success: item.status === 'Completed' || item.status === 'Applied',
+            result: {
+              type: 'tool_result',
+              tool_use_id: item.id,
+              content: toolItem.result?.content ?? toolItem.output,
+              is_error: toolItem.status === 'Failed' || !!toolItem.error,
+            },
+          })
+        }
         break
       }
 
@@ -702,6 +709,19 @@ export class CodexSession extends BaseBackendSession {
       default:
         console.log('[CodexSession] Unhandled notification:', method)
     }
+  }
+
+  /**
+   * 将 Codex item 映射为 Claude tool 格式
+   * 如果不是工具类型，返回 null
+   */
+  private mapCodexItemToTool(item: CodexItem): { type: string; name: string } | null {
+    const toolMap: Record<string, { type: string; name: string }> = {
+      commandExecution: { type: 'bash', name: 'Bash' },
+      fileChange: { type: 'edit', name: 'Edit' },
+      mcpToolCall: { type: 'GENERIC', name: 'MCP' },
+    }
+    return toolMap[item.type] ?? null
   }
 
   private handleServerRequest(request: JsonRpcServerRequest): void {
