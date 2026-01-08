@@ -159,7 +159,6 @@ class UiStreamAdapter {
             )
             is CommandExecutionContent,
             is ToolResultContent,
-            is McpToolCallContent,
             is FileChangeContent,
             is WebSearchContent -> {
                 val toolId = when (content) {

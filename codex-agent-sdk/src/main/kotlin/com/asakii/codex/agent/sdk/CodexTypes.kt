@@ -31,6 +31,9 @@ data class ThreadItem(
     val items: List<TodoEntry>? = null,
     val arguments: JsonElement? = null,
     val content: JsonElement? = null,
+    // MCP 工具调用字段
+    val server: String? = null,
+    val tool: String? = null,
 )
 
 @Serializable

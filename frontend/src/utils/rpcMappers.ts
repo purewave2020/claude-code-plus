@@ -60,15 +60,6 @@ export function mapRpcContentBlock(block: RpcContentBlock): ContentBlock | null 
       }
     case 'file_change':
       return { type: 'file_change', changes: block.changes, status: block.status }
-    case 'mcp_tool_call':
-      return {
-        type: 'mcp_tool_call',
-        server: block.server,
-        tool: block.tool,
-        arguments: block.arguments,
-        result: block.result,
-        status: block.status
-      }
     case 'web_search':
       return { type: 'web_search', query: block.query }
     case 'todo_list':

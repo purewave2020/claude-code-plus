@@ -1056,14 +1056,12 @@ class AiAgentRpcServiceImpl(
 
         val overrides = mutableMapOf<String, JsonElement>()
         fun applyTimeoutOverride(serverName: String, timeout: Long?) {
-            if (timeout == null || timeout <= 0) {
-                overrides["mcp_servers.$serverName.tool_timeout_sec"] = JsonPrimitive(0)
-            } else {
-                // 将毫秒转换为秒（Codex 使用秒）
-                val timeoutSec = timeout / 1000
-                if (timeoutSec > 0) {
-                    overrides["mcp_servers.$serverName.tool_timeout_sec"] = JsonPrimitive(timeoutSec)
-                }
+            // 当 timeout 为 null 或 <= 0 时，不设置 override，让 Codex 使用默认值（60秒）
+            // 注意：Codex 不支持 0 作为"永不超时"，设置 0 会导致立即超时！
+            if (timeout != null && timeout > 0) {
+                // 将毫秒转换为秒（Codex 使用秒），最小 1 秒
+                val timeoutSec = (timeout / 1000).coerceAtLeast(1)
+                overrides["mcp_servers.$serverName.tool_timeout_sec"] = JsonPrimitive(timeoutSec)
             }
         }
 
@@ -1502,13 +1500,7 @@ class AiAgentRpcServiceImpl(
             status = status.toRpcStatus(),
             changes = changes.map { RpcFileChange(path = it.path, kind = it.kind) }
         )
-        is McpToolCallContent -> RpcMcpToolCallBlock(
-            server = server,
-            tool = tool,
-            arguments = arguments,
-            result = result,
-            status = status.toRpcStatus()
-        )
+        // McpToolCallContent 已删除，MCP 工具调用统一使用 ToolUseContent + ToolResultContent
         is WebSearchContent -> RpcWebSearchBlock(query = query)
         is TodoListContent -> RpcTodoListBlock(
             items = items.map { RpcTodoItem(text = it.text, completed = it.completed) }
@@ -1656,7 +1648,7 @@ class AiAgentRpcServiceImpl(
                 is ToolResultContent -> "ToolResult(toolUseId=${block.toolUseId}, content=${block.content}, isError=${block.isError})"
                 is CommandExecutionContent -> "Command(cmd=${block.command}, output=${block.output}, exitCode=${block.exitCode})"
                 is FileChangeContent -> "FileChange(changes=${block.changes})"
-                is McpToolCallContent -> "McpTool(server=${block.server}, tool=${block.tool}, args=${block.arguments}, result=${block.result})"
+                // McpToolCallContent 已删除，MCP 工具调用统一使用 ToolUseContent
                 is WebSearchContent -> "WebSearch(query=${block.query})"
                 is TodoListContent -> "TodoList(items=${block.items})"
                 is ErrorContent -> "Error(${block.message})"

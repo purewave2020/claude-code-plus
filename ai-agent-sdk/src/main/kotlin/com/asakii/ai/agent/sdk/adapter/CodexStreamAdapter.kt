@@ -78,6 +78,23 @@ class CodexStreamAdapter(
                         index = index,
                         content = convertThreadItem(item)
                     )
+                    
+                    // 如果是 mcp_tool_call 且有 result，额外生成 ToolResultContent
+                    if (item.type == "mcp_tool_call") {
+                        val toolUseId = item.id ?: return result
+                        val mcpResult = item.result?.structuredContent ?: item.result?.content
+                        val isError = item.error != null || item.status?.lowercase() == "failed"
+                        
+                        result += ContentCompletedEvent(
+                            provider = AiAgentProvider.CODEX,
+                            index = indexCounter++,
+                            content = ToolResultContent(
+                                toolUseId = toolUseId,
+                                content = mcpResult,
+                                isError = isError
+                            )
+                        )
+                    }
                 }
             }
 
@@ -137,11 +154,10 @@ class CodexStreamAdapter(
                 changes = item.changes.orEmpty(),
                 status = item.status.toContentStatus()
             )
-            "mcp_tool_call" -> McpToolCallContent(
-                server = null,
-                tool = null,
-                arguments = item.arguments,
-                result = item.result?.structuredContent ?: item.result?.content,
+            "mcp_tool_call" -> ToolUseContent(
+                id = item.id ?: idGenerator(),
+                name = buildMcpToolName(item.server, item.tool),
+                input = item.arguments,
                 status = item.status.toContentStatus()
             )
             "web_search" -> WebSearchContent(item.query.orEmpty())
@@ -179,6 +195,15 @@ class CodexStreamAdapter(
             "failed" -> ContentStatus.FAILED
             else -> ContentStatus.COMPLETED
         }
+
+    /**
+     * 构建 MCP 工具名称，格式：mcp__server__tool
+     */
+    private fun buildMcpToolName(server: String?, tool: String?): String {
+        val s = server ?: "unknown"
+        val t = tool ?: "unknown"
+        return "mcp__${s}__${t}"
+    }
 
     private fun resolveSessionId(event: ThreadEvent): String {
         val incoming = event.threadId?.takeIf { it.isNotBlank() }

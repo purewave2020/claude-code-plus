@@ -196,6 +196,16 @@ export function createToolCall(
   if (block.toolName === 'Task') {
     (toolCall as any).agentName = (block as any).input?.subagent_type || (block as any).input?.model
   }
+
+  // 如果 block 中已经有 result（如 Codex mcp_tool_call），直接设置
+  const blockResult = (block as any).result
+  if (blockResult) {
+    const normalizedResult = normalizeCodexToolResult(blockResult)
+    toolCall.status = normalizedResult.is_error ? ToolCallStatus.FAILED : ToolCallStatus.SUCCESS
+    toolCall.endTime = Date.now()
+    toolCall.result = normalizedResult as ToolResult
+  }
+
   pendingToolCalls.set(block.id, toolCall)
   return toolCall
 }

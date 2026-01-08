@@ -91,15 +91,7 @@ data class FileChangeContent(
     override val type: String = "file_change"
 }
 
-data class McpToolCallContent(
-    val server: String?,
-    val tool: String?,
-    val arguments: JsonElement?,
-    val result: JsonElement?,
-    val status: ContentStatus
-) : UnifiedContentBlock {
-    override val type: String = "mcp_tool_call"
-}
+// McpToolCallContent 已删除，统一使用 ToolUseContent + ToolResultContent
 
 data class WebSearchContent(
     val query: String
