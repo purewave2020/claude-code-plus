@@ -50,6 +50,25 @@ data class CustomModelConfig(
 )
 
 /**
+ * 外部路径规则类型
+ */
+enum class ExternalPathRuleType {
+    INCLUDE,  // 包含（允许访问）
+    EXCLUDE   // 排除（禁止访问）
+}
+
+/**
+ * 外部路径访问规则
+ *
+ * 用于控制哪些项目外部路径可以被访问
+ */
+@Serializable
+data class ExternalPathRule(
+    val path: String,                    // 目录路径
+    val type: ExternalPathRuleType       // 规则类型
+)
+
+/**
  * 统一的模型信息类
  *
  * 用于统一表示内置模型和自定义模型
@@ -92,10 +111,15 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var jetbrainsFileDisableBuiltinTools: Boolean = true, // 启用 JetBrains File MCP 时禁用内置工具
         var jetbrainsFileDisabledTools: String = "Read,Write,Edit", // 禁用的内置工具列表（逗号分隔）
         // JetBrains File MCP 外部文件配置
-        var jetbrainsFileAllowExternal: Boolean = false, // 是否允许访问项目外部文件
-        var jetbrainsFileExternalDir1: String = "", // 外部目录 1
-        var jetbrainsFileExternalDir2: String = "", // 外部目录 2
-        var jetbrainsFileExternalDir3: String = "", // 外部目录 3
+        var jetbrainsFileAllowExternal: Boolean = true, // 是否允许访问项目外部文件（默认开启）
+        var jetbrainsFileExternalRules: String = "[]", // 外部路径规则列表（JSON 序列化）
+        // 旧版配置（用于迁移，新版本不再使用）
+        @Deprecated("Use jetbrainsFileExternalRules instead")
+        var jetbrainsFileExternalDir1: String = "", // 外部目录 1（已废弃）
+        @Deprecated("Use jetbrainsFileExternalRules instead")
+        var jetbrainsFileExternalDir2: String = "", // 外部目录 2（已废弃）
+        @Deprecated("Use jetbrainsFileExternalRules instead")
+        var jetbrainsFileExternalDir3: String = "", // 外部目录 3（已废弃）
         // MCP 工具调用超时配置（秒），0 表示永不超时
         var userInteractionMcpTimeout: Int = 0,        // User Interaction MCP 默认永不超时
         var jetbrainsMcpTimeout: Int = 60,             // JetBrains MCP 默认 60 秒
@@ -225,6 +249,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     override fun loadState(state: State) {
         XmlSerializerUtil.copyBean(state, this.state)
         migrateLegacyModelIds()
+        migrateOldExternalDirsConfig()  // 迁移旧版外部目录配置
         this.state.defaultBackendType = normalizeBackendType(this.state.defaultBackendType)
     }
 
@@ -315,57 +340,165 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         get() = state.jetbrainsFileAllowExternal
         set(value) { state.jetbrainsFileAllowExternal = value }
 
+    var jetbrainsFileExternalRules: String
+        get() = state.jetbrainsFileExternalRules
+        set(value) { state.jetbrainsFileExternalRules = value }
+
+    // 旧版配置属性（用于迁移，已废弃）
+    @Suppress("DEPRECATION")
+    @Deprecated("Use jetbrainsFileExternalRules instead")
     var jetbrainsFileExternalDir1: String
         get() = state.jetbrainsFileExternalDir1
         set(value) { state.jetbrainsFileExternalDir1 = value }
 
+    @Suppress("DEPRECATION")
+    @Deprecated("Use jetbrainsFileExternalRules instead")
     var jetbrainsFileExternalDir2: String
         get() = state.jetbrainsFileExternalDir2
         set(value) { state.jetbrainsFileExternalDir2 = value }
 
+    @Suppress("DEPRECATION")
+    @Deprecated("Use jetbrainsFileExternalRules instead")
     var jetbrainsFileExternalDir3: String
         get() = state.jetbrainsFileExternalDir3
         set(value) { state.jetbrainsFileExternalDir3 = value }
 
     /**
-     * 获取 JetBrains File MCP 允许的外部目录列表
-     * @return 非空的外部目录路径列表
+     * 获取外部路径规则列表
+     */
+    fun getExternalPathRules(): List<ExternalPathRule> {
+        return try {
+            Json.decodeFromString<List<ExternalPathRule>>(state.jetbrainsFileExternalRules)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * 设置外部路径规则列表
+     */
+    fun setExternalPathRules(rules: List<ExternalPathRule>) {
+        state.jetbrainsFileExternalRules = Json.encodeToString(rules)
+    }
+
+    /**
+     * 添加外部路径规则
+     */
+    fun addExternalPathRule(rule: ExternalPathRule) {
+        val rules = getExternalPathRules().toMutableList()
+        // 避免重复添加相同路径和类型的规则
+        if (rules.none { it.path == rule.path && it.type == rule.type }) {
+            rules.add(rule)
+            setExternalPathRules(rules)
+        }
+    }
+
+    /**
+     * 移除外部路径规则
+     */
+    fun removeExternalPathRule(index: Int) {
+        val rules = getExternalPathRules().toMutableList()
+        if (index in rules.indices) {
+            rules.removeAt(index)
+            setExternalPathRules(rules)
+        }
+    }
+
+    /**
+     * 获取 JetBrains File MCP 允许的外部目录列表（兼容旧接口）
+     * @return Include 规则中的目录路径列表
      */
     fun getJetbrainsFileExternalDirs(): List<String> {
         if (!state.jetbrainsFileAllowExternal) return emptyList()
-        return listOfNotNull(
-            state.jetbrainsFileExternalDir1.takeIf { it.isNotBlank() },
-            state.jetbrainsFileExternalDir2.takeIf { it.isNotBlank() },
-            state.jetbrainsFileExternalDir3.takeIf { it.isNotBlank() }
-        )
+        return getExternalPathRules()
+            .filter { it.type == ExternalPathRuleType.INCLUDE }
+            .map { it.path }
     }
 
     /**
      * 检查文件路径是否在允许的范围内（项目内或允许的外部目录内）
+     *
+     * 规则优先级：
+     * 1. 项目内文件始终允许
+     * 2. 如果不允许外部文件访问，返回 false
+     * 3. Exclude 规则优先于 Include 规则
+     * 4. 如果没有任何规则，允许所有外部路径
+     * 5. 如果只有 Exclude 规则，允许未被排除的路径
+     * 6. 如果有 Include 规则，只允许匹配的路径
+     *
      * @param filePath 文件的绝对路径
      * @param projectBasePath 项目根目录
      * @return true 如果文件在允许的范围内
      */
     fun isFilePathAllowed(filePath: String, projectBasePath: String): Boolean {
-        val normalizedPath = java.io.File(filePath).canonicalPath
-        val normalizedProjectPath = java.io.File(projectBasePath).canonicalPath
+        val normalizedPath = java.io.File(filePath).canonicalPath.replace("\\", "/").lowercase()
+        val normalizedProjectPath = java.io.File(projectBasePath).canonicalPath.replace("\\", "/").lowercase()
 
         // 项目内文件始终允许
         if (normalizedPath.startsWith(normalizedProjectPath)) {
             return true
         }
 
-        // 检查是否在允许的外部目录内
-        if (state.jetbrainsFileAllowExternal) {
-            for (externalDir in getJetbrainsFileExternalDirs()) {
-                val normalizedExternalDir = java.io.File(externalDir).canonicalPath
-                if (normalizedPath.startsWith(normalizedExternalDir)) {
-                    return true
-                }
+        // 如果不允许外部文件访问，返回 false
+        if (!state.jetbrainsFileAllowExternal) {
+            return false
+        }
+
+        val rules = getExternalPathRules()
+
+        // 如果没有任何规则，允许所有外部路径
+        if (rules.isEmpty()) {
+            return true
+        }
+
+        // 先检查 Exclude 规则（优先级高）
+        for (rule in rules.filter { it.type == ExternalPathRuleType.EXCLUDE }) {
+            val rulePath = rule.path.replace("\\", "/").lowercase()
+            if (normalizedPath.startsWith(rulePath) || normalizedPath.startsWith("$rulePath/")) {
+                return false  // 在排除列表中
             }
         }
 
-        return false
+        // 检查 Include 规则
+        val includeRules = rules.filter { it.type == ExternalPathRuleType.INCLUDE }
+
+        // 如果没有 Include 规则（只有 Exclude 规则），允许未被排除的路径
+        if (includeRules.isEmpty()) {
+            return true
+        }
+
+        // 如果有 Include 规则，检查是否匹配
+        for (rule in includeRules) {
+            val rulePath = rule.path.replace("\\", "/").lowercase()
+            if (normalizedPath.startsWith(rulePath) || normalizedPath.startsWith("$rulePath/")) {
+                return true  // 在包含列表中
+            }
+        }
+
+        return false  // 有 Include 规则但不匹配任何
+    }
+
+    /**
+     * 迁移旧版配置到新版
+     */
+    @Suppress("DEPRECATION")
+    fun migrateOldExternalDirsConfig() {
+        val oldDirs = listOfNotNull(
+            state.jetbrainsFileExternalDir1.takeIf { it.isNotBlank() },
+            state.jetbrainsFileExternalDir2.takeIf { it.isNotBlank() },
+            state.jetbrainsFileExternalDir3.takeIf { it.isNotBlank() }
+        )
+
+        if (oldDirs.isNotEmpty() && getExternalPathRules().isEmpty()) {
+            // 将旧配置迁移为 Include 规则
+            val newRules = oldDirs.map { ExternalPathRule(it, ExternalPathRuleType.INCLUDE) }
+            setExternalPathRules(newRules)
+
+            // 清空旧配置
+            state.jetbrainsFileExternalDir1 = ""
+            state.jetbrainsFileExternalDir2 = ""
+            state.jetbrainsFileExternalDir3 = ""
+        }
     }
 
     var enableContext7Mcp: Boolean

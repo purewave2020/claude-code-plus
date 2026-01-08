@@ -3,6 +3,8 @@ package com.asakii.settings
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionToolbarPosition
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileChooser.FileChooser
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.SearchableConfigurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
@@ -13,6 +15,7 @@ import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.components.*
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -447,9 +450,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             jetbrainsFileEntry?.disabledTools != settings.getJetbrainsFileDisabledToolsList() ||
             // JetBrains File MCP 外部文件配置
             jetbrainsFileEntry?.fileAllowExternal != settings.jetbrainsFileAllowExternal ||
-            jetbrainsFileEntry?.fileExternalDir1 != settings.jetbrainsFileExternalDir1 ||
-            jetbrainsFileEntry?.fileExternalDir2 != settings.jetbrainsFileExternalDir2 ||
-            jetbrainsFileEntry?.fileExternalDir3 != settings.jetbrainsFileExternalDir3
+            jetbrainsFileEntry?.fileExternalRules != settings.jetbrainsFileExternalRules
         ) {
             return true
         }
@@ -545,10 +546,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         settings.jetbrainsMcpTimeout = jetbrainsEntry?.toolTimeoutSec ?: 60
         settings.jetbrainsFileMcpTimeout = jetbrainsFileEntry?.toolTimeoutSec ?: 60
         // 保存 JetBrains File MCP 外部文件配置
-        settings.jetbrainsFileAllowExternal = jetbrainsFileEntry?.fileAllowExternal ?: false
-        settings.jetbrainsFileExternalDir1 = jetbrainsFileEntry?.fileExternalDir1 ?: ""
-        settings.jetbrainsFileExternalDir2 = jetbrainsFileEntry?.fileExternalDir2 ?: ""
-        settings.jetbrainsFileExternalDir3 = jetbrainsFileEntry?.fileExternalDir3 ?: ""
+        settings.jetbrainsFileAllowExternal = jetbrainsFileEntry?.fileAllowExternal ?: true
+        settings.jetbrainsFileExternalRules = jetbrainsFileEntry?.fileExternalRules ?: "[]"
         settings.context7McpTimeout = context7Entry?.toolTimeoutSec ?: 60
         settings.terminalMcpTimeout = terminalEntry?.toolTimeoutSec ?: 60
         settings.gitMcpTimeout = gitEntry?.toolTimeoutSec ?: 60
@@ -660,9 +659,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             hasDisableToolsToggle = true,
             toolTimeoutSec = settings.jetbrainsFileMcpTimeout,
             fileAllowExternal = settings.jetbrainsFileAllowExternal,
-            fileExternalDir1 = settings.jetbrainsFileExternalDir1,
-            fileExternalDir2 = settings.jetbrainsFileExternalDir2,
-            fileExternalDir3 = settings.jetbrainsFileExternalDir3
+            fileExternalRules = settings.jetbrainsFileExternalRules
         ))
         builtInServers.add(McpServerEntry(
             name = "Context7 MCP",
@@ -982,13 +979,9 @@ data class McpServerEntry(
     /** 工具调用超时时间（秒），0 表示永不超时，默认 60 秒 */
     val toolTimeoutSec: Int = 60,
     /** JetBrains File MCP: 是否允许访问外部文件 */
-    val fileAllowExternal: Boolean = false,
-    /** JetBrains File MCP: 外部目录 1 */
-    val fileExternalDir1: String = "",
-    /** JetBrains File MCP: 外部目录 2 */
-    val fileExternalDir2: String = "",
-    /** JetBrains File MCP: 外部目录 3 */
-    val fileExternalDir3: String = ""
+    val fileAllowExternal: Boolean = true,
+    /** JetBrains File MCP: 外部路径规则（JSON 序列化） */
+    val fileExternalRules: String = "[]"
 )
 
 private class McpBackendSelection(initialKeys: Set<String>) {
@@ -1121,9 +1114,33 @@ class BuiltInMcpServerDialog(
 
     // JetBrains File MCP 外部文件配置
     private val fileAllowExternalCheckbox = JBCheckBox("Allow external files", entry.fileAllowExternal)
-    private val fileExternalDir1Field = JBTextField(entry.fileExternalDir1, 40)
-    private val fileExternalDir2Field = JBTextField(entry.fileExternalDir2, 40)
-    private val fileExternalDir3Field = JBTextField(entry.fileExternalDir3, 40)
+    // 外部路径规则列表
+    private val externalRulesListModel = DefaultListModel<ExternalPathRule>().apply {
+        try {
+            val rules = Json.decodeFromString<List<ExternalPathRule>>(entry.fileExternalRules)
+            rules.forEach { addElement(it) }
+        } catch (_: Exception) { }
+    }
+    private val externalRulesList = JBList(externalRulesListModel).apply {
+        cellRenderer = object : DefaultListCellRenderer() {
+            override fun getListCellRendererComponent(
+                list: JList<*>?,
+                value: Any?,
+                index: Int,
+                isSelected: Boolean,
+                cellHasFocus: Boolean
+            ): Component {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
+                if (value is ExternalPathRule) {
+                    val icon = if (value.type == ExternalPathRuleType.INCLUDE) "✓" else "✗"
+                    val typeLabel = if (value.type == ExternalPathRuleType.INCLUDE) "Include" else "Exclude"
+                    text = "$icon [$typeLabel] ${value.path}"
+                }
+                return this
+            }
+        }
+        selectionMode = ListSelectionModel.SINGLE_SELECTION
+    }
 
     // JetBrains Terminal MCP Shell 配置
     // 动态检测已安装的 shell
@@ -1408,71 +1425,107 @@ class BuiltInMcpServerDialog(
             topPanel.add(allowExternalPanel)
             topPanel.add(Box.createVerticalStrut(4))
 
-            // 外部目录输入框面板
-            val externalDirsPanel = JPanel().apply {
+            // 外部路径规则面板
+            val externalRulesPanel = JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
                 alignmentX = JPanel.LEFT_ALIGNMENT
             }
 
-            val dirLabel = JBLabel("Allowed external directories:").apply {
+            val rulesLabel = JBLabel("Path rules (Exclude > Include priority):").apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 foreground = JBColor(0x666666, 0x999999)
                 font = font.deriveFont(11f)
             }
-            externalDirsPanel.add(dirLabel)
-            externalDirsPanel.add(Box.createVerticalStrut(4))
+            externalRulesPanel.add(rulesLabel)
+            externalRulesPanel.add(Box.createVerticalStrut(4))
 
-            // 目录 1
-            val dir1Panel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+            // 规则列表
+            val listScrollPane = JBScrollPane(externalRulesList).apply {
+                preferredSize = Dimension(400, 100)
+                minimumSize = Dimension(300, 80)
                 alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Dir 1: "))
-                add(fileExternalDir1Field)
-                add(Box.createHorizontalStrut(4))
-                add(createBrowseButton(fileExternalDir1Field))
             }
-            externalDirsPanel.add(dir1Panel)
-            externalDirsPanel.add(Box.createVerticalStrut(2))
+            externalRulesPanel.add(listScrollPane)
+            externalRulesPanel.add(Box.createVerticalStrut(4))
 
-            // 目录 2
-            val dir2Panel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+            // 按钮面板
+            val buttonsPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Dir 2: "))
-                add(fileExternalDir2Field)
-                add(Box.createHorizontalStrut(4))
-                add(createBrowseButton(fileExternalDir2Field))
-            }
-            externalDirsPanel.add(dir2Panel)
-            externalDirsPanel.add(Box.createVerticalStrut(2))
 
-            // 目录 3
-            val dir3Panel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Dir 3: "))
-                add(fileExternalDir3Field)
-                add(Box.createHorizontalStrut(4))
-                add(createBrowseButton(fileExternalDir3Field))
-            }
-            externalDirsPanel.add(dir3Panel)
+                // + Include 按钮
+                add(JButton("+ Include").apply {
+                    toolTipText = "Add a directory to the include list"
+                    addActionListener {
+                        val descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor()
+                        descriptor.title = "Select Directory to Include"
+                        val chosen = FileChooser.chooseFile(descriptor, null, null)
+                        if (chosen != null) {
+                            val rule = ExternalPathRule(chosen.path, ExternalPathRuleType.INCLUDE)
+                            // 检查是否已存在相同规则
+                            val exists = (0 until externalRulesListModel.size()).any {
+                                val existing = externalRulesListModel.getElementAt(it)
+                                existing.path == rule.path && existing.type == rule.type
+                            }
+                            if (!exists) {
+                                externalRulesListModel.addElement(rule)
+                            }
+                        }
+                    }
+                })
 
-            topPanel.add(externalDirsPanel)
+                // + Exclude 按钮
+                add(JButton("+ Exclude").apply {
+                    toolTipText = "Add a directory to the exclude list"
+                    addActionListener {
+                        val descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor()
+                        descriptor.title = "Select Directory to Exclude"
+                        val chosen = FileChooser.chooseFile(descriptor, null, null)
+                        if (chosen != null) {
+                            val rule = ExternalPathRule(chosen.path, ExternalPathRuleType.EXCLUDE)
+                            // 检查是否已存在相同规则
+                            val exists = (0 until externalRulesListModel.size()).any {
+                                val existing = externalRulesListModel.getElementAt(it)
+                                existing.path == rule.path && existing.type == rule.type
+                            }
+                            if (!exists) {
+                                externalRulesListModel.addElement(rule)
+                            }
+                        }
+                    }
+                })
+
+                // Remove 按钮
+                add(JButton("Remove").apply {
+                    toolTipText = "Remove selected rule"
+                    addActionListener {
+                        val selectedIndex = externalRulesList.selectedIndex
+                        if (selectedIndex >= 0) {
+                            externalRulesListModel.remove(selectedIndex)
+                        }
+                    }
+                })
+            }
+            externalRulesPanel.add(buttonsPanel)
+
+            topPanel.add(externalRulesPanel)
             topPanel.add(Box.createVerticalStrut(4))
 
             val externalHintLabel = JBLabel(
-                "<html><font color='#666666' size='2'>Leave directories empty to only allow project files. " +
-                "Files must be within specified directories.</font></html>"
+                "<html><font color='#666666' size='2'>Empty rules = allow all external paths. " +
+                "Exclude rules take priority over Include rules.</font></html>"
             ).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
             }
             topPanel.add(externalHintLabel)
             topPanel.add(Box.createVerticalStrut(8))
 
-            // 根据复选框状态启用/禁用目录输入框
-            fun updateExternalDirsState() {
+            // 根据复选框状态启用/禁用规则面板
+            fun updateExternalRulesState() {
                 val enabled = fileAllowExternalCheckbox.isSelected
-                setEnabledRecursively(externalDirsPanel, enabled)
+                setEnabledRecursively(externalRulesPanel, enabled)
             }
-            updateExternalDirsState()
-            fileAllowExternalCheckbox.addActionListener { updateExternalDirsState() }
+            updateExternalRulesState()
+            fileAllowExternalCheckbox.addActionListener { updateExternalRulesState() }
         }
 
         // JetBrains Terminal MCP 的 Shell 配置
@@ -1754,15 +1807,10 @@ class BuiltInMcpServerDialog(
             fileAllowExternal = if (entry.name == "JetBrains File MCP") {
                 fileAllowExternalCheckbox.isSelected
             } else entry.fileAllowExternal,
-            fileExternalDir1 = if (entry.name == "JetBrains File MCP") {
-                fileExternalDir1Field.text.trim()
-            } else entry.fileExternalDir1,
-            fileExternalDir2 = if (entry.name == "JetBrains File MCP") {
-                fileExternalDir2Field.text.trim()
-            } else entry.fileExternalDir2,
-            fileExternalDir3 = if (entry.name == "JetBrains File MCP") {
-                fileExternalDir3Field.text.trim()
-            } else entry.fileExternalDir3
+            fileExternalRules = if (entry.name == "JetBrains File MCP") {
+                val rules = (0 until externalRulesListModel.size()).map { externalRulesListModel.getElementAt(it) }
+                Json.encodeToString(rules)
+            } else entry.fileExternalRules
         )
     }
 }

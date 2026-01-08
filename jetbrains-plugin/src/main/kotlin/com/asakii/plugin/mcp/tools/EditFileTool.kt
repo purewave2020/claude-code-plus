@@ -49,13 +49,12 @@ class EditFileTool(private val project: Project) {
         // 安全检查：确保文件在允许的范围内（项目内或配置的外部目录内）
         val settings = AgentSettingsService.getInstance()
         if (!settings.isFilePathAllowed(absolutePath, projectBasePath)) {
-            val externalDirs = settings.getJetbrainsFileExternalDirs()
-            val hint = if (externalDirs.isEmpty()) {
+            val hint = if (!settings.jetbrainsFileAllowExternal) {
                 "Enable 'Allow external files' in settings to access files outside the project."
             } else {
-                "Allowed external directories: ${externalDirs.joinToString(", ")}"
+                "File path is excluded or not in allowed directories. Check path rules in settings."
             }
-            return ToolResult.error("File path must be within project directory or allowed external directories. $hint")
+            return ToolResult.error("错误: $hint")
         }
 
         val file = File(absolutePath)
