@@ -103,6 +103,14 @@ class EditFileTool(private val project: Project) {
     }
 
     /**
+     * 标准化换行符（CRLF -> LF）
+     * 用于解决 Windows 文件 CRLF 与参数 LF 不匹配的问题
+     */
+    private fun normalizeLineEndings(text: String): String {
+        return text.replace("\r\n", "\n")
+    }
+
+    /**
      * 编辑文件内容
      */
     private fun editFileContent(
@@ -114,8 +122,13 @@ class EditFileTool(private val project: Project) {
     ): Any {
         val originalContent = file.readText(Charsets.UTF_8)
 
-        // 检查 oldString 是否存在
-        if (!originalContent.contains(oldString)) {
+        // 标准化换行符用于匹配（解决 CRLF vs LF 问题）
+        val normalizedContent = normalizeLineEndings(originalContent)
+        val normalizedOldString = normalizeLineEndings(oldString)
+        val normalizedNewString = normalizeLineEndings(newString)
+
+        // 检查 oldString 是否存在（使用标准化后的内容匹配）
+        if (!normalizedContent.contains(normalizedOldString)) {
             return ToolResult.error("""
                 |oldString not found in file: $originalPath
                 |
@@ -124,9 +137,9 @@ class EditFileTool(private val project: Project) {
             """.trimMargin())
         }
 
-        // 检查 oldString 是否唯一（如果不是 replaceAll 模式）
+        // 检查 oldString 是否唯一（如果不是 replaceAll 模式，使用标准化内容检查）
         if (!replaceAll) {
-            val occurrences = countOccurrences(originalContent, oldString)
+            val occurrences = countOccurrences(normalizedContent, normalizedOldString)
             if (occurrences > 1) {
                 return ToolResult.error("""
                     |oldString is not unique in file: $originalPath
@@ -139,27 +152,33 @@ class EditFileTool(private val project: Project) {
             }
         }
 
-        // 执行替换
-        val newContent = if (replaceAll) {
-            originalContent.replace(oldString, newString)
+        // 执行替换（在标准化内容上进行）
+        val newNormalizedContent = if (replaceAll) {
+            normalizedContent.replace(normalizedOldString, normalizedNewString)
         } else {
-            originalContent.replaceFirst(oldString, newString)
+            normalizedContent.replaceFirst(normalizedOldString, normalizedNewString)
         }
 
         // 检查是否有变化
-        if (originalContent == newContent) {
+        if (normalizedContent == newNormalizedContent) {
             return ToolResult.error("No changes made: oldString equals newString")
         }
 
-        // 写入文件
-        file.writeText(newContent, Charsets.UTF_8)
+        // 写入文件（保持原文件的换行符格式）
+        val hasCRLF = originalContent.contains("\r\n")
+        val finalContent = if (hasCRLF) {
+            newNormalizedContent.replace("\n", "\r\n")
+        } else {
+            newNormalizedContent
+        }
+        file.writeText(finalContent, Charsets.UTF_8)
 
         // 刷新 VFS
         LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
 
-        // 统计替换次数
+        // 统计替换次数（使用标准化内容）
         val replacementCount = if (replaceAll) {
-            countOccurrences(originalContent, oldString)
+            countOccurrences(normalizedContent, normalizedOldString)
         } else {
             1
         }
