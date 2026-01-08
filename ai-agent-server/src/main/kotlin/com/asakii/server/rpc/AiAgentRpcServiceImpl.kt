@@ -448,12 +448,14 @@ class AiAgentRpcServiceImpl(
                                         val resultBlock = event.result.toRpcContentBlock()
                                         val toolResultMessage = RpcUserMessage(
                                             message = RpcMessageContent(content = listOf(resultBlock)),
-                                            parentToolUseId = event.toolId,
+                                            // 使用 event.parentToolUseId（父工具调用 ID），而不是 event.toolId
+                                            // 如果 parentToolUseId 为 null，表示这是顶层工具调用的结果，会被 processToolResults 正确处理
+                                            parentToolUseId = event.parentToolUseId,
                                             provider = rpcProvider
                                         )
                                         messageHistory.add(toolResultMessage)
                                         send(toolResultMessage)
-                                        sdkLog.info("[executeTurn] tool result message sent toolId=${event.toolId}")
+                                        sdkLog.info("[executeTurn] tool result message sent toolId=${event.toolId}, parentToolUseId=${event.parentToolUseId}")
                                     }
 
                                     else -> {}
