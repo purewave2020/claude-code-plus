@@ -197,7 +197,9 @@ export default {
     rollbackFileConfirm: '{file} を変更前のバージョンにロールバックしますか？',
     rollbackModificationConfirm: 'この変更をロールバックしますか？この変更とその後の変更がすべて元に戻されます。',
     rollbackFailed: 'ロールバックに失敗しました',
-    rolledBack: 'ロールバック済み'
+    rolledBack: 'ロールバック済み',
+    rollback: 'ロールバック',
+    fileEditStats: '{files}ファイル、{edits}回の編集'
   },
   settings: {
     title: '設定',

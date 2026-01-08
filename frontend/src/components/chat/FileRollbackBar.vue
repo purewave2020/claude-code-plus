@@ -4,7 +4,7 @@
     <div class="rollback-header" @click="toggleExpanded">
       <span class="rollback-icon">↩</span>
       <span class="rollback-title">{{ t('tools.modifiedFiles') }}</span>
-      <span class="file-count">({{ changedFileCount }})</span>
+      <span class="file-count">({{ t('tools.fileEditStats', { files: changedFileCount, edits: totalEditCount }) }})</span>
       <span class="expand-icon" :class="{ expanded }">▾</span>
     </div>
 
@@ -105,6 +105,7 @@ const expanded = ref(false)
 const fileChanges = computed(() => fileChangesInstance?.fileChanges.value ?? [])
 const hasChanges = computed(() => fileChangesInstance?.hasChanges.value ?? false)
 const changedFileCount = computed(() => fileChangesInstance?.changedFileCount.value ?? 0)
+const totalEditCount = computed(() => fileChangesInstance?.totalEditCount.value ?? 0)
 
 // 检查文件是否正在回滚
 function isRollingBack(filePath: string): boolean {
@@ -163,10 +164,7 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   }
 }
 
-// 暴露刷新方法
-defineExpose({
-  refresh: () => fileChangesInstance?.refresh()
-})
+
 </script>
 
 <style scoped>

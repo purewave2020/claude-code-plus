@@ -215,7 +215,9 @@ export default {
     rollbackFileConfirm: '确定要将 {file} 回滚到修改前的版本吗？',
     rollbackModificationConfirm: '确定要回滚此修改吗？该修改及之后的修改都将被还原。',
     rollbackFailed: '回滚失败',
-    rolledBack: '已回滚'
+    rolledBack: '已回滚',
+    rollback: '回滚',
+    fileEditStats: '{files} 个文件, {edits} 次编辑'
   },
   settings: {
     title: '设置',

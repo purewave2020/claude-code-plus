@@ -197,7 +197,9 @@ export default {
     rollbackFileConfirm: '{file}을(를) 수정 전 버전으로 롤백하시겠습니까?',
     rollbackModificationConfirm: '이 수정을 롤백하시겠습니까? 이 수정과 이후 모든 수정이 되돌려집니다.',
     rollbackFailed: '롤백 실패',
-    rolledBack: '롤백됨'
+    rolledBack: '롤백됨',
+    rollback: '롤백',
+    fileEditStats: '{files}개 파일, {edits}회 편집'
   },
   settings: {
     title: '설정',

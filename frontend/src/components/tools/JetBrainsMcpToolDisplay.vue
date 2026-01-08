@@ -3,8 +3,23 @@
     :display-info="displayInfo"
     :is-expanded="expanded"
     :has-details="hasDetails"
-    @click="expanded = !expanded"
+    :tool-call="toolCallData"
+    @toggle="expanded = !expanded"
   >
+    <!-- 回滚按钮（仅对当前会话的 WriteFile/EditFile 显示） -->
+    <template v-if="showRollbackBtn" #header-actions>
+      <button
+        class="rollback-btn"
+        :class="{ loading: isRollingBack }"
+        :disabled="isRollingBack"
+        :title="t('tools.rollback')"
+        @click.stop="handleRollback"
+      >
+        <span v-if="isRollingBack" class="spinner" />
+        <span v-else>↩</span>
+      </button>
+    </template>
+
     <template #details>
       <div class="jetbrains-tool-details">
         <!-- 参数区域：key: value 形式一行一行展示 -->
@@ -68,21 +83,64 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import type { GenericToolCall } from '@/types/display'
-import CompactToolCard from './CompactToolCard.vue'
+import CompactToolCard, { type ToolCallData } from './CompactToolCard.vue'
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer.vue'
 import { extractToolDisplayInfo } from '@/utils/toolDisplayInfo'
+import { useI18n } from '@/composables/useI18n'
+import { isJetBrainsFileEditTool, type FileChangesInstance } from '@/composables/useFileChanges'
+
+const { t } = useI18n()
 
 interface Props {
   toolCall: GenericToolCall
 }
 
 const props = defineProps<Props>()
+
+// 注入 fileChanges 实例
+const fileChangesInstance = inject<FileChangesInstance>('fileChanges')
+
 // 默认折叠，与其他工具保持一致
 const expanded = ref(false)
 
+// 回滚中状态
+const isRollingBack = ref(false)
+
 const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall as any, props.toolCall.result as any))
+
+// 构造 toolCallData 用于拦截器
+const toolCallData = computed<ToolCallData>(() => ({
+  toolType: props.toolCall.toolName,
+  toolUseId: props.toolCall.id,
+  input: (props.toolCall.input || {}) as Record<string, unknown>,
+  result: props.toolCall.result as ToolCallData['result']
+}))
+
+// 是否显示回滚按钮
+const showRollbackBtn = computed(() => {
+  // 只对 WriteFile/EditFile 工具显示
+  if (!isJetBrainsFileEditTool(props.toolCall.toolName)) return false
+  // 检查是否在当前会话中且可以回滚
+  return fileChangesInstance?.canRollback(props.toolCall.id) ?? false
+})
+
+// 处理回滚
+async function handleRollback() {
+  if (!fileChangesInstance || isRollingBack.value) return
+  
+  isRollingBack.value = true
+  try {
+    const result = await fileChangesInstance.rollbackByToolUseId(props.toolCall.id)
+    if (!result.success) {
+      console.error('Rollback failed:', result.error)
+      alert(t('tools.rollbackFailed') + ': ' + result.error)
+    }
+  } finally {
+    isRollingBack.value = false
+  }
+}
 
 const params = computed(() => props.toolCall.input || {})
 
@@ -390,5 +448,48 @@ function embeddedMeta(block: any): string {
 
 .result-content :deep(.markdown-body pre) {
   background: var(--theme-background, #fff);
+}
+
+/* 回滚按钮 */
+.rollback-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--theme-secondary-foreground);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.rollback-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--theme-warning) 20%, transparent);
+  color: var(--theme-warning);
+}
+
+.rollback-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.rollback-btn .spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid transparent;
+  border-top-color: var(--theme-warning);
+  border-right-color: var(--theme-warning);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

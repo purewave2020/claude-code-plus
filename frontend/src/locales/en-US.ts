@@ -215,7 +215,9 @@ export default {
     rollbackFileConfirm: 'Are you sure you want to rollback {file} to the version before modification?',
     rollbackModificationConfirm: 'Are you sure you want to rollback this modification? This and all subsequent modifications will be reverted.',
     rollbackFailed: 'Rollback failed',
-    rolledBack: 'Rolled back'
+    rolledBack: 'Rolled back',
+    rollback: 'Rollback',
+    fileEditStats: '{files} files, {edits} edits'
   },
   settings: {
     title: 'Settings',
