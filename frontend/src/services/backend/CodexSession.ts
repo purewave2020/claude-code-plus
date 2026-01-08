@@ -162,8 +162,8 @@ export class CodexSession extends BaseBackendSession {
     supportedTools: ['bash', 'write', 'edit', 'mcp'],
     availableModels: [
       {
-        id: 'gpt-5.2-codex-max',
-        displayName: 'GPT-5.2-Codex-Max',
+        id: 'gpt-5.1-codex-max',
+        displayName: 'GPT-5.1-Codex-Max',
         isDefault: true,
         supportsThinking: true,
       },

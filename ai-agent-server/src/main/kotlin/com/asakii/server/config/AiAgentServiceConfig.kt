@@ -105,7 +105,7 @@ data class CodexDefaults(
     val defaultReasoningEffort: String? = null,
     val defaultReasoningSummary: String? = null,
     val webSearchEnabled: Boolean? = null,
-    val defaultModelId: String? = "gpt-5.2-codex-max",
+    val defaultModelId: String? = "gpt-5.2-codex",
     val defaultAutoCleanupContexts: Boolean = true
 )
 

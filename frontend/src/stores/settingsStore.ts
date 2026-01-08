@@ -150,7 +150,7 @@ const DEFAULT_SETTINGS: Settings = {
   claudeThinkingTokens: 8096,
 
   // Codex 设置（向后兼容）
-  codexModel: 'gpt-5.2-codex-max',
+  codexModel: 'gpt-5.2-codex',
   codexReasoningEffort: 'medium',
   codexReasoningSummary: 'auto',
   codexSandboxMode: 'workspace-write',

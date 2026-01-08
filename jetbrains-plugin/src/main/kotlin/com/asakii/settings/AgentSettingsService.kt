@@ -163,7 +163,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var nodePath: String = "",
         var codexPath: String = "",
         var codexWebSearchEnabled: Boolean = false,
-        var codexDefaultModelId: String = "gpt-5.2-codex-max",
+        var codexDefaultModelId: String = "gpt-5.2-codex",
         var codexDefaultReasoningEffort: String = "medium",
         var codexDefaultReasoningSummary: String = "auto",
         var codexDefaultSandboxMode: String = "workspace-write",
@@ -1154,8 +1154,8 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     fun getCodexBuiltInModels(): List<ModelInfo> {
         return listOf(
             ModelInfo(
-                modelId = "gpt-5.2-codex-max",
-                displayName = "GPT-5.2-Codex-Max",
+                modelId = "gpt-5.1-codex-max",
+                displayName = "GPT-5.1-Codex-Max",
                 isBuiltIn = true
             ),
             ModelInfo(

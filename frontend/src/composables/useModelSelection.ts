@@ -82,7 +82,7 @@ export function useModelSelection(options: UseModelSelectionOptions = {}) {
     if (backendType === 'codex') {
       // Codex 后端：modelId 即为模型 ID
       if (!modelId) {
-        return settingsStore.settings.codexModel || 'gpt-5.2-codex-max'
+        return settingsStore.settings.codexModel || 'gpt-5.2-codex'
       }
       return modelId
     }
@@ -145,7 +145,7 @@ export function useModelSelection(options: UseModelSelectionOptions = {}) {
   const selectedCodexModel = computed({
     get: () => {
       const modelId = sessionStore.currentTab?.modelId.value
-      return modelId || settingsStore.settings.codexModel || 'gpt-5.2-codex-max'
+      return modelId || settingsStore.settings.codexModel || 'gpt-5.2-codex'
     },
     set: (_val: string) => {
       // setter 由 handleCodexModelChange 处理

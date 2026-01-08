@@ -535,7 +535,7 @@ class HttpApiServer(
                                         data = mapOf(
                                             "defaultBackendType" to JsonPrimitive(config.defaultProvider.name.lowercase()),
                                             "claudeDefaultModelId" to JsonPrimitive(config.defaultModel ?: ""),
-                                            "codexDefaultModelId" to JsonPrimitive(config.codex.defaultModelId ?: "gpt-5.2-codex-max"),
+                                            "codexDefaultModelId" to JsonPrimitive(config.codex.defaultModelId ?: "gpt-5.2-codex"),
                                             "codexReasoningEffort" to JsonPrimitive(config.codex.defaultReasoningEffort ?: "medium"),
                                             "codexReasoningSummary" to JsonPrimitive(config.codex.defaultReasoningSummary ?: "auto"),
                                             "codexSandboxMode" to JsonPrimitive(config.codex.sandboxMode ?: "workspace-write"),
@@ -583,8 +583,8 @@ class HttpApiServer(
 
                                     val builtInCodexModels = listOf(
                                         mapOf(
-                                            "displayName" to JsonPrimitive("GPT-5.2-Codex-Max"),
-                                            "modelId" to JsonPrimitive("gpt-5.2-codex-max"),
+                                            "displayName" to JsonPrimitive("GPT-5.1-Codex-Max"),
+                                            "modelId" to JsonPrimitive("gpt-5.1-codex-max"),
                                             "isBuiltIn" to JsonPrimitive(true),
                                             "supportsThinking" to JsonPrimitive(true)
                                         ),
@@ -618,7 +618,7 @@ class HttpApiServer(
                                             "codexModels" to JsonArray((builtInCodexModels + codexCustomModels).map { JsonObject(it) }),
                                             "defaultBackendType" to JsonPrimitive(config.defaultProvider.name.lowercase()),
                                             "defaultClaudeModelId" to JsonPrimitive(config.defaultModel),
-                                            "defaultCodexModelId" to JsonPrimitive(config.codex.defaultModelId ?: "gpt-5.2-codex-max")
+                                            "defaultCodexModelId" to JsonPrimitive(config.codex.defaultModelId ?: "gpt-5.2-codex")
                                         )
                                     )
                                     call.respondText(json.encodeToString(response), ContentType.Application.Json)
