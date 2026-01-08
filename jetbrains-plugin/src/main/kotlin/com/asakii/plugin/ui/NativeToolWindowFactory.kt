@@ -36,6 +36,8 @@ import java.awt.event.MouseEvent
 import java.io.IOException
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import org.cef.browser.CefBrowser
+import org.cef.handler.CefDisplayHandlerAdapter
 import javax.swing.JComponent
 
 /**
@@ -99,6 +101,30 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
             .setOffScreenRendering(false)
             .setEnableOpenDevToolsMenuItem(true)
             .build()
+
+        // 拦截前端 console 消息并转发到 IDEA 日志
+        val frontendLogger = Logger.getInstance("Frontend")
+        browser.jbCefClient.addDisplayHandler(object : CefDisplayHandlerAdapter() {
+            override fun onConsoleMessage(
+                browser: CefBrowser,
+                level: org.cef.CefSettings.LogSeverity,
+                message: String,
+                source: String,
+                line: Int
+            ): Boolean {
+                val sourceInfo = source.substringAfterLast("/")
+                val logMessage = "[$sourceInfo:$line] $message"
+                when (level) {
+                    org.cef.CefSettings.LogSeverity.LOGSEVERITY_VERBOSE -> frontendLogger.debug(logMessage)
+                    org.cef.CefSettings.LogSeverity.LOGSEVERITY_INFO -> frontendLogger.info(logMessage)
+                    org.cef.CefSettings.LogSeverity.LOGSEVERITY_WARNING -> frontendLogger.warn(logMessage)
+                    org.cef.CefSettings.LogSeverity.LOGSEVERITY_ERROR,
+                    org.cef.CefSettings.LogSeverity.LOGSEVERITY_FATAL -> frontendLogger.error(logMessage)
+                    else -> frontendLogger.info(logMessage)
+                }
+                return false  // 继续默认处理
+            }
+        }, browser.cefBrowser)
 
         // 构建 URL 参数：ide=true + 初始主题
         val jetbrainsApi = httpService.jetbrainsApi
