@@ -27,7 +27,9 @@ import {
   JetBrainsSessionSummarySchema,
   JetBrainsGetOriginalContentResponseSchema,
   JetBrainsGetFileHistoryContentRequestSchema,
-  JetBrainsGetFileHistoryContentResponseSchema
+  JetBrainsGetFileHistoryContentResponseSchema,
+  JetBrainsRollbackFileRequestSchema,
+  JetBrainsRollbackFileResponseSchema
 } from '@/proto/jetbrains_api_pb'
 import {
   GetIdeSettingsResponseSchema,
@@ -226,6 +228,28 @@ function decodeGetFileHistoryContentResponse(data: Uint8Array): { success: boole
     success: proto.success,
     found: proto.found,
     content: proto.content || undefined,
+    error: proto.error || undefined
+  }
+}
+
+/**
+ * 编码 JetBrainsRollbackFileRequest
+ */
+function encodeRollbackFileRequest(filePath: string, beforeTimestamp: number): Uint8Array {
+  const proto = create(JetBrainsRollbackFileRequestSchema, {
+    filePath,
+    beforeTimestamp: BigInt(beforeTimestamp)
+  })
+  return toBinary(JetBrainsRollbackFileRequestSchema, proto)
+}
+
+/**
+ * 解码 JetBrainsRollbackFileResponse
+ */
+function decodeRollbackFileResponse(data: Uint8Array): { success: boolean; error?: string } {
+  const proto = fromBinary(JetBrainsRollbackFileResponseSchema, data)
+  return {
+    success: proto.success,
     error: proto.error || undefined
   }
 }
@@ -472,11 +496,46 @@ class JetBrainsRSocketService {
   private connected = false
 
   /**
-   * 连接到 JetBrains RSocket 端点
+   * 连接到 JetBrains RSocket 端点（带自动重试）
+   *
+   * 无限重试，直到连接成功。使用指数退避策略，最大延迟 10 秒。
+   * 适用于 IDEA 插件场景，后端一定会启动，只是时间问题。
+   *
+   * @param initialDelayMs 初始重试延迟（毫秒），默认 500ms
+   * @param maxDelayMs 最大重试延迟（毫秒），默认 10000ms
    */
-  async connect(): Promise<boolean> {
+  async connect(initialDelayMs = 500, maxDelayMs = 10000): Promise<boolean> {
     if (this.connected) return true
 
+    let attempt = 0
+
+    while (true) {
+      attempt++
+      try {
+        console.log(`[JetBrainsRSocket] 连接尝试 #${attempt}...`)
+        const success = await this.tryConnect()
+        if (success) {
+          if (attempt > 1) {
+            console.log(`[JetBrainsRSocket] 第 ${attempt} 次尝试连接成功`)
+          }
+          return true
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        console.warn(`[JetBrainsRSocket] 连接尝试 #${attempt} 失败:`, errorMsg)
+      }
+
+      // 指数退避，但不超过最大延迟
+      const delayMs = Math.min(initialDelayMs * Math.pow(2, attempt - 1), maxDelayMs)
+      console.log(`[JetBrainsRSocket] ${delayMs}ms 后重试...`)
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+  }
+
+  /**
+   * 尝试单次连接
+   */
+  private async tryConnect(): Promise<boolean> {
     try {
       const httpUrl = resolveServerHttpUrl()
       const wsUrl = httpUrl.replace(/^http/, 'ws') + '/jetbrains-rsocket'
@@ -592,8 +651,14 @@ class JetBrainsRSocketService {
       console.log('[JetBrainsRSocket] Connected')
       return true
     } catch (error) {
-      console.error('[JetBrainsRSocket] Connection failed:', error)
-      return false
+      // 清理失败的 client
+      if (this.client) {
+        try {
+          this.client.disconnect()
+        } catch (_) { /* ignore */ }
+        this.client = null
+      }
+      throw error
     }
   }
 
@@ -888,6 +953,35 @@ class JetBrainsRSocketService {
     } catch (error) {
       console.error('[JetBrainsRSocket] Failed to get file history content:', error)
       return null
+    }
+  }
+
+  /**
+   * 回滚文件到指定时间戳之前的版本
+   * 使用 LocalHistory API 恢复文件内容
+   *
+   * @param filePath 文件绝对路径
+   * @param beforeTimestamp 时间戳（毫秒），回滚到此时间之前的版本
+   * @returns 回滚结果，包含是否成功和错误信息
+   */
+  async rollbackFile(filePath: string, beforeTimestamp: number): Promise<{ success: boolean; error?: string }> {
+    if (!this.client) {
+      return { success: false, error: 'RSocket client not connected' }
+    }
+
+    try {
+      const data = encodeRollbackFileRequest(filePath, beforeTimestamp)
+      const response = await this.client.requestResponse('jetbrains.rollbackFile', data)
+      const result = decodeRollbackFileResponse(response)
+      if (result.success) {
+        console.log('[JetBrainsRSocket] Rolled back file:', filePath, 'to before:', beforeTimestamp)
+      } else {
+        console.warn('[JetBrainsRSocket] Rollback failed:', result.error)
+      }
+      return result
+    } catch (error) {
+      console.error('[JetBrainsRSocket] Failed to rollback file:', error)
+      return { success: false, error: String(error) }
     }
   }
 
