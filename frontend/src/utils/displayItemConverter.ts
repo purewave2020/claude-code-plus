@@ -197,7 +197,7 @@ export function createToolCall(
     (toolCall as any).agentName = (block as any).input?.subagent_type || (block as any).input?.model
   }
 
-  // 如果 block 中已经有 result（如 Codex mcp_tool_call），直接设置
+  // 如果 block 中已经有 result，直接设置（用于非流式响应）
   const blockResult = (block as any).result
   if (blockResult) {
     const normalizedResult = normalizeCodexToolResult(blockResult)

@@ -419,14 +419,7 @@ export interface RpcFileChange {
   kind: string
 }
 
-export interface RpcMcpToolCallBlock {
-  type: 'mcp_tool_call'
-  server?: string
-  tool?: string
-  arguments?: unknown
-  result?: unknown
-  status: RpcContentStatus
-}
+// RpcMcpToolCallBlock 已删除，统一使用 RpcToolUseBlock + RpcToolResultBlock
 
 export interface RpcWebSearchBlock {
   type: 'web_search'
@@ -463,7 +456,6 @@ export type RpcContentBlock =
   | RpcImageBlock
   | RpcCommandExecutionBlock
   | RpcFileChangeBlock
-  | RpcMcpToolCallBlock
   | RpcWebSearchBlock
   | RpcTodoListBlock
   | RpcErrorBlock

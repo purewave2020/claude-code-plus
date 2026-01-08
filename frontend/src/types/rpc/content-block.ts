@@ -230,61 +230,7 @@ export class FileChangeBlock extends ContentBlock {
   }
 }
 
-// ==================== MCP 工具调用块 ====================
-
-@BlockType('mcp_tool_call')
-export class McpToolCallBlock extends ContentBlock {
-  readonly type = 'mcp_tool_call' as const
-  readonly server?: string
-  readonly tool?: string
-  readonly arguments: any
-  readonly result?: any
-  readonly status: ContentStatus
-
-  constructor(data: any) {
-    super(data)
-    this.server = data?.server
-    this.tool = data?.tool
-    this.status = data?.status ?? 'in_progress'
-
-    // arguments 可能是 JSON 字符串
-    if (data?.arguments_json) {
-      try {
-        this.arguments = typeof data.arguments_json === 'string'
-          ? JSON.parse(data.arguments_json)
-          : data.arguments_json
-      } catch {
-        this.arguments = data.arguments_json
-      }
-    } else {
-      this.arguments = data?.arguments ?? {}
-    }
-
-    // result 可能是 JSON 字符串
-    if (data?.result_json) {
-      try {
-        this.result = typeof data.result_json === 'string'
-          ? JSON.parse(data.result_json)
-          : data.result_json
-      } catch {
-        this.result = data.result_json
-      }
-    } else {
-      this.result = data?.result
-    }
-  }
-
-  get isCompleted(): boolean {
-    return this.status === 'completed'
-  }
-
-  get fullName(): string {
-    if (this.server && this.tool) {
-      return `${this.server}:${this.tool}`
-    }
-    return this.tool ?? ''
-  }
-}
+// McpToolCallBlock 已删除，统一使用 ToolUseBlock + ToolResultBlock
 
 // ==================== 网页搜索块 ====================
 
