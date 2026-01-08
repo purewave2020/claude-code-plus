@@ -1226,7 +1226,8 @@ export function useSessionMessages(
       // 消息不在 UI 中（生成中排队的），先添加到 UI
       const { userMessage, mergedContent } = addMessageToUI({
         contexts: nextMessage.contexts,
-        contents: nextMessage.contents
+        contents: nextMessage.contents,
+        ideContext: nextMessage.ideContext  // 修复：传递 IDE 上下文
       })
       return {
         userMessage,
