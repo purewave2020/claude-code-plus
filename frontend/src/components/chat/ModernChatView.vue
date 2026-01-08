@@ -41,6 +41,9 @@
         <AskUserQuestionInteractive />
       </div>
 
+      <!-- 文件改动回滚条（输入框上方） -->
+      <FileRollbackBar />
+
       <!-- 输入区域 -->
       <ChatInput
         ref="chatInputRef"
@@ -161,11 +164,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, provide } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, provide, toRef } from 'vue'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useI18n } from '@/composables/useI18n'
 import { useEnvironment } from '@/composables/useEnvironment'
+import { useFileChanges } from '@/composables/useFileChanges'
 import { setupIdeSessionBridge, onIdeHostCommand } from '@/bridges/ideSessionBridge'
 import { aiAgentService } from '@/services/aiAgentService'
 import MessageList from './MessageList.vue'
@@ -174,6 +178,7 @@ import ChatHeader from './ChatHeader.vue'
 import SessionListOverlay from './SessionListOverlay.vue'
 import PendingMessageQueue from './PendingMessageQueue.vue'
 import CompactingCard from './CompactingCard.vue'
+import FileRollbackBar from './FileRollbackBar.vue'
 import ToolPermissionInteractive from '@/components/tools/ToolPermissionInteractive.vue'
 import AskUserQuestionInteractive from '@/components/tools/AskUserQuestionInteractive.vue'
 import { calculateToolStats } from '@/utils/toolStatistics'
@@ -195,13 +200,18 @@ const props = withDefaults(defineProps<Props>(), {
   showDebug: false
 })
 
+// 使用 stores（需要在使用前声明）
+const sessionStore = useSessionStore()
+const settingsStore = useSettingsStore()
+
 // 提供上下文给子组件（如 TaskToolDisplay）
 provide('projectPath', computed(() => props.projectPath))
 provide('aiAgentService', aiAgentService)
 
-// 使用 stores
-const sessionStore = useSessionStore()
-const settingsStore = useSettingsStore()
+// 文件改动追踪（用于回滚功能）
+const displayItemsRef = computed(() => sessionStore.currentDisplayItems)
+const fileChanges = useFileChanges(displayItemsRef)
+provide('fileChanges', fileChanges)
 const { t } = useI18n()
 const { isInIde, detectEnvironment } = useEnvironment()
 const isIdeMode = isInIde
@@ -437,22 +447,38 @@ onMounted(async () => {
     if (!sessionStore.hasTabs) {
       console.log('No existing tabs, creating default...')
 
-      // 在 IDE 环境下，确保 IDE 设置已加载完成后再创建 Tab
-      // 这样 defaultBypassPermissions 等设置才能正确应用
-      if (isIdeMode.value && !settingsStore.ideSettings) {
-        console.log('Waiting for IDE settings to load...')
-        await settingsStore.loadIdeSettings()
-        console.log('IDE settings loaded, skipPermissions:', settingsStore.settings.skipPermissions)
+      // 在 IDE 环境下，等待设置加载完成
+      // 注意：实际的设置加载由 App.vue 负责
+      // 由于 Vue 组件挂载顺序（子组件先于父组件），需要等待 App.vue 完成初始化
+      if (isIdeMode.value && !settingsStore.settingsReady) {
+        console.log('Waiting for settings to be ready (App.vue will load them)...')
+        // 等待 App.vue 完成设置加载（最多等待 10 秒，因为初始化包含多个网络请求）
+        const maxWaitMs = 10000
+        const intervalMs = 100
+        let waited = 0
+        while (!settingsStore.settingsReady && waited < maxWaitMs) {
+          await new Promise(resolve => setTimeout(resolve, intervalMs))
+          waited += intervalMs
+        }
+        if (settingsStore.settingsReady) {
+          console.log('Settings ready after', waited, 'ms, skipPermissions:', settingsStore.settings.skipPermissions)
+        } else {
+          console.warn('Settings not ready after', maxWaitMs, 'ms timeout, proceeding with defaults')
+        }
       }
 
-      // 并行执行：创建 Tab（RSocket 连接）+ 加载历史会话列表（HTTP）
-      const [tab] = await Promise.all([
-        sessionStore.createTab(),
-        loadHistorySessions(true)  // 提前加载历史会话列表
-      ])
-
-      console.log('Default tab created:', tab.tabId)
-      // Chrome 状态由 Tab 连接成功后自动查询（在 useSessionTab.ts 中）
+      // 创建默认 Tab
+      console.log('Creating default tab...')
+      try {
+        const [tab] = await Promise.all([
+          sessionStore.createTab(),
+          loadHistorySessions(true)  // 同时加载历史会话列表（HTTP）
+        ])
+        console.log('Default tab created:', tab.tabId)
+      } catch (createError) {
+        console.error('Failed to create default tab:', createError)
+        throw createError
+      }
     }
   } catch (error) {
     console.error('Failed to initialize session:', error)

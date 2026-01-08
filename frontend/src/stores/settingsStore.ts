@@ -161,6 +161,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const ideSettings = ref<IdeSettings | null>(null)
   const loading = ref(false)
   const showPanel = ref(false)
+  // 标记设置是否已加载完成（无论是 IDE 设置还是默认设置）
+  const settingsReady = ref(false)
   let settingsChangeUnsubscribe: (() => void) | null = null
 
   // 后端特定的模型列表
@@ -348,6 +350,10 @@ export const useSettingsStore = defineStore('settings', () => {
       }
     } catch (error) {
       console.error('❌ Error loading IDE settings:', error)
+    } finally {
+      // 标记设置加载完成
+      settingsReady.value = true
+      console.log('✅ Settings ready (IDE mode)')
     }
   }
 
@@ -674,6 +680,10 @@ export const useSettingsStore = defineStore('settings', () => {
       }
     } catch (error) {
       console.error('❌ Error loading default settings:', error)
+    } finally {
+      // 标记设置加载完成
+      settingsReady.value = true
+      console.log('✅ Settings ready (default/browser mode)')
     }
   }
 
@@ -893,6 +903,7 @@ export const useSettingsStore = defineStore('settings', () => {
     // 状态
     settings,
     ideSettings,
+    settingsReady,  // 标记设置是否已加载完成
     loading,
     showPanel,
 
