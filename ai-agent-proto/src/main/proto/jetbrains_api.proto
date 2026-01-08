@@ -187,3 +187,17 @@ message JetBrainsGetOriginalContentResponse {
   optional string content = 3;        // 原始文件内容
   optional string error = 4;
 }
+
+// ========== 获取文件历史内容（基于时间戳查询 LocalHistory）==========
+
+message JetBrainsGetFileHistoryContentRequest {
+  string file_path = 1;              // 文件绝对路径
+  int64 before_timestamp = 2;        // 时间戳（毫秒），获取此时间之前的版本
+}
+
+message JetBrainsGetFileHistoryContentResponse {
+  bool success = 1;
+  bool found = 2;                     // 是否找到历史版本
+  optional string content = 3;        // 历史文件内容
+  optional string error = 4;
+}

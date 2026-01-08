@@ -62,13 +62,12 @@ class EditFileTool(private val project: Project) {
             return ToolResult.error("File not found: $filePath")
         }
 
-        // 从协程上下文获取 toolUseId，使用 LocalHistory 打标签并缓存
+        // 记录历史时间戳并打 LocalHistory 标签
+        val historyTs = System.currentTimeMillis()
         val toolUseId = currentToolUseId()
         if (toolUseId != null) {
-            // 打标签并缓存 Label 对象（用于后续获取原始内容）
-            val label = LocalHistory.getInstance().putSystemLabel(project, "claude_$toolUseId")
-            FileChangeLabelCache.record(toolUseId, absolutePath, label)
-            logger.info { "EditFile: created LocalHistory label for toolUseId=$toolUseId" }
+            LocalHistory.getInstance().putSystemLabel(project, "claude_edit_$toolUseId")
+            logger.info { "EditFile: created LocalHistory label for toolUseId=$toolUseId, historyTs=$historyTs" }
         }
 
         val isExternalFile = !absolutePath.startsWith(File(projectBasePath).canonicalPath)
@@ -77,7 +76,7 @@ class EditFileTool(private val project: Project) {
             var result: Any = ""
             ApplicationManager.getApplication().invokeAndWait {
                 result = WriteAction.compute<Any, Exception> {
-                    editFileContent(file, oldString, newString, replaceAll, filePath, isExternalFile)
+                    editFileContent(file, oldString, newString, replaceAll, filePath, isExternalFile, historyTs)
                 }
             }
             result
@@ -130,7 +129,8 @@ class EditFileTool(private val project: Project) {
         newString: String,
         replaceAll: Boolean,
         originalPath: String,
-        isExternalFile: Boolean
+        isExternalFile: Boolean,
+        historyTs: Long
     ): Any {
         // 尝试获取 VirtualFile
         val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
@@ -216,7 +216,7 @@ class EditFileTool(private val project: Project) {
             1
         }
 
-        return formatOutput(originalPath, replacementCount, replaceAll, isExternalFile)
+        return formatOutput(originalPath, replacementCount, replaceAll, isExternalFile, historyTs)
     }
 
     /**
@@ -241,9 +241,13 @@ class EditFileTool(private val project: Project) {
         originalPath: String,
         replacementCount: Int,
         replaceAll: Boolean,
-        isExternalFile: Boolean
+        isExternalFile: Boolean,
+        historyTs: Long
     ): String {
         val sb = StringBuilder()
+
+        // Meta 信息放在开头，方便前端解析
+        sb.appendLine("[jb:historyTs=$historyTs]")
 
         val locationHint = if (isExternalFile) " (external)" else ""
         sb.appendLine("Edited File$locationHint: `$originalPath`")
@@ -251,7 +255,7 @@ class EditFileTool(private val project: Project) {
         sb.appendLine("Replacements: $replacementCount occurrence(s)")
         sb.appendLine("Mode: ${if (replaceAll) "Replace All" else "Replace First"}")
         sb.appendLine()
-        sb.appendLine("✅ File updated successfully")
+        sb.append("✅ File updated successfully")
 
         return sb.toString()
     }

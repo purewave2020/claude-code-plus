@@ -25,7 +25,9 @@ import {
   JetBrainsSetLocaleRequestSchema,
   JetBrainsSessionStateSchema,
   JetBrainsSessionSummarySchema,
-  JetBrainsGetOriginalContentResponseSchema
+  JetBrainsGetOriginalContentResponseSchema,
+  JetBrainsGetFileHistoryContentRequestSchema,
+  JetBrainsGetFileHistoryContentResponseSchema
 } from '@/proto/jetbrains_api_pb'
 import {
   GetIdeSettingsResponseSchema,
@@ -196,6 +198,30 @@ function decodeProjectPathResponse(data: Uint8Array): string {
  */
 function decodeGetOriginalContentResponse(data: Uint8Array): { success: boolean; found: boolean; content?: string; error?: string } {
   const proto = fromBinary(JetBrainsGetOriginalContentResponseSchema, data)
+  return {
+    success: proto.success,
+    found: proto.found,
+    content: proto.content || undefined,
+    error: proto.error || undefined
+  }
+}
+
+/**
+ * 编码 JetBrainsGetFileHistoryContentRequest
+ */
+function encodeGetFileHistoryContentRequest(filePath: string, beforeTimestamp: number): Uint8Array {
+  const proto = create(JetBrainsGetFileHistoryContentRequestSchema, {
+    filePath,
+    beforeTimestamp: BigInt(beforeTimestamp)
+  })
+  return toBinary(JetBrainsGetFileHistoryContentRequestSchema, proto)
+}
+
+/**
+ * 解码 JetBrainsGetFileHistoryContentResponse
+ */
+function decodeGetFileHistoryContentResponse(data: Uint8Array): { success: boolean; found: boolean; content?: string; error?: string } {
+  const proto = fromBinary(JetBrainsGetFileHistoryContentResponseSchema, data)
   return {
     success: proto.success,
     found: proto.found,
@@ -829,6 +855,38 @@ class JetBrainsRSocketService {
       return null
     } catch (error) {
       console.error('[JetBrainsRSocket] Failed to get original content:', error)
+      return null
+    }
+  }
+
+  /**
+   * 获取文件历史内容（基于时间戳查询 LocalHistory）
+   * 用于历史会话加载时的 Diff 显示
+   *
+   * @param filePath 文件绝对路径
+   * @param beforeTimestamp 时间戳（毫秒），获取此时间之前的版本
+   * @returns 历史文件内容，如果不存在返回 null
+   */
+  async getFileHistoryContent(filePath: string, beforeTimestamp: number): Promise<string | null> {
+    if (!this.client) return null
+
+    try {
+      const data = encodeGetFileHistoryContentRequest(filePath, beforeTimestamp)
+      const response = await this.client.requestResponse('jetbrains.getFileHistoryContent', data)
+      const result = decodeGetFileHistoryContentResponse(response)
+      if (result.success && result.found) {
+        console.log('[JetBrainsRSocket] Got file history content for:', filePath, 'before:', beforeTimestamp)
+        return result.content || null
+      }
+      if (!result.found) {
+        console.log('[JetBrainsRSocket] File history content not found for:', filePath)
+      }
+      if (result.error) {
+        console.warn('[JetBrainsRSocket] Error getting file history content:', result.error)
+      }
+      return null
+    } catch (error) {
+      console.error('[JetBrainsRSocket] Failed to get file history content:', error)
       return null
     }
   }

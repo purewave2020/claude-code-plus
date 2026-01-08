@@ -101,6 +101,7 @@ class JetBrainsRSocketHandler(
                     "jetbrains.getProjectPath" -> handleGetProjectPath()
                     "jetbrains.reportSessionState" -> handleReportSessionState(dataBytes)
                     "jetbrains.getOriginalContent" -> handleGetOriginalContent(dataBytes)
+                    "jetbrains.getFileHistoryContent" -> handleGetFileHistoryContent(dataBytes)
                     else -> {
                         logger.warn("⚠️ [JetBrains RSocket] Unknown route: $route")
                         buildErrorResponse("Unknown route: $route")
@@ -477,6 +478,35 @@ class JetBrainsRSocketHandler(
             buildPayload { data(responseBuilder.build().toByteArray()) }
         } catch (e: Exception) {
             logger.error("❌ [JetBrains] getOriginalContent failed: ${e.message}")
+            buildErrorResponse(e.message ?: "Unknown error")
+        }
+    }
+
+    /**
+     * 获取文件历史内容（基于时间戳查询 LocalHistory）
+     * 用于历史会话加载时的 Diff 显示
+     */
+    private fun handleGetFileHistoryContent(dataBytes: ByteArray): Payload {
+        return try {
+            val req = com.asakii.rpc.proto.JetBrainsGetFileHistoryContentRequest.parseFrom(dataBytes)
+            logger.info("📄 [JetBrains] getFileHistoryContent: ${req.filePath} (before: ${req.beforeTimestamp})")
+
+            val content = com.asakii.plugin.services.FileHistoryService.getContentBefore(
+                req.filePath,
+                req.beforeTimestamp
+            )
+
+            val responseBuilder = com.asakii.rpc.proto.JetBrainsGetFileHistoryContentResponse.newBuilder()
+                .setSuccess(true)
+                .setFound(content != null)
+
+            if (content != null) {
+                responseBuilder.setContent(content)
+            }
+
+            buildPayload { data(responseBuilder.build().toByteArray()) }
+        } catch (e: Exception) {
+            logger.error("❌ [JetBrains] getFileHistoryContent failed: ${e.message}")
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }

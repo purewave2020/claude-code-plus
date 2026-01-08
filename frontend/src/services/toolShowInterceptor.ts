@@ -3,7 +3,7 @@
  * 类似 Spring Boot 的 HandlerInterceptor 模式
  *
  * 在 JetBrains IDE 环境中，拦截工具点击事件，调用 IDEA 原生功能
- * 通过 HTTP API 与后端通信
+ * 通过 RSocket 与后端通信
  */
 
 import {
@@ -14,6 +14,8 @@ import {
   type ShowMultiEditDiffRequest,
   type ShowEditFullDiffRequest
 } from './jetbrainsApi'
+import { jetbrainsRSocketService } from './jetbrainsRSocket'
+import { parseJbMeta } from '@/utils/jbMetaParser'
 
 // ====== 工具输入类型定义 ======
 
@@ -218,10 +220,29 @@ class ToolShowInterceptorService {
       })
     })
 
-    // JetBrains WriteFile 工具：打开文件
-    this.register<JetBrainsWriteFileInput>('mcp__jetbrains-file__WriteFile', (ctx, api) => {
-      api.openFile({
-        filePath: ctx.input.filePath || ''
+    // JetBrains WriteFile 工具：显示 Diff（新建或覆写）
+    this.register<JetBrainsWriteFileInput>('mcp__jetbrains-file__WriteFile', async (ctx, api) => {
+      const filePath = ctx.input.filePath || ''
+      const newContent = ctx.input.content || ''
+
+      // 从工具结果中解析 isOverwrite 和 historyTs 元数据
+      let oldContent = ''
+      const resultContent = this.extractResultContent(ctx.result)
+      if (resultContent) {
+        const { meta } = parseJbMeta(resultContent)
+
+        if (meta.isOverwrite && meta.historyTs && jetbrainsRSocketService.isConnected()) {
+          // 覆写文件：通过 RSocket 查询 LocalHistory 获取原始内容
+          oldContent = await jetbrainsRSocketService.getFileHistoryContent(filePath, meta.historyTs) || ''
+        }
+        // 新建文件（isOverwrite=false）：oldContent 保持为空
+      }
+
+      api.showDiff({
+        filePath,
+        oldContent,
+        newContent,
+        title: oldContent ? `Overwrite: ${filePath}` : `New File: ${filePath}`
       })
     })
 
@@ -229,10 +250,15 @@ class ToolShowInterceptorService {
     this.register<JetBrainsEditFileInput>('mcp__jetbrains-file__EditFile', async (ctx, api) => {
       const filePath = ctx.input.filePath || ''
 
-      // 尝试获取缓存的原始内容
+      // 从工具结果中解析 historyTs 元数据
       let originalContent: string | undefined
-      if (ctx.toolUseId) {
-        originalContent = await jetbrainsBridge.getOriginalContent(ctx.toolUseId) || undefined
+      const resultContent = this.extractResultContent(ctx.result)
+      if (resultContent) {
+        const { meta } = parseJbMeta(resultContent)
+        if (meta.historyTs && jetbrainsRSocketService.isConnected()) {
+          // 通过 RSocket 查询 LocalHistory 获取历史内容
+          originalContent = await jetbrainsRSocketService.getFileHistoryContent(filePath, meta.historyTs) || undefined
+        }
       }
 
       api.showEditFullDiff({
@@ -244,6 +270,26 @@ class ToolShowInterceptorService {
         originalContent
       })
     })
+  }
+
+  /**
+   * 从工具结果中提取文本内容
+   */
+  private extractResultContent(result?: { content?: string | unknown[] }): string | null {
+    if (!result?.content) return null
+    if (typeof result.content === 'string') return result.content
+    if (Array.isArray(result.content)) {
+      // 查找 text 类型的 content block
+      for (const block of result.content) {
+        if (typeof block === 'object' && block !== null && 'type' in block) {
+          const typedBlock = block as { type: string; text?: string }
+          if (typedBlock.type === 'text' && typedBlock.text) {
+            return typedBlock.text
+          }
+        }
+      }
+    }
+    return null
   }
 }
 

@@ -52,14 +52,18 @@ class WriteFileTool(private val project: Project) {
             return ToolResult.error("错误: $hint")
         }
 
-        // 从协程上下文获取 toolUseId，使用 LocalHistory 打标签并缓存（仅对已存在的文件）
-        val toolUseId = currentToolUseId()
         val file = File(absolutePath)
-        if (toolUseId != null && file.exists()) {
-            // 打标签并缓存 Label 对象（用于后续获取原始内容）
-            val label = LocalHistory.getInstance().putSystemLabel(project, "claude_$toolUseId")
-            FileChangeLabelCache.record(toolUseId, absolutePath, label)
-            logger.info { "WriteFile: created LocalHistory label for toolUseId=$toolUseId" }
+        val isOverwrite = file.exists()
+        var historyTs: Long? = null
+
+        // 覆盖已有文件时记录历史时间戳并打 LocalHistory 标签
+        if (isOverwrite) {
+            historyTs = System.currentTimeMillis()
+            val toolUseId = currentToolUseId()
+            if (toolUseId != null) {
+                LocalHistory.getInstance().putSystemLabel(project, "claude_write_$toolUseId")
+                logger.info { "WriteFile: created LocalHistory label for toolUseId=$toolUseId, historyTs=$historyTs" }
+            }
         }
 
         val isExternalFile = !absolutePath.startsWith(File(projectBasePath).canonicalPath)
@@ -68,7 +72,7 @@ class WriteFileTool(private val project: Project) {
             var result: Any = ""
             ApplicationManager.getApplication().invokeAndWait {
                 result = WriteAction.compute<Any, Exception> {
-                    writeFileContent(absolutePath, content, filePath, isExternalFile)
+                    writeFileContent(absolutePath, content, filePath, isExternalFile, isOverwrite, historyTs)
                 }
             }
             result
@@ -107,7 +111,14 @@ class WriteFileTool(private val project: Project) {
     /**
      * 写入文件内容（使用 VirtualFile API）
      */
-    private fun writeFileContent(absolutePath: String, content: String, originalPath: String, isExternalFile: Boolean): Any {
+    private fun writeFileContent(
+        absolutePath: String,
+        content: String,
+        originalPath: String,
+        isExternalFile: Boolean,
+        isOverwrite: Boolean,
+        historyTs: Long?
+    ): Any {
         val file = File(absolutePath)
         val isNewFile = !file.exists()
 
@@ -148,7 +159,7 @@ class WriteFileTool(private val project: Project) {
             }
         }
 
-        return formatOutput(originalPath, absolutePath, content, isNewFile, isExternalFile, virtualFile)
+        return formatOutput(originalPath, absolutePath, content, isNewFile, isExternalFile, virtualFile, isOverwrite, historyTs)
     }
 
     /**
@@ -160,21 +171,27 @@ class WriteFileTool(private val project: Project) {
         content: String,
         isNewFile: Boolean,
         isExternalFile: Boolean,
-        virtualFile: VirtualFile?
+        virtualFile: VirtualFile?,
+        isOverwrite: Boolean,
+        historyTs: Long?
     ): String {
         val sb = StringBuilder()
 
+        // Meta 信息放在开头，方便前端解析
+        historyTs?.let { sb.appendLine("[jb:historyTs=$it]") }
+        sb.appendLine("[jb:isOverwrite=$isOverwrite]")
+
         val action = if (isNewFile) "Created" else "Updated"
         val locationHint = if (isExternalFile) " (external)" else ""
-        sb.appendLine("## $action File$locationHint: `$originalPath`")
+        sb.appendLine("$action File$locationHint: `$originalPath`")
         sb.appendLine()
         sb.appendLine("**Path:** `$absolutePath`")
         sb.appendLine("**Size:** ${content.length} characters, ${content.lines().size} lines")
 
         if (virtualFile != null) {
-            sb.appendLine("**Status:** ✅ File written and synced to IDE")
+            sb.append("**Status:** ✅ File written and synced to IDE")
         } else {
-            sb.appendLine("**Status:** ⚠️ File written but not synced to IDE (may need manual refresh)")
+            sb.append("**Status:** ⚠️ File written but not synced to IDE (may need manual refresh)")
         }
 
         return sb.toString()

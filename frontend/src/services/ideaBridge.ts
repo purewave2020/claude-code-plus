@@ -315,6 +315,9 @@ export async function openUrl(url: string) {
   }
 }
 
+// 注：getFileHistoryContent 已迁移到 RSocket 实现
+// 参见 jetbrainsRSocket.ts 的 getFileHistoryContent 方法
+
 export const aiAgentBridgeService = {
   async connect(options?: any) {
     return ideaBridge.query('claude.connect', options)
