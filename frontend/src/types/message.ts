@@ -101,14 +101,7 @@ export interface FileChangeContent {
   status: ContentStatus
 }
 
-export interface McpToolCallContent {
-  type: 'mcp_tool_call'
-  server?: string
-  tool?: string
-  arguments?: unknown
-  result?: unknown
-  status: ContentStatus
-}
+// McpToolCallContent 已删除，统一使用 ToolUseContent + ToolResultContent
 
 export interface WebSearchContent {
   type: 'web_search'
@@ -134,7 +127,6 @@ export type ContentBlock =
   | ToolResultContent
   | CommandExecutionContent
   | FileChangeContent
-  | McpToolCallContent
   | WebSearchContent
   | TodoListContent
   | ErrorContent

@@ -126,7 +126,20 @@ class CodexAppServerStreamAdapter(
             }
 
             is AppServerEvent.CommandOutputDelta -> {
-                // Ignore command output deltas; final output will be attached on completion.
+                val (index, started) = ensureIndexWithStart(event.itemId)
+                if (started) {
+                    result += ContentStartedEvent(
+                        provider = AiAgentProvider.CODEX,
+                        index = index,
+                        contentType = "command_execution",
+                        toolName = "Bash"
+                    )
+                }
+                result += ContentDeltaEvent(
+                    provider = AiAgentProvider.CODEX,
+                    index = index,
+                    delta = CommandDeltaPayload(event.delta)
+                )
             }
 
             is AppServerEvent.TokenUsageUpdated -> {
@@ -328,11 +341,10 @@ class CodexAppServerStreamAdapter(
                 },
                 status = item.status.toContentStatus()
             )
-            is ThreadItem.McpToolCall -> McpToolCallContent(
-                server = item.server,
-                tool = item.tool,
-                arguments = item.arguments,
-                result = item.result.toResultJson() ?: item.error?.let { JsonPrimitive(it.message) },
+            is ThreadItem.McpToolCall -> ToolUseContent(
+                id = item.id,
+                name = buildMcpToolName(item.server, item.tool),
+                input = item.arguments,
                 status = item.status.toContentStatus()
             )
             is ThreadItem.WebSearch -> WebSearchContent(item.query)
