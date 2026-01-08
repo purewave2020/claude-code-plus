@@ -1,0 +1,11 @@
+# JetBrains File MCP 演示
+
+这是通过 WriteFile 工具创建的文件。
+
+## 功能列表
+- ReadFile: 读取文件内容
+- WriteFile: 创建或覆盖文件
+- EditFile: 编辑文件（替换指定文本）
+
+创建时间: 2026/01/08
+修改时间: 2026/01/08 (通过 EditFile 工具修改)

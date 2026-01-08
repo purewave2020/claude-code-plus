@@ -2,21 +2,19 @@
   <div
     class="chat-header"
   >
-    <!-- 左侧：会话 Tab 列表 -->
-    <SessionTabs
-      :sessions="sessionTabList"
-      :current-session-id="currentTabId"
-      :can-close="true"
-      @switch="handleSwitchTab"
-      @close="handleCloseTab"
-      @reorder="handleReorder"
-      @toggle-list="emit('toggle-history')"
-      @rename="handleRename"
-    />
-
-    <!-- 右侧：功能按钮 -->
-    <div class="header-actions">
-      <!-- 新建会话 -->
+    <!-- 左侧：会话 Tab 列表 + 新建按钮 -->
+    <div class="tabs-with-new">
+      <SessionTabs
+        :sessions="sessionTabList"
+        :current-session-id="currentTabId"
+        :can-close="true"
+        @switch="handleSwitchTab"
+        @close="handleCloseTab"
+        @reorder="handleReorder"
+        @toggle-list="emit('toggle-history')"
+        @rename="handleRename"
+      />
+      <!-- 新建会话按钮（紧挨着 tab 列表） -->
       <button
         class="new-session-btn"
         type="button"
@@ -27,6 +25,10 @@
           <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
+    </div>
+
+    <!-- 右侧：功能按钮 -->
+    <div class="header-actions">
       <!-- 会话操作下拉菜单 -->
       <div class="session-menu-trigger" @click="toggleSessionMenu">
         <button
@@ -396,6 +398,14 @@ function handleRename(tabId: string, newName: string) {
   border-bottom: 1px solid var(--theme-border, #e1e4e8);
   background: var(--theme-panel-background, #f6f8fa);
   box-sizing: border-box;
+}
+
+.tabs-with-new {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
 }
 
 .header-actions {
