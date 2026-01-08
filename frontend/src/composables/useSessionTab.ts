@@ -1922,9 +1922,21 @@ export function useSessionTab(initialOrder: number = 0) {
                 // 可以在这里添加工具开始的 UI 更新
                 break
 
-            case 'tool_completed':
+            case 'tool_completed': {
                 log.info(`[Tab ${tabId}] 工具完成: ${event.itemId}, success=${event.success}`)
+                // 将 Codex 的工具结果转换为 ToolResult 格式并更新工具状态
+                if (event.itemId && event.result) {
+                    const codexResult = event.result as { item?: Record<string, unknown> }
+                    const toolResult = {
+                        type: 'tool_result' as const,
+                        tool_use_id: event.itemId,
+                        content: codexResult.item || codexResult,
+                        is_error: !event.success
+                    }
+                    tools.updateToolResult(event.itemId, toolResult)
+                }
                 break
+            }
 
             case 'turn_completed':
                 messagesHandler.stopGenerating()

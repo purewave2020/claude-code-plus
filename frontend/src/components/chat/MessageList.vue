@@ -335,7 +335,7 @@ function saveAnchorImmediately() {
 
 const lastScrollTop = ref(0)       // 上次滚动位置，用于检测滚动方向
 const isTabSwitching = ref(false)  // Tab 切换中，阻止其他滚动逻辑
-const isUserInteracting = ref(false)  // 用户正在交互（拖动滚动条/触摸滚动）
+const isProgrammaticScroll = ref(false)  // 程序触发的滚动（用于区分用户手动滚动）
 const historyLoadInProgress = ref(false)
 const historyLoadRequested = ref(false)
 const historyScrollHeightBefore = ref(0)
@@ -427,9 +427,8 @@ watch(
 watch(
   () => props.outputTokens,
   () => {
-    // 只在流式响应中、follow 模式、且用户没有在交互时才自动滚动
-    // 检查 isUserInteracting 防止用户拖动滚动条时界面晃动
-    if (props.isStreaming && scrollState.value.mode === 'follow' && !isUserInteracting.value) {
+    // 只在流式响应中、follow 模式时才自动滚动
+    if (props.isStreaming && scrollState.value.mode === 'follow') {
       scrollToBottomSilent()
     }
   }
@@ -440,9 +439,8 @@ watch(
 watch(
   () => props.contentVersion,
   () => {
-    // 只在流式响应中、follow 模式、且用户没有在交互时才自动滚动
-    // 检查 isUserInteracting 防止用户拖动滚动条时界面晃动
-    if (props.isStreaming && scrollState.value.mode === 'follow' && !isUserInteracting.value) {
+    // 只在流式响应中、follow 模式时才自动滚动
+    if (props.isStreaming && scrollState.value.mode === 'follow') {
       scrollToBottomSilent()
     }
   }
@@ -481,53 +479,15 @@ function handleWheel(e: WheelEvent) {
   }
 }
 
-// 用户交互检测（滚动条拖动/触摸滚动）
-function handlePointerDown(e: PointerEvent) {
-  const el = scrollerRef.value?.$el as HTMLElement | undefined
-  if (!el) return
-
-  // 检测是否点击在滚动条区域（元素右侧约 20px）
-  const rect = el.getBoundingClientRect()
-  const isOnScrollbar = e.clientX > rect.right - 20
-
-  if (isOnScrollbar) {
-    isUserInteracting.value = true
-    console.log('🔄 [Scroll] User started dragging scrollbar')
-  }
-}
-
-function handlePointerUp() {
-  if (isUserInteracting.value) {
-    isUserInteracting.value = false
-    console.log('🔄 [Scroll] User stopped dragging scrollbar')
-  }
-}
-
-function handleTouchStart() {
-  isUserInteracting.value = true
-}
-
-function handleTouchEnd() {
-  // 延迟重置，因为惯性滚动可能还在继续
-  setTimeout(() => {
-    isUserInteracting.value = false
-  }, 150)
-}
-
-// 添加用户交互事件监听器（需要在 DynamicScroller 渲染后调用）
+// 添加滚轮事件监听器（需要在 DynamicScroller 渲染后调用）
 let scrollListenersAdded = false
 function addScrollListeners() {
   if (scrollListenersAdded) return
   const el = scrollerRef.value?.$el as HTMLElement | undefined
   if (el) {
     el.addEventListener('wheel', handleWheel, { passive: true })
-    el.addEventListener('pointerdown', handlePointerDown, { passive: true })
-    el.addEventListener('touchstart', handleTouchStart, { passive: true })
-    // 全局监听 pointerup 和 touchend，因为用户可能在元素外释放
-    window.addEventListener('pointerup', handlePointerUp)
-    window.addEventListener('touchend', handleTouchEnd)
     scrollListenersAdded = true
-    console.log('🔄 [Scroll] User interaction listeners added')
+    console.log('🔄 [Scroll] Wheel listener added')
   }
 }
 
@@ -567,11 +527,7 @@ onUnmounted(() => {
   const el = scrollerRef.value?.$el as HTMLElement | undefined
   if (el) {
     el.removeEventListener('wheel', handleWheel)
-    el.removeEventListener('pointerdown', handlePointerDown)
-    el.removeEventListener('touchstart', handleTouchStart)
   }
-  window.removeEventListener('pointerup', handlePointerUp)
-  window.removeEventListener('touchend', handleTouchEnd)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   // 注销 Tab 切换前回调
   sessionStore.unregisterBeforeTabSwitch(handleBeforeTabSwitch)
@@ -836,19 +792,19 @@ function handleScrollCore() {
   // - browse 模式：向下滚动到底部 → 切换回 follow 模式
 
   if (scrollState.value.mode === 'follow') {
-    // follow 模式下：只有用户明确交互才切换到 browse
-    // - 滚轮向上：由 handleWheel 处理
+    // follow 模式下：用户手动向上滚动才切换到 browse
+    // - 滚轮向上：由 handleWheel 处理（响应更快）
     // - 拖动滚动条向上：在这里处理
-    // 注意：不在 scroll 事件中做位置修正，由 watch(contentVersion/outputTokens) 处理
-    if (isUserInteracting.value && isScrollingUp && significantScroll && !nearBottom) {
-      // 用户正在拖动滚动条向上，切换到 browse 模式
+    // 关键：通过 isProgrammaticScroll 区分用户滚动和程序滚动
+    if (!isProgrammaticScroll.value && isScrollingUp && significantScroll && !nearBottom) {
+      // 用户手动向上滚动，切换到 browse 模式
       const anchor = computeScrollAnchor()
       scrollState.value = {
         mode: 'browse',
         anchor,
         newMessageCount: 0
       }
-      console.log('🔄 [Scroll] Switched to browse mode (dragging scrollbar up)')
+      console.log('🔄 [Scroll] Switched to browse mode (user scrolled up)')
     }
   } else {
     // browse 模式下
@@ -865,13 +821,19 @@ function handleScrollCore() {
 
 /**
  * 程序调用的滚动到底部（follow 模式下使用）
+ * 设置 isProgrammaticScroll 标志，避免触发模式切换
  */
 function scrollToBottomSilent() {
+  isProgrammaticScroll.value = true
   if (scrollerRef.value) {
     scrollerRef.value.scrollToBottom()
   } else if (wrapperRef.value) {
     wrapperRef.value.scrollTop = wrapperRef.value.scrollHeight
   }
+  // 延迟重置标志，确保 scroll 事件处理完成
+  requestAnimationFrame(() => {
+    isProgrammaticScroll.value = false
+  })
 }
 
 /**
