@@ -217,7 +217,7 @@ class EditFileTool(private val project: Project) {
             1
         }
 
-        return formatOutput(originalPath, oldString, newString, replacementCount, replaceAll, isExternalFile)
+        return formatOutput(originalPath, replacementCount, replaceAll, isExternalFile)
     }
 
     /**
@@ -240,8 +240,6 @@ class EditFileTool(private val project: Project) {
      */
     private fun formatOutput(
         originalPath: String,
-        oldString: String,
-        newString: String,
         replacementCount: Int,
         replaceAll: Boolean,
         isExternalFile: Boolean
@@ -249,26 +247,10 @@ class EditFileTool(private val project: Project) {
         val sb = StringBuilder()
 
         val locationHint = if (isExternalFile) " (external)" else ""
-        sb.appendLine("## Edited File$locationHint: `$originalPath`")
+        sb.appendLine("Edited File$locationHint: `$originalPath`")
         sb.appendLine()
-        sb.appendLine("**Replacements:** $replacementCount occurrence(s)")
-        sb.appendLine("**Mode:** ${if (replaceAll) "Replace All" else "Replace First"}")
-        sb.appendLine()
-
-        // 显示替换摘要
-        val oldPreview = if (oldString.length > 100) {
-            oldString.take(100) + "..."
-        } else {
-            oldString
-        }
-        val newPreview = if (newString.length > 100) {
-            newString.take(100) + "..."
-        } else {
-            newString
-        }
-
-        sb.appendLine("**Old:** `${oldPreview.replace("\n", "\\n")}`")
-        sb.appendLine("**New:** `${newPreview.replace("\n", "\\n")}`")
+        sb.appendLine("Replacements: $replacementCount occurrence(s)")
+        sb.appendLine("Mode: ${if (replaceAll) "Replace All" else "Replace First"}")
         sb.appendLine()
         sb.appendLine("✅ File updated successfully")
 
