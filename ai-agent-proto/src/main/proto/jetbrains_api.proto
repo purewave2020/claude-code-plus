@@ -201,3 +201,15 @@ message JetBrainsGetFileHistoryContentResponse {
   optional string content = 3;        // 历史文件内容
   optional string error = 4;
 }
+
+// ========== 文件回滚（恢复到指定时间戳之前的版本）==========
+
+message JetBrainsRollbackFileRequest {
+  string file_path = 1;              // 文件绝对路径
+  int64 before_timestamp = 2;        // 时间戳（毫秒），回滚到此时间之前的版本
+}
+
+message JetBrainsRollbackFileResponse {
+  bool success = 1;
+  optional string error = 2;
+}

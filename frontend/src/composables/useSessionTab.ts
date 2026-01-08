@@ -1917,23 +1917,31 @@ export function useSessionTab(initialOrder: number = 0) {
                 } as any)
                 break
 
-            case 'tool_started':
-                log.info(`[Tab ${tabId}] 工具开始: ${event.toolName}`)
-                // 可以在这里添加工具开始的 UI 更新
+            case 'tool_started': {
+                log.info(`[Tab ${tabId}] 工具开始: ${event.toolName}, itemId=${event.itemId}`)
+                // 为 Codex 后端创建 ToolCall（Claude 后端通过消息流处理）
+                if (backendType.value === 'codex' && event.itemId) {
+                    // 构造 ToolUseBlock 格式
+                    const toolUseBlock = {
+                        id: event.itemId,
+                        type: 'tool_use' as const,
+                        toolName: event.toolName,
+                        name: event.toolName,
+                        input: event.parameters || {},
+                        toolType: event.toolType
+                    }
+                    tools.registerToolCall(toolUseBlock as any)
+                    log.debug(`[Tab ${tabId}] 已注册 Codex 工具调用: ${event.itemId}`)
+                }
                 break
+            }
 
             case 'tool_completed': {
                 log.info(`[Tab ${tabId}] 工具完成: ${event.itemId}, success=${event.success}`)
-                // 将 Codex 的工具结果转换为 ToolResult 格式并更新工具状态
+                // CodexSession 已经发送了正确格式的 tool_result，直接使用
                 if (event.itemId && event.result) {
-                    const codexResult = event.result as { item?: Record<string, unknown> }
-                    const toolResult = {
-                        type: 'tool_result' as const,
-                        tool_use_id: event.itemId,
-                        content: codexResult.item || codexResult,
-                        is_error: !event.success
-                    }
-                    tools.updateToolResult(event.itemId, toolResult)
+                    // event.result 已经是 { type: 'tool_result', tool_use_id, content, is_error } 格式
+                    tools.updateToolResult(event.itemId, event.result as import('@/types/display').ToolResult)
                 }
                 break
             }

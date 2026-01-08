@@ -19,6 +19,7 @@ import com.asakii.plugin.compat.DiffEditorCompat
 import com.asakii.plugin.compat.LocalizationCompat
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.PathManager
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.FileTypeManager
@@ -546,6 +547,8 @@ class IdeToolsImpl(
                 }
             }
             result
+        } catch (e: ProcessCanceledException) {
+            throw e
         } catch (e: Exception) {
             logger.warn("Failed to get active editor file: ${e.message}")
             null
@@ -993,6 +996,17 @@ class IdeToolsImpl(
             logger.warn("Failed to open URL: ${e.message}")
             Result.failure(e)
         }
+    }
+
+    /**
+     * 获取文件历史内容（基于 LocalHistory 时间戳）
+     *
+     * 使用 IDEA LocalHistory API 查询指定时间点之前的文件内容，
+     * 用于 Edit/Write 工具的历史快照恢复和 Diff 显示。
+     */
+    override fun getFileHistoryContent(filePath: String, beforeTimestamp: Long): String? {
+        logger.info("[IDEA] Getting file history content: $filePath (before: $beforeTimestamp)")
+        return com.asakii.plugin.services.FileHistoryService.getContentBefore(filePath, beforeTimestamp)
     }
 }
 

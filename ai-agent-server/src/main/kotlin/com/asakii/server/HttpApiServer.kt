@@ -527,6 +527,8 @@ class HttpApiServer(
                                     )
                                     call.respondText(json.encodeToString(response), ContentType.Application.Json)
                                 }
+                                // 注：ide.getFileHistoryContent 已迁移到 RSocket 实现
+                                // 参见 JetBrainsRSocketHandler.handleGetFileHistoryContent
                                 "settings.getDefault" -> {
                                     // 获取默认配置（浏览器模式下使用，IDE 模式下使用 RSocket）
                                     val config = serviceConfigProvider()

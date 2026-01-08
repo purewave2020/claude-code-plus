@@ -123,6 +123,18 @@ interface IdeTools {
      * @return Result<Unit> 成功或失败
      */
     fun openUrl(url: String): Result<Unit>
+
+    /**
+     * 获取文件历史内容（基于 LocalHistory 时间戳）
+     *
+     * 用于 Edit/Write 工具的历史快照恢复。
+     * 仅在 IDE 环境下有效，浏览器模式返回 null。
+     *
+     * @param filePath 文件绝对路径
+     * @param beforeTimestamp 时间戳（毫秒），获取此时间之前的版本
+     * @return String? 历史内容，如果不存在或获取失败则返回 null
+     */
+    fun getFileHistoryContent(filePath: String, beforeTimestamp: Long): String? = null
 }
 
 /**

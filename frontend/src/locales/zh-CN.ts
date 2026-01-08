@@ -207,7 +207,15 @@ export default {
     },
     writeTool: {
       lines: '{n}行'
-    }
+    },
+    modifiedFiles: '已修改的文件',
+    rollbackFile: '回滚文件',
+    rollbackAll: '全部回滚',
+    rollbackModification: '回滚此修改',
+    rollbackFileConfirm: '确定要将 {file} 回滚到修改前的版本吗？',
+    rollbackModificationConfirm: '确定要回滚此修改吗？该修改及之后的修改都将被还原。',
+    rollbackFailed: '回滚失败',
+    rolledBack: '已回滚'
   },
   settings: {
     title: '设置',

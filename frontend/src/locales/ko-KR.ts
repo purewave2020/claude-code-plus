@@ -189,7 +189,15 @@ export default {
     },
     writeTool: {
       lines: '{n}줄'
-    }
+    },
+    modifiedFiles: '수정된 파일',
+    rollbackFile: '파일 롤백',
+    rollbackAll: '모두 롤백',
+    rollbackModification: '이 수정 롤백',
+    rollbackFileConfirm: '{file}을(를) 수정 전 버전으로 롤백하시겠습니까?',
+    rollbackModificationConfirm: '이 수정을 롤백하시겠습니까? 이 수정과 이후 모든 수정이 되돌려집니다.',
+    rollbackFailed: '롤백 실패',
+    rolledBack: '롤백됨'
   },
   settings: {
     title: '설정',

@@ -127,7 +127,10 @@ export function useSessionTools() {
   function updateToolResult(toolUseId: string, result: ToolResultBlock | ToolResult): boolean {
     const toolCall = pendingToolCalls.get(toolUseId)
     if (!toolCall) {
+      // 调试日志：显示所有已注册的 toolCall ID
+      const registeredIds = Array.from(pendingToolCalls.keys())
       log.warn(`[useSessionTools] 更新结果失败：工具调用 ${toolUseId} 不存在`)
+      log.warn(`[useSessionTools] 已注册的工具调用 ID: [${registeredIds.join(', ')}]`)
       return false
     }
 

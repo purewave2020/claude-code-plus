@@ -207,7 +207,15 @@ export default {
     },
     writeTool: {
       lines: '{n} lines'
-    }
+    },
+    modifiedFiles: 'Modified Files',
+    rollbackFile: 'Rollback file',
+    rollbackAll: 'Rollback all',
+    rollbackModification: 'Rollback this modification',
+    rollbackFileConfirm: 'Are you sure you want to rollback {file} to the version before modification?',
+    rollbackModificationConfirm: 'Are you sure you want to rollback this modification? This and all subsequent modifications will be reverted.',
+    rollbackFailed: 'Rollback failed',
+    rolledBack: 'Rolled back'
   },
   settings: {
     title: 'Settings',

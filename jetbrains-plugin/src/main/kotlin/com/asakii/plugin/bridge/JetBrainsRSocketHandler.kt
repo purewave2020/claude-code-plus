@@ -102,6 +102,7 @@ class JetBrainsRSocketHandler(
                     "jetbrains.reportSessionState" -> handleReportSessionState(dataBytes)
                     "jetbrains.getOriginalContent" -> handleGetOriginalContent(dataBytes)
                     "jetbrains.getFileHistoryContent" -> handleGetFileHistoryContent(dataBytes)
+                    "jetbrains.rollbackFile" -> handleRollbackFile(dataBytes)
                     else -> {
                         logger.warn("⚠️ [JetBrains RSocket] Unknown route: $route")
                         buildErrorResponse("Unknown route: $route")
@@ -508,6 +509,38 @@ class JetBrainsRSocketHandler(
         } catch (e: Exception) {
             logger.error("❌ [JetBrains] getFileHistoryContent failed: ${e.message}")
             buildErrorResponse(e.message ?: "Unknown error")
+        }
+    }
+
+    /**
+     * 回滚文件到指定时间戳之前的版本
+     * 用于前端文件回滚功能
+     */
+    private fun handleRollbackFile(dataBytes: ByteArray): Payload {
+        return try {
+            val req = com.asakii.rpc.proto.JetBrainsRollbackFileRequest.parseFrom(dataBytes)
+            logger.info("↩️ [JetBrains] rollbackFile: ${req.filePath} (before: ${req.beforeTimestamp})")
+
+            val result = com.asakii.plugin.services.FileHistoryService.rollbackToTimestamp(
+                req.filePath,
+                req.beforeTimestamp
+            )
+
+            val responseBuilder = com.asakii.rpc.proto.JetBrainsRollbackFileResponse.newBuilder()
+                .setSuccess(result.success)
+
+            if (result.error != null) {
+                responseBuilder.setError(result.error)
+            }
+
+            buildPayload { data(responseBuilder.build().toByteArray()) }
+        } catch (e: Exception) {
+            logger.error("❌ [JetBrains] rollbackFile failed: ${e.message}")
+            val response = com.asakii.rpc.proto.JetBrainsRollbackFileResponse.newBuilder()
+                .setSuccess(false)
+                .setError(e.message ?: "Unknown error")
+                .build()
+            buildPayload { data(response.toByteArray()) }
         }
     }
 

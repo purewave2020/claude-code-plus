@@ -189,7 +189,15 @@ export default {
     },
     writeTool: {
       lines: '{n}行'
-    }
+    },
+    modifiedFiles: '変更されたファイル',
+    rollbackFile: 'ファイルをロールバック',
+    rollbackAll: 'すべてロールバック',
+    rollbackModification: 'この変更をロールバック',
+    rollbackFileConfirm: '{file} を変更前のバージョンにロールバックしますか？',
+    rollbackModificationConfirm: 'この変更をロールバックしますか？この変更とその後の変更がすべて元に戻されます。',
+    rollbackFailed: 'ロールバックに失敗しました',
+    rolledBack: 'ロールバック済み'
   },
   settings: {
     title: '設定',

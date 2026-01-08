@@ -14,7 +14,7 @@ import {
   type ShowMultiEditDiffRequest,
   type ShowEditFullDiffRequest
 } from './jetbrainsApi'
-import { jetbrainsRSocketService } from './jetbrainsRSocket'
+import { jetbrainsRSocket } from './jetbrainsRSocket'
 import { parseJbMeta } from '@/utils/jbMetaParser'
 
 // ====== 工具输入类型定义 ======
@@ -231,9 +231,9 @@ class ToolShowInterceptorService {
       if (resultContent) {
         const { meta } = parseJbMeta(resultContent)
 
-        if (meta.isOverwrite && meta.historyTs && jetbrainsRSocketService.isConnected()) {
+        if (meta.isOverwrite && meta.historyTs && jetbrainsRSocket.isConnected()) {
           // 覆写文件：通过 RSocket 查询 LocalHistory 获取原始内容
-          oldContent = await jetbrainsRSocketService.getFileHistoryContent(filePath, meta.historyTs) || ''
+          oldContent = await jetbrainsRSocket.getFileHistoryContent(filePath, meta.historyTs) || ''
         }
         // 新建文件（isOverwrite=false）：oldContent 保持为空
       }
@@ -255,9 +255,9 @@ class ToolShowInterceptorService {
       const resultContent = this.extractResultContent(ctx.result)
       if (resultContent) {
         const { meta } = parseJbMeta(resultContent)
-        if (meta.historyTs && jetbrainsRSocketService.isConnected()) {
+        if (meta.historyTs && jetbrainsRSocket.isConnected()) {
           // 通过 RSocket 查询 LocalHistory 获取历史内容
-          originalContent = await jetbrainsRSocketService.getFileHistoryContent(filePath, meta.historyTs) || undefined
+          originalContent = await jetbrainsRSocket.getFileHistoryContent(filePath, meta.historyTs) || undefined
         }
       }
 
