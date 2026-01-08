@@ -30,7 +30,14 @@ data class CodexClientOptions @JvmOverloads constructor(
      * 传递给 Codex CLI 进程的环境变量。
      * 如果提供，则不会继承当前进程的环境。
      */
-    @JvmField val env: Map<String, String>? = null
+    @JvmField val env: Map<String, String>? = null,
+    /**
+     * AppServer 启动时的配置覆盖（通过 -c 参数传递）。
+     * 格式：key -> value，如 "mcp_servers.user_interaction.url" -> "http://..."
+     *
+     * 这些配置在 AppServer 进程启动时生效，使 mcpServerStatus/list API 可以查询到 MCP 状态。
+     */
+    @JvmField val appServerConfigOverrides: Map<String, String> = emptyMap()
 )
 
 

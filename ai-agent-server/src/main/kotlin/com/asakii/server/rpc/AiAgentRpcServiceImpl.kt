@@ -1144,12 +1144,28 @@ class AiAgentRpcServiceImpl(
     ): CodexOverrides {
         val codexDefaults = serviceConfig.codex
 
-        val threadConfigOverrides = buildMap<String, JsonElement> {
+        // 构建完整的配置覆盖（包含 MCP 和 features）
+        val fullConfigOverrides = buildMap<String, JsonElement> {
             putAll(mcpSetup.codexThreadConfigOverrides)
             // 禁用 MCP 替代的 Codex 内置工具
             mcpSetup.codexDisabledFeatures.forEach { feature ->
                 put("features.$feature", JsonPrimitive(false))
             }
+        }
+
+        // 构建 AppServer 级别配置（MCP、features）- 用于 mcpServerStatus/list 查询
+        val appServerConfigOverrides = buildAppServerConfigOverrides(
+            mcpSetup.claudeServers,
+            fullConfigOverrides,
+            codexDefaults.webSearchEnabled
+        )
+        if (appServerConfigOverrides.isNotEmpty()) {
+            sdkLog.info("[buildCodexOverrides] appServerConfigOverrides keys: ${appServerConfigOverrides.keys.sorted().joinToString()}")
+        }
+
+        // 构建 Thread 级别配置（仅非 MCP/features）
+        val threadConfigOverrides = fullConfigOverrides.filterKeys { key ->
+            !key.startsWith("mcp_servers.") && !key.startsWith("features.")
         }
         if (threadConfigOverrides.isNotEmpty()) {
             sdkLog.info("[buildCodexOverrides] threadConfigOverrides keys: ${threadConfigOverrides.keys.sorted().joinToString()}")
@@ -1160,7 +1176,8 @@ class AiAgentRpcServiceImpl(
                 ?.takeIf { it.isNotBlank() }
                 ?.let { Path.of(it) },
             baseUrl = options.baseUrl ?: codexDefaults.baseUrl,
-            apiKey = options.apiKey ?: codexDefaults.apiKey
+            apiKey = options.apiKey ?: codexDefaults.apiKey,
+            appServerConfigOverrides = appServerConfigOverrides
         )
 
         val sandboxMode = options.sandboxMode?.toSdkSandboxMode()
@@ -1192,9 +1209,6 @@ class AiAgentRpcServiceImpl(
         val cwdLog = workingDirectory ?: "default"
         sdkLog.info("[buildCodexOverrides] model=${model ?: "default"}, codexPath=$codexPathLog, baseUrl=$baseUrlLog, apiKeyPresent=$apiKeyPresent, sandbox=$sandboxLog, approval=$approvalLog, effort=$effortLog, summary=$summaryLog, cwd=$cwdLog")
 
-        // Extract HTTP MCP URLs for thread-level config (required for model to see MCP tools)
-        val mcpHttpUrls = extractMcpHttpUrls(mcpSetup.claudeServers)
-
         val threadOptions = ThreadOptions(
             model = model,
             sandboxMode = sandboxMode,
@@ -1202,10 +1216,10 @@ class AiAgentRpcServiceImpl(
             skipGitRepoCheck = true,
             modelReasoningEffort = reasoningEffort,
             modelReasoningSummary = reasoningSummary,
-            webSearchEnabled = codexDefaults.webSearchEnabled,
+            webSearchEnabled = null,  // 移到 AppServer 级别
             approvalPolicy = approvalPolicy,
             developerInstructions = mcpSetup.mcpSystemPromptAppendix.takeIf { it.isNotBlank() },
-            mcpServers = mcpHttpUrls,
+            mcpServers = emptyMap(),  // 移到 AppServer 级别
             threadConfigOverrides = threadConfigOverrides
         )
 
@@ -1213,6 +1227,43 @@ class AiAgentRpcServiceImpl(
             clientOptions = clientOptions,
             threadOptions = threadOptions
         )
+    }
+
+    /**
+     * 构建 AppServer 级别的配置覆盖（MCP 服务器 URL、features）。
+     * 这些配置通过 -c 参数传递给 codex app-server，使 mcpServerStatus/list API 可以查询到。
+     */
+    private fun buildAppServerConfigOverrides(
+        mcpServers: Map<String, McpServerSpec>,
+        configOverrides: Map<String, JsonElement>,
+        webSearchEnabled: Boolean?
+    ): Map<String, String> {
+        val config = mutableMapOf<String, String>()
+
+        // MCP 服务器 URL
+        mcpServers.forEach { (name, spec) ->
+            when (spec) {
+                is McpHttpServerConfig -> config["mcp_servers.$name.url"] = spec.url
+                else -> {} // stdio 等类型暂不支持
+            }
+        }
+
+        // Web search 配置
+        webSearchEnabled?.let { enabled ->
+            config["features.web_search_request"] = enabled.toString()
+        }
+
+        // configOverrides 中的 MCP/features 配置
+        configOverrides.forEach { (key, value) ->
+            if (key.startsWith("mcp_servers.") || key.startsWith("features.")) {
+                config[key] = when (value) {
+                    is JsonPrimitive -> value.content
+                    else -> value.toString()
+                }
+            }
+        }
+
+        return config
     }
 
     private fun parseReasoningEffort(value: String?): ModelReasoningEffort? {

@@ -467,17 +467,25 @@ class CodexAppServerClient private constructor(
     companion object {
         /**
          * 创建并启动 Codex App-Server 客户端
+         *
+         * @param codexPath Codex 可执行文件路径，null 则自动查找
+         * @param workingDirectory 工作目录
+         * @param env 环境变量
+         * @param configOverrides 配置覆盖，格式为 key -> value（支持 dotted path，如 mcp_servers.xxx.url -> http://...）
+         * @param scope 协程作用域
          */
         fun create(
             codexPath: Path? = null,
             workingDirectory: Path? = null,
             env: Map<String, String> = emptyMap(),
+            configOverrides: Map<String, String> = emptyMap(),
             scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         ): CodexAppServerClient {
             val process = CodexAppServerProcess.spawn(
                 codexPath = codexPath,
                 workingDirectory = workingDirectory,
                 env = env,
+                configOverrides = configOverrides,
                 scope = scope
             )
 

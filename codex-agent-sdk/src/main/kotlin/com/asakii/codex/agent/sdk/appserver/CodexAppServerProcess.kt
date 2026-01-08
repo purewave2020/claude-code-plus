@@ -66,21 +66,29 @@ class CodexAppServerProcess private constructor(
          * @param codexPath Codex 可执行文件路径，null 则自动查找
          * @param workingDirectory 工作目录
          * @param env 环境变量
+         * @param configOverrides 配置覆盖，格式为 key=value（支持 dotted path，如 mcp_servers.xxx.url=http://...）
          * @param scope 协程作用域
          */
         fun spawn(
             codexPath: Path? = null,
             workingDirectory: Path? = null,
             env: Map<String, String> = emptyMap(),
+            configOverrides: Map<String, String> = emptyMap(),
             scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         ): CodexAppServerProcess {
             val executablePath = codexPath?.toString() ?: findCodexExecutable()
             logger.info(
-                "Starting codex app-server: path=$executablePath cwd=${workingDirectory?.toAbsolutePath() ?: "default"}"
+                "Starting codex app-server: path=$executablePath cwd=${workingDirectory?.toAbsolutePath() ?: "default"} configOverrides=$configOverrides"
             )
 
             val command = mutableListOf(executablePath)
             command.add("app-server")
+            
+            // 添加配置覆盖参数 (-c key=value)
+            configOverrides.forEach { (key, value) ->
+                command.add("-c")
+                command.add("$key=$value")
+            }
 
             val finalCommand = if (isWindowsCmd(executablePath)) {
                 listOf("cmd", "/c") + command

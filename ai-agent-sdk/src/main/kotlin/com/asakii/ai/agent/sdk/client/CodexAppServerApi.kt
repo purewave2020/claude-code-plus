@@ -161,6 +161,7 @@ internal object DefaultCodexAppServerApiFactory : CodexAppServerApiFactory {
             codexPath = options.codexPathOverride,
             workingDirectory = workingDirectory,
             env = env,
+            configOverrides = options.appServerConfigOverrides,
             scope = scope
         )
         return DefaultCodexAppServerApi(client)

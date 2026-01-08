@@ -96,7 +96,13 @@ internal class CodexAgentClientImpl(
 
         disconnect()
 
-        val newClient = appServerFactory.create(codexClientOptions, codexThreadOptions, scope)
+        // 构建 AppServer 级别配置（MCP、features），使 mcpServerStatus/list 可查询
+        val appServerConfig = buildAppServerConfig(codexThreadOptions)
+        val enrichedClientOptions = codexClientOptions.copy(
+            appServerConfigOverrides = codexClientOptions.appServerConfigOverrides + appServerConfig
+        )
+
+        val newClient = appServerFactory.create(enrichedClientOptions, codexThreadOptions, scope)
         newClient.initialize(
             clientName = "claude-code-plus",
             clientTitle = "Claude Code Plus",
@@ -104,7 +110,7 @@ internal class CodexAgentClientImpl(
         )
 
         client = newClient
-        currentClientOptions = codexClientOptions
+        currentClientOptions = enrichedClientOptions
         startEventRelay(newClient)
 
         val thread = if (normalized.codexThreadId != null) {
@@ -115,11 +121,7 @@ internal class CodexAgentClientImpl(
                 cwd = codexThreadOptions.workingDirectory,
                 approvalPolicy = codexThreadOptions.approvalPolicy?.wireValue,
                 sandbox = codexThreadOptions.sandboxMode?.wireValue,
-                config = buildMcpConfig(
-                    codexThreadOptions.mcpServers,
-                    codexThreadOptions.webSearchEnabled,
-                    codexThreadOptions.threadConfigOverrides
-                ),
+                config = buildThreadOnlyConfig(codexThreadOptions),
                 developerInstructions = codexThreadOptions.developerInstructions
             )
         }
@@ -496,6 +498,7 @@ internal class CodexAgentClientImpl(
     }
 
     private suspend fun restartAppServer(threadIdToResume: String?) {
+        // currentClientOptions 已包含 appServerConfigOverrides（在 connect() 中设置）
         val options = currentClientOptions ?: CodexClientOptions()
         val threadOptions = currentThreadOptions ?: ThreadOptions()
 
@@ -521,11 +524,7 @@ internal class CodexAgentClientImpl(
                 cwd = threadOptions.workingDirectory,
                 approvalPolicy = threadOptions.approvalPolicy?.wireValue,
                 sandbox = threadOptions.sandboxMode?.wireValue,
-                config = buildMcpConfig(
-                    threadOptions.mcpServers,
-                    threadOptions.webSearchEnabled,
-                    threadOptions.threadConfigOverrides
-                ),
+                config = buildThreadOnlyConfig(threadOptions),
                 developerInstructions = threadOptions.developerInstructions
             )
         }
@@ -692,29 +691,50 @@ internal class CodexAgentClientImpl(
     }
 
     /**
-     * 构建 MCP 配置（将 MCP 服务器配置转换为 Codex 配置格式）
+     * 构建 AppServer 级别配置（MCP 服务器、features 等）。
+     * 这些配置通过 -c 参数传递给 codex app-server，使 mcpServerStatus/list API 可以查询到。
      *
-     * @param mcpServers MCP 服务器配置，key 为服务器名称，value 为 HTTP URL
-     * @return Codex thread config 参数，如果为空则返回 null
+     * @param threadOptions 线程选项
+     * @return AppServer 配置覆盖，格式为 key -> value
      */
-    private fun buildMcpConfig(
-        mcpServers: Map<String, String>,
-        webSearchEnabled: Boolean?,
-        threadConfigOverrides: Map<String, JsonElement>
-    ): Map<String, JsonElement>? {
-        if (mcpServers.isEmpty() && webSearchEnabled == null && threadConfigOverrides.isEmpty()) return null
+    private fun buildAppServerConfig(threadOptions: ThreadOptions): Map<String, String> {
+        val config = mutableMapOf<String, String>()
 
-        val config = mutableMapOf<String, JsonElement>()
-        webSearchEnabled?.let { enabled ->
-            config["features.web_search_request"] = JsonPrimitive(enabled)
+        // MCP 服务器配置
+        threadOptions.mcpServers.forEach { (serverName, url) ->
+            config["mcp_servers.$serverName.url"] = url
         }
-        mcpServers.forEach { (serverName, url) ->
-            config["mcp_servers.$serverName.url"] = JsonPrimitive(url)
+
+        // Web search 配置
+        threadOptions.webSearchEnabled?.let { enabled ->
+            config["features.web_search_request"] = enabled.toString()
         }
-        threadConfigOverrides.forEach { (key, value) ->
-            config[key] = value
+
+        // threadConfigOverrides 中的 MCP/features 相关配置
+        threadOptions.threadConfigOverrides.forEach { (key, value) ->
+            if (key.startsWith("mcp_servers.") || key.startsWith("features.")) {
+                config[key] = when (value) {
+                    is JsonPrimitive -> value.content
+                    else -> value.toString()
+                }
+            }
         }
+
         return config
+    }
+
+    /**
+     * 构建 Thread 级别配置（仅非 MCP/features 相关）。
+     * MCP/features 配置已提升到 AppServer 级别。
+     *
+     * @param threadOptions 线程选项
+     * @return Thread 配置，如果为空则返回 null
+     */
+    private fun buildThreadOnlyConfig(threadOptions: ThreadOptions): Map<String, JsonElement>? {
+        val config = threadOptions.threadConfigOverrides.filterKeys { key ->
+            !key.startsWith("mcp_servers.") && !key.startsWith("features.")
+        }
+        return config.takeIf { it.isNotEmpty() }
     }
 
     private fun checkCapability(supported: Boolean, method: String) {
