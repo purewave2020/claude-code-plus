@@ -113,38 +113,6 @@ function computeToolTextSkipAndHydrate(message: Message): Set<number> {
   return skip
 }
 
-/**
- * 检测是否为 Codex McpToolCall 格式
- */
-function isCodexMcpToolCallInput(input: any): boolean {
-  return input?.type === 'McpToolCall' && (input?.toolName || (input?.server && input?.tool))
-}
-
-/**
- * 将 Codex McpToolCall 格式转换为统一的 MCP 工具格式
- * Codex 格式：
- * {
- *   type: 'McpToolCall',
- *   server: 'jetbrains-file',
- *   tool: 'ReadFile',
- *   toolName: 'mcp__jetbrains-file__ReadFile',
- *   arguments: { filePath: '...', maxLines: 20 }
- * }
- * 转换为：
- * {
- *   toolName: 'mcp__jetbrains-file__ReadFile',
- *   input: { filePath: '...', maxLines: 20 }
- * }
- */
-function normalizeCodexMcpToolCall(block: ToolUseContent): { toolName: string; input: Record<string, any> } {
-  const input = block.input as any
-  // 提取真正的 MCP 工具名
-  const mcpToolName = input.toolName || `mcp__${input.server}__${input.tool}`
-  // 提取实际的工具参数
-  const actualInput = input.arguments || input.parameters || {}
-  return { toolName: mcpToolName, input: actualInput }
-}
-
 export function createToolCall(
   block: ToolUseContent,
   pendingToolCalls: Map<string, ToolCall>
@@ -152,44 +120,28 @@ export function createToolCall(
   const existing = pendingToolCalls.get(block.id)
   if (existing) {
     if (block.input && Object.keys(block.input as any).length > 0) {
-      // 如果是 Codex McpToolCall，需要转换后再更新
-      if (isCodexMcpToolCallInput(block.input)) {
-        const normalized = normalizeCodexMcpToolCall(block)
-        existing.toolName = normalized.toolName
-        existing.input = normalized.input
-        existing.toolType = resolveToolType(normalized.toolName)
-      } else {
-        existing.input = block.input as any
-      }
+      existing.input = block.input as any
     }
     return existing
   }
 
-  // 检测并转换 Codex McpToolCall 格式
-  let finalToolName = block.toolName
-  let finalInput = (block.input || {}) as Record<string, any>
-
-  if (block.toolName === 'McpToolCall' || isCodexMcpToolCallInput(block.input)) {
-    const normalized = normalizeCodexMcpToolCall(block)
-    finalToolName = normalized.toolName
-    finalInput = normalized.input
-  }
+  const toolName = block.toolName
+  const input = (block.input || {}) as Record<string, any>
 
   // 优先使用后端传来的 toolType，否则通过 toolName 解析
-  const toolType = block.toolType || resolveToolType(finalToolName)
+  const toolType = block.toolType || resolveToolType(toolName)
 
   const timestamp = Date.now()
 
   const baseToolCall = {
     id: block.id,
     displayType: 'toolCall' as const,
-    toolName: finalToolName,
-
-    toolType,                           // 类型标识（CLAUDE_READ 等）
+    toolName,
+    toolType,
     status: ToolCallStatus.RUNNING,
     startTime: timestamp,
     timestamp,
-    input: finalInput
+    input
   }
 
   const toolCall = reactive({ ...baseToolCall }) as ToolCall
