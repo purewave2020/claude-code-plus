@@ -7,6 +7,7 @@
       :sessions="sessionTabList"
       :current-session-id="currentTabId"
       :can-close="true"
+      :initializing="!settingsStore.settingsReady"
       @switch="handleSwitchTab"
       @close="handleCloseTab"
       @reorder="handleReorder"

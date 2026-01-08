@@ -234,6 +234,7 @@ export default {
     noHistory: '기록 없음',
     active: '활성',
     noActive: '활성 세션 없음',
+    initializing: '초기화 중...',
     historySection: '기록',
     unnamed: '이름 없는 세션',
     messages: '개의 메시지'

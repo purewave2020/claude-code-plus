@@ -234,6 +234,7 @@ export default {
     noHistory: '履歴なし',
     active: 'アクティブ',
     noActive: 'アクティブなセッションなし',
+    initializing: '初期化中...',
     historySection: '履歴',
     unnamed: '無題のセッション',
     messages: '件のメッセージ'

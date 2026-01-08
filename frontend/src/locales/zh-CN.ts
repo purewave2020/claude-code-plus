@@ -260,6 +260,7 @@ export default {
     historySection: '历史',
     unnamed: '未命名会话',
     empty: '暂无活动会话',
+    initializing: '初始化中...',
     messages: '条消息',
     loadHistoryFailed: '加载历史会话失败',
     deleteSuccess: '会话已删除',

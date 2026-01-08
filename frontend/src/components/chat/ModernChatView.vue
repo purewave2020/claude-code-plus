@@ -447,10 +447,10 @@ onMounted(async () => {
     if (!sessionStore.hasTabs) {
       console.log('No existing tabs, creating default...')
 
-      // 在 IDE 环境下，等待设置加载完成
+      // 等待设置加载完成（无论 IDE 还是浏览器模式）
       // 注意：实际的设置加载由 App.vue 负责
       // 由于 Vue 组件挂载顺序（子组件先于父组件），需要等待 App.vue 完成初始化
-      if (isIdeMode.value && !settingsStore.settingsReady) {
+      if (!settingsStore.settingsReady) {
         console.log('Waiting for settings to be ready (App.vue will load them)...')
         // 等待 App.vue 完成设置加载（最多等待 10 秒，因为初始化包含多个网络请求）
         const maxWaitMs = 10000

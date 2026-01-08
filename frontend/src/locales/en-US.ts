@@ -260,6 +260,7 @@ export default {
     historySection: 'History',
     unnamed: 'Unnamed session',
     empty: 'No active sessions',
+    initializing: 'Initializing...',
     messages: 'messages',
     loadHistoryFailed: 'Failed to load history sessions',
     deleteSuccess: 'Session deleted',

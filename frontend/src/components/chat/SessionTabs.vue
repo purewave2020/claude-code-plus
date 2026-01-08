@@ -79,7 +79,11 @@
         </template>
       </draggable>
 
-      <span v-if="sessions.length === 0" class="tab-placeholder">
+      <span v-if="initializing" class="tab-placeholder initializing">
+        <span class="loading-spinner" />
+        {{ t('session.initializing') || '初始化中...' }}
+      </span>
+      <span v-else-if="sessions.length === 0" class="tab-placeholder">
         {{ t('session.empty') || '暂无活动会话' }}
       </span>
     </div>
@@ -119,8 +123,10 @@ const props = withDefaults(defineProps<{
   sessions: SessionTabInfo[]
   currentSessionId: string | null
   canClose?: boolean
+  initializing?: boolean
 }>(), {
-  canClose: true
+  canClose: true,
+  initializing: false
 })
 
 const emit = defineEmits<{
@@ -509,5 +515,26 @@ function getTabTooltip(tab: SessionTabInfo): string {
   font-size: 12px;
   color: var(--theme-secondary-foreground, #6a737d);
   opacity: 0.8;
+}
+
+.tab-placeholder.initializing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.loading-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--theme-secondary-foreground, #6a737d);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
