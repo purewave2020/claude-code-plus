@@ -113,6 +113,38 @@ function computeToolTextSkipAndHydrate(message: Message): Set<number> {
   return skip
 }
 
+/**
+ * 检测是否为 Codex McpToolCall 格式
+ */
+function isCodexMcpToolCallInput(input: any): boolean {
+  return input?.type === 'McpToolCall' && (input?.toolName || (input?.server && input?.tool))
+}
+
+/**
+ * 将 Codex McpToolCall 格式转换为统一的 MCP 工具格式
+ * Codex 格式：
+ * {
+ *   type: 'McpToolCall',
+ *   server: 'jetbrains-file',
+ *   tool: 'ReadFile',
+ *   toolName: 'mcp__jetbrains-file__ReadFile',
+ *   arguments: { filePath: '...', maxLines: 20 }
+ * }
+ * 转换为：
+ * {
+ *   toolName: 'mcp__jetbrains-file__ReadFile',
+ *   input: { filePath: '...', maxLines: 20 }
+ * }
+ */
+function normalizeCodexMcpToolCall(block: ToolUseContent): { toolName: string; input: Record<string, any> } {
+  const input = block.input as any
+  // 提取真正的 MCP 工具名
+  const mcpToolName = input.toolName || `mcp__${input.server}__${input.tool}`
+  // 提取实际的工具参数
+  const actualInput = input.arguments || input.parameters || {}
+  return { toolName: mcpToolName, input: actualInput }
+}
+
 export function createToolCall(
   block: ToolUseContent,
   pendingToolCalls: Map<string, ToolCall>
@@ -120,26 +152,44 @@ export function createToolCall(
   const existing = pendingToolCalls.get(block.id)
   if (existing) {
     if (block.input && Object.keys(block.input as any).length > 0) {
-      existing.input = block.input as any
+      // 如果是 Codex McpToolCall，需要转换后再更新
+      if (isCodexMcpToolCallInput(block.input)) {
+        const normalized = normalizeCodexMcpToolCall(block)
+        existing.toolName = normalized.toolName
+        existing.input = normalized.input
+        existing.toolType = resolveToolType(normalized.toolName)
+      } else {
+        existing.input = block.input as any
+      }
     }
     return existing
   }
 
+  // 检测并转换 Codex McpToolCall 格式
+  let finalToolName = block.toolName
+  let finalInput = (block.input || {}) as Record<string, any>
+
+  if (block.toolName === 'McpToolCall' || isCodexMcpToolCallInput(block.input)) {
+    const normalized = normalizeCodexMcpToolCall(block)
+    finalToolName = normalized.toolName
+    finalInput = normalized.input
+  }
+
   // 优先使用后端传来的 toolType，否则通过 toolName 解析
-  const toolType = block.toolType || resolveToolType(block.toolName)
+  const toolType = block.toolType || resolveToolType(finalToolName)
 
   const timestamp = Date.now()
 
   const baseToolCall = {
     id: block.id,
     displayType: 'toolCall' as const,
-    toolName: block.toolName,
+    toolName: finalToolName,
 
     toolType,                           // 类型标识（CLAUDE_READ 等）
     status: ToolCallStatus.RUNNING,
     startTime: timestamp,
     timestamp,
-    input: (block.input || {}) as Record<string, any>
+    input: finalInput
   }
 
   const toolCall = reactive({ ...baseToolCall }) as ToolCall
@@ -150,11 +200,66 @@ export function createToolCall(
   return toolCall
 }
 
+/**
+ * 将 Codex 工具结果格式转换为 Claude 统一格式
+ * Codex 格式：{ success: boolean, output?: string, error?: string, result?: any }
+ * Claude 格式：{ content: string | any[], is_error: boolean }
+ */
+function normalizeCodexToolResult(result: any): ToolResultContent {
+  if (!result) {
+    return { content: '', is_error: false } as any
+  }
+
+  // 已经是 Claude 格式
+  if ('content' in result && ('is_error' in result || !('success' in result))) {
+    return result
+  }
+
+  // Codex 格式转换
+  if ('success' in result || 'error' in result) {
+    const isError = result.success === false || !!result.error
+    let content: string | any[]
+
+    if (isError) {
+      content = result.error || 'Unknown error'
+    } else {
+      // 尝试多种字段获取输出内容
+      content = result.output || result.result || result.data || result.stdout || ''
+      // 如果内容是对象，尝试提取 content 字段
+      if (typeof content === 'object' && content !== null) {
+        if ('content' in content) {
+          content = content.content
+        } else if (Array.isArray(content)) {
+          // 保持数组格式
+        } else {
+          // 转为 JSON 字符串
+          content = JSON.stringify(content, null, 2)
+        }
+      }
+    }
+
+    return {
+      ...result,
+      content,
+      is_error: isError
+    } as any
+  }
+
+  // 其他情况，尝试包装为统一格式
+  if (typeof result === 'string') {
+    return { content: result, is_error: false } as any
+  }
+
+  return result
+}
+
 export function updateToolCallResult(toolCall: ToolCall, resultBlock: ToolResultContent) {
-  toolCall.status = resultBlock.is_error ? ToolCallStatus.FAILED : ToolCallStatus.SUCCESS
+  // 转换 Codex 结果格式为 Claude 统一格式
+  const normalizedResult = normalizeCodexToolResult(resultBlock)
+
+  toolCall.status = normalizedResult.is_error ? ToolCallStatus.FAILED : ToolCallStatus.SUCCESS
   toolCall.endTime = Date.now()
-  // 直接存储后端数据，不做格式转换，保留 is_error 字段
-  toolCall.result = resultBlock as ToolResult
+  toolCall.result = normalizedResult as ToolResult
 
   // 从结构化字段读取 agentId（仅 Task 工具有）
   if (toolCall.toolName === 'Task' && (resultBlock as any).agent_id) {
