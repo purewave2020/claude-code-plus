@@ -217,7 +217,12 @@ export default {
     rollbackFailed: '回滚失败',
     rolledBack: '已回滚',
     rollback: '回滚',
-    fileEditStats: '{files} 个文件, {edits} 次编辑'
+    fileEditStats: '{files} 个文件, {edits} 次编辑',
+    acceptAll: '接受全部',
+    accept: '接受',
+    acceptFile: '接受此文件的所有修改',
+    acceptModification: '接受此修改',
+    viewDiff: '查看差异'
   },
   settings: {
     title: '设置',

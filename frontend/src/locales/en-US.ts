@@ -217,7 +217,12 @@ export default {
     rollbackFailed: 'Rollback failed',
     rolledBack: 'Rolled back',
     rollback: 'Rollback',
-    fileEditStats: '{files} files, {edits} edits'
+    fileEditStats: '{files} files, {edits} edits',
+    acceptAll: 'Accept All',
+    accept: 'Accept',
+    acceptFile: 'Accept all changes to this file',
+    acceptModification: 'Accept this modification',
+    viewDiff: 'View diff'
   },
   settings: {
     title: 'Settings',

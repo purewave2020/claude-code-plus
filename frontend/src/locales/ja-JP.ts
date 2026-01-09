@@ -199,7 +199,12 @@ export default {
     rollbackFailed: 'ロールバックに失敗しました',
     rolledBack: 'ロールバック済み',
     rollback: 'ロールバック',
-    fileEditStats: '{files}ファイル、{edits}回の編集'
+    fileEditStats: '{files}ファイル、{edits}回の編集',
+    acceptAll: 'すべて承認',
+    accept: '承認',
+    acceptFile: 'このファイルのすべての変更を承認',
+    acceptModification: 'この変更を承認',
+    viewDiff: '差分を表示'
   },
   settings: {
     title: '設定',

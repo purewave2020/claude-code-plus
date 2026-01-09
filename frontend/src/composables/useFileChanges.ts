@@ -39,8 +39,14 @@ export interface FileModification {
   filePath: string
   /** 是否已回滚 */
   rolledBack: boolean
+  /** 是否已接受（接受后不再显示，无法回滚） */
+  accepted: boolean
   /** 时间戳（显示用） */
   timestamp: number
+  /** 增加的行数 */
+  linesAdded?: number
+  /** 删除的行数 */
+  linesRemoved?: number
 }
 
 /**
@@ -73,10 +79,21 @@ export function isJetBrainsFileEditTool(toolName: string): toolName is JetBrains
 }
 
 /**
- * 从工具结果中提取 historyTs
+ * 从工具结果中提取的元信息
  */
-export function extractHistoryTs(result: any): number | null {
-  if (!result?.content) return null
+export interface ToolResultMeta {
+  historyTs: number | null
+  linesAdded?: number
+  linesRemoved?: number
+}
+
+/**
+ * 从工具结果中提取元信息（historyTs、行数变化等）
+ */
+export function extractToolResultMeta(result: any): ToolResultMeta {
+  const meta: ToolResultMeta = { historyTs: null }
+  
+  if (!result?.content) return meta
   
   const content = typeof result.content === 'string' 
     ? result.content 
@@ -85,11 +102,19 @@ export function extractHistoryTs(result: any): number | null {
       : ''
   
   // 匹配 [jb:historyTs=xxx] 格式
-  const match = content.match(/\[jb:historyTs=(\d+)\]/)
-  if (match) {
-    return parseInt(match[1], 10)
+  const historyMatch = content.match(/\[jb:historyTs=(\d+)\]/)
+  if (historyMatch) {
+    meta.historyTs = parseInt(historyMatch[1], 10)
   }
-  return null
+  
+  return meta
+}
+
+/**
+ * 从工具结果中提取 historyTs（兼容旧代码）
+ */
+export function extractHistoryTs(result: any): number | null {
+  return extractToolResultMeta(result).historyTs
 }
 
 /**
@@ -132,6 +157,40 @@ function getShortToolName(toolName: string): 'WriteFile' | 'EditFile' {
   return 'EditFile'
 }
 
+/**
+ * 计算行数变化
+ */
+function calculateLineChanges(toolCall: ToolCall): { added: number; removed: number } {
+  const input = toolCall.input as Record<string, any>
+  const toolName = toolCall.toolName
+  
+  if (toolName === 'mcp__jetbrains-file__EditFile') {
+    const oldStr = input?.oldString || ''
+    const newStr = input?.newString || ''
+    const oldLines = oldStr.split('\n').length
+    const newLines = newStr.split('\n').length
+    
+    // 简化计算：新增行数 = max(0, newLines - oldLines)，删除行数 = max(0, oldLines - newLines)
+    // 更准确的方式需要 diff 算法，这里用简化版
+    if (newLines > oldLines) {
+      return { added: newLines - oldLines, removed: 0 }
+    } else if (oldLines > newLines) {
+      return { added: 0, removed: oldLines - newLines }
+    }
+    // 行数相同但内容不同，标记为 1 行变化
+    return { added: 1, removed: 1 }
+  }
+  
+  if (toolName === 'mcp__jetbrains-file__WriteFile') {
+    const content = input?.content || ''
+    const lines = content.split('\n').length
+    // WriteFile 是覆盖写入，简化为全部是新增
+    return { added: lines, removed: 0 }
+  }
+  
+  return { added: 0, removed: 0 }
+}
+
 // ============ Composable ============
 
 /**
@@ -153,12 +212,14 @@ export function useFileChanges(displayItems: Ref<DisplayItem[]> | ComputedRef<Di
   
   /**
    * 计算属性：按文件分组的改动列表
+   * 过滤掉已回滚和已接受的改动
    */
   const fileChanges = computed<FileChange[]>(() => {
     const map = new Map<string, FileChange>()
     
     for (const edit of fileEdits.value) {
-      if (edit.rolledBack) continue
+      // 过滤掉已回滚和已接受的改动
+      if (edit.rolledBack || edit.accepted) continue
       
       let fileChange = map.get(edit.filePath)
       if (!fileChange) {
@@ -217,22 +278,28 @@ export function useFileChanges(displayItems: Ref<DisplayItem[]> | ComputedRef<Di
     const filePath = extractFilePath(toolCall)
     if (!filePath) return false
     
-    // 提取 historyTs
-    const historyTs = extractHistoryTs(toolCall.result)
-    if (!historyTs) return false
+    // 提取元信息（historyTs、行数变化等）
+    const meta = extractToolResultMeta(toolCall.result)
+    if (!meta.historyTs) return false
     
     // 检查是否已存在（避免重复）
     if (fileEditMap.value.has(toolCall.id)) return false
     
+    // 从工具输入计算行数变化
+    const lineStats = calculateLineChanges(toolCall)
+    
     // 添加记录
     fileEdits.value.push({
       toolUseId: toolCall.id,
-      historyTs,
+      historyTs: meta.historyTs,
       toolName: getShortToolName(toolCall.toolName),
       summary: generateSummary(toolCall),
       filePath,
       rolledBack: false,
-      timestamp: toolCall.timestamp
+      accepted: false,
+      timestamp: toolCall.timestamp,
+      linesAdded: lineStats.added,
+      linesRemoved: lineStats.removed
     })
     
     return true
@@ -324,6 +391,58 @@ export function useFileChanges(displayItems: Ref<DisplayItem[]> | ComputedRef<Di
     rollingBackFiles.value = new Set()
   }
   
+  /**
+   * 接受单个修改及其之前的所有修改
+   * 因为回滚是按时间顺序的，接受也需要保持时间顺序
+   */
+  function acceptModification(filePath: string, historyTs: number): void {
+    for (const edit of fileEdits.value) {
+      if (edit.filePath === filePath && edit.historyTs <= historyTs && !edit.rolledBack) {
+        edit.accepted = true
+      }
+    }
+  }
+  
+  /**
+   * 接受整个文件的所有修改
+   */
+  function acceptFile(filePath: string): void {
+    for (const edit of fileEdits.value) {
+      if (edit.filePath === filePath && !edit.rolledBack) {
+        edit.accepted = true
+      }
+    }
+  }
+  
+  /**
+   * 接受所有修改
+   */
+  function acceptAll(): void {
+    for (const edit of fileEdits.value) {
+      if (!edit.rolledBack) {
+        edit.accepted = true
+      }
+    }
+  }
+  
+  /**
+   * 检查某个工具调用是否已被接受
+   */
+  function isAccepted(toolUseId: string): boolean {
+    const edit = fileEditMap.value.get(toolUseId)
+    return edit?.accepted ?? false
+  }
+  
+  /**
+   * 根据 toolUseId 接受修改
+   */
+  function acceptByToolUseId(toolUseId: string): void {
+    const edit = fileEditMap.value.get(toolUseId)
+    if (edit) {
+      acceptModification(edit.filePath, edit.historyTs)
+    }
+  }
+  
   // 监听 displayItems 变化
   // 1. 自动检测并添加新完成的 JetBrains MCP 工具调用（仅在生成中）
   // 2. 清理已删除的工具调用
@@ -368,7 +487,7 @@ export function useFileChanges(displayItems: Ref<DisplayItem[]> | ComputedRef<Di
     changedFileCount,
     totalEditCount,
     
-    // 方法
+    // 回滚方法
     addFileEdit,
     canRollback,
     rollbackFile,
@@ -376,7 +495,14 @@ export function useFileChanges(displayItems: Ref<DisplayItem[]> | ComputedRef<Di
     rollbackByToolUseId,
     getModificationByToolUseId,
     isRollingBack,
-    clear
+    clear,
+    
+    // 接受方法
+    acceptModification,
+    acceptFile,
+    acceptAll,
+    acceptByToolUseId,
+    isAccepted
   }
 }
 
@@ -390,7 +516,7 @@ export type FileChangesInstance = {
   changedFileCount: ComputedRef<number>
   totalEditCount: ComputedRef<number>
 
-  // 方法
+  // 回滚方法
   addFileEdit: (toolCall: ToolCall) => boolean
   canRollback: (toolUseId: string) => boolean
   rollbackFile: (filePath: string) => Promise<RollbackResult>
@@ -399,4 +525,11 @@ export type FileChangesInstance = {
   getModificationByToolUseId: (toolUseId: string) => FileModification | null
   isRollingBack: (filePath: string) => boolean
   clear: () => void
+  
+  // 接受方法
+  acceptModification: (filePath: string, historyTs: number) => void
+  acceptFile: (filePath: string) => void
+  acceptAll: () => void
+  acceptByToolUseId: (toolUseId: string) => void
+  isAccepted: (toolUseId: string) => boolean
 }

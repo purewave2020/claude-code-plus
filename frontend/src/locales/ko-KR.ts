@@ -199,7 +199,12 @@ export default {
     rollbackFailed: '롤백 실패',
     rolledBack: '롤백됨',
     rollback: '롤백',
-    fileEditStats: '{files}개 파일, {edits}회 편집'
+    fileEditStats: '{files}개 파일, {edits}회 편집',
+    acceptAll: '모두 승인',
+    accept: '승인',
+    acceptFile: '이 파일의 모든 변경 승인',
+    acceptModification: '이 수정 승인',
+    viewDiff: '차이점 보기'
   },
   settings: {
     title: '설정',

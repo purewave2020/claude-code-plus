@@ -6,6 +6,16 @@
     :tool-call="toolCallData"
     @toggle="expanded = !expanded"
   >
+    <template #header-actions>
+      <button
+        v-if="canAccept && !isAccepted"
+        class="accept-btn"
+        :title="t('tools.acceptModification')"
+        @click.stop="handleAccept"
+      >
+        ✓
+      </button>
+    </template>
     <template #details>
       <div class="edit-tool-details">
         <DiffViewer :old-content="oldString" :new-content="newString" />
@@ -19,9 +29,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 import type { GenericToolCall } from '@/types/display'
+import type { FileChangesInstance } from '@/composables/useFileChanges'
+import { isJetBrainsFileEditTool, extractHistoryTs } from '@/composables/useFileChanges'
 import CompactToolCard from '../CompactToolCard.vue'
 import { extractToolDisplayInfo } from '@/utils/toolDisplayInfo'
 import DiffViewer from '../DiffViewer.vue'
@@ -35,6 +47,9 @@ interface Props {
 const props = defineProps<Props>()
 // 默认折叠
 const expanded = ref(false)
+
+// 注入 fileChanges 实例
+const fileChangesInstance = inject<FileChangesInstance>('fileChanges')
 
 // 提取工具显示信息
 const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall as any, props.toolCall.result as any))
@@ -51,9 +66,52 @@ const input = computed(() => props.toolCall.input as Record<string, any>)
 const oldString = computed(() => input.value.old_string || '')
 const newString = computed(() => input.value.new_string || '')
 const replaceAll = computed(() => input.value.replace_all || false)
+
+// 检查是否可以接受（是 JetBrains 文件编辑工具且有 historyTs）
+const canAccept = computed(() => {
+  const toolName = props.toolCall.toolName || props.toolCall.name || ''
+  if (!isJetBrainsFileEditTool(toolName)) return false
+  const historyTs = extractHistoryTs(props.toolCall.result)
+  return historyTs !== null
+})
+
+// 检查是否已接受
+const isAccepted = computed(() => {
+  const toolUseId = props.toolCall.id || props.toolCall.result?.tool_use_id
+  if (!toolUseId || !fileChangesInstance) return false
+  return fileChangesInstance.isAccepted(toolUseId)
+})
+
+// 处理接受
+function handleAccept() {
+  const toolUseId = props.toolCall.id || props.toolCall.result?.tool_use_id
+  if (!toolUseId || !fileChangesInstance) return
+  fileChangesInstance.acceptByToolUseId(toolUseId)
+}
 </script>
 
 <style scoped>
+.accept-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--theme-secondary-foreground);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.accept-btn:hover {
+  background: color-mix(in srgb, var(--theme-success) 20%, transparent);
+  color: var(--theme-success);
+}
+
 .edit-tool {
   border-color: var(--theme-error, #f9826c);
 }

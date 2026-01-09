@@ -1,11 +1,22 @@
 <template>
   <div v-if="hasChanges && isIdeMode" class="file-rollback-bar">
     <!-- 头部：可点击展开/收起 -->
-    <div class="rollback-header" @click="toggleExpanded">
-      <span class="rollback-icon">↩</span>
-      <span class="rollback-title">{{ t('tools.modifiedFiles') }}</span>
-      <span class="file-count">({{ t('tools.fileEditStats', { files: changedFileCount, edits: totalEditCount }) }})</span>
-      <span class="expand-icon" :class="{ expanded }">▾</span>
+    <div class="rollback-header">
+      <div class="header-left" @click="toggleExpanded">
+        <span class="rollback-icon">↩</span>
+        <span class="rollback-title">{{ t('tools.modifiedFiles') }}</span>
+        <span class="file-count">({{ t('tools.fileEditStats', { files: changedFileCount, edits: totalEditCount }) }})</span>
+        <span class="expand-icon" :class="{ expanded }">▾</span>
+      </div>
+      <div class="header-actions">
+        <button
+          class="accept-all-btn"
+          :title="t('tools.acceptAll')"
+          @click="handleAcceptAll"
+        >
+          ✓ {{ t('tools.acceptAll') }}
+        </button>
+      </div>
     </div>
 
     <!-- 展开内容 -->
@@ -17,6 +28,13 @@
       >
         <!-- 文件头部 -->
         <div class="file-header">
+          <span 
+            class="file-collapse-btn"
+            :class="{ collapsed: !isFileExpanded(file.filePath) }"
+            @click="toggleFileExpanded(file.filePath)"
+          >
+            ▾
+          </span>
           <span class="file-icon">📄</span>
           <span 
             class="file-name" 
@@ -25,37 +43,70 @@
           >
             {{ file.fileName }}
           </span>
-          <button
-            class="rollback-all-btn"
-            :class="{ loading: isRollingBack(file.filePath) }"
-            :disabled="isRollingBack(file.filePath)"
-            :title="t('tools.rollbackAll')"
-            @click="handleRollbackFile(file.filePath)"
-          >
-            <span v-if="isRollingBack(file.filePath)" class="spinner" />
-            <span v-else>↩ {{ t('tools.rollbackAll') }}</span>
-          </button>
+          <span class="file-stats">
+            {{ getFileStats(file) }}
+          </span>
+          <div class="file-actions">
+            <button
+              class="accept-file-btn"
+              :title="t('tools.acceptFile')"
+              @click="handleAcceptFile(file.filePath)"
+            >
+              ✓ {{ t('tools.accept') }}
+            </button>
+            <button
+              class="rollback-all-btn"
+              :class="{ loading: isRollingBack(file.filePath) }"
+              :disabled="isRollingBack(file.filePath)"
+              :title="t('tools.rollbackAll')"
+              @click="handleRollbackFile(file.filePath)"
+            >
+              <span v-if="isRollingBack(file.filePath)" class="spinner" />
+              <span v-else>↩ {{ t('tools.rollbackAll') }}</span>
+            </button>
+          </div>
         </div>
 
         <!-- 修改列表 -->
-        <div class="modification-list">
+        <div v-if="isFileExpanded(file.filePath)" class="modification-list">
           <div
             v-for="mod in getActiveModifications(file)"
             :key="mod.toolUseId"
             class="modification-item"
-            :class="{ 'rolled-back': mod.rolledBack }"
           >
             <span class="mod-tool">{{ mod.toolName }}</span>
-            <span class="mod-summary" :title="mod.summary">{{ mod.summary }}</span>
-            <button
-              v-if="!mod.rolledBack"
-              class="rollback-mod-btn"
-              :title="t('tools.rollbackModification')"
-              @click="handleRollbackModification(file.filePath, mod.historyTs)"
+            <span 
+              class="mod-summary" 
+              :title="mod.summary"
+              @click="handleViewDiff(mod)"
             >
-              ↩
-            </button>
-            <span v-else class="rolled-back-badge">{{ t('tools.rolledBack') }}</span>
+              {{ mod.summary }}
+            </span>
+            <span v-if="mod.linesAdded" class="line-badge badge-add">+{{ mod.linesAdded }}</span>
+            <span v-if="mod.linesRemoved" class="line-badge badge-remove">-{{ mod.linesRemoved }}</span>
+            <div class="mod-actions">
+              <button
+                class="mod-action-btn accept-btn"
+                :title="t('tools.acceptModification')"
+                @click="handleAcceptModification(file.filePath, mod.historyTs)"
+              >
+                ✓
+              </button>
+              <button
+                class="mod-action-btn view-btn"
+                :title="t('tools.viewDiff')"
+                @click="handleViewDiff(mod)"
+              >
+                👁
+              </button>
+              <button
+                class="mod-action-btn rollback-btn"
+                :title="t('tools.rollbackModification')"
+                @click="handleRollbackModification(file.filePath, mod.historyTs)"
+              >
+                ↩
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -88,7 +139,7 @@ import { ref, computed, inject } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 import { ideaBridge } from '@/services/ideaBridge'
 import { jetbrainsRSocket } from '@/services/jetbrainsRSocket'
-import type { FileChangesInstance, FileChange } from '@/composables/useFileChanges'
+import type { FileChangesInstance, FileChange, FileModification } from '@/composables/useFileChanges'
 
 const { t } = useI18n()
 
@@ -98,8 +149,11 @@ const fileChangesInstance = inject<FileChangesInstance>('fileChanges')
 // 检测是否在 IDE 模式
 const isIdeMode = computed(() => ideaBridge.isInIde())
 
-// 展开/收起状态
+// 展开/收起状态（整体）
 const expanded = ref(false)
+
+// 文件级别展开状态
+const expandedFiles = ref<Set<string>>(new Set())
 
 // 从 composable 获取数据
 const fileChanges = computed(() => fileChangesInstance?.fileChanges.value ?? [])
@@ -112,14 +166,48 @@ function isRollingBack(filePath: string): boolean {
   return fileChangesInstance?.isRollingBack(filePath) ?? false
 }
 
-// 获取文件的活跃修改（未回滚的）
+// 获取文件的活跃修改（未回滚、未接受的）
 function getActiveModifications(file: FileChange) {
-  return file.modifications.filter(m => !m.rolledBack)
+  return file.modifications.filter(m => !m.rolledBack && !m.accepted)
 }
 
-// 切换展开/收起
+// 获取文件统计信息
+function getFileStats(file: FileChange): string {
+  const mods = getActiveModifications(file)
+  const editCount = mods.length
+  const totalAdded = mods.reduce((sum, m) => sum + (m.linesAdded || 0), 0)
+  const totalRemoved = mods.reduce((sum, m) => sum + (m.linesRemoved || 0), 0)
+  
+  let stats = `${editCount} edit${editCount > 1 ? 's' : ''}`
+  if (totalAdded > 0 || totalRemoved > 0) {
+    stats += ','
+    if (totalAdded > 0) stats += ` +${totalAdded}`
+    if (totalRemoved > 0) stats += ` -${totalRemoved}`
+  }
+  return stats
+}
+
+// 切换整体展开/收起
 function toggleExpanded() {
   expanded.value = !expanded.value
+  // 展开时默认展开所有文件
+  if (expanded.value) {
+    fileChanges.value.forEach(f => expandedFiles.value.add(f.filePath))
+  }
+}
+
+// 检查文件是否展开
+function isFileExpanded(filePath: string): boolean {
+  return expandedFiles.value.has(filePath)
+}
+
+// 切换文件展开/收起
+function toggleFileExpanded(filePath: string) {
+  if (expandedFiles.value.has(filePath)) {
+    expandedFiles.value.delete(filePath)
+  } else {
+    expandedFiles.value.add(filePath)
+  }
 }
 
 // 打开文件
@@ -129,6 +217,50 @@ async function openFile(filePath: string) {
   } catch (error) {
     console.error('Failed to open file:', error)
   }
+}
+
+// 查看 Diff
+async function handleViewDiff(mod: FileModification) {
+  // IDE 模式：在 IDEA 中打开 Diff
+  if (isIdeMode.value) {
+    try {
+      // 获取历史内容
+      const originalContent = await jetbrainsRSocket.getFileHistoryContent(mod.filePath, mod.historyTs)
+      if (originalContent !== null) {
+        // 获取当前内容
+        const response = await jetbrainsRSocket.readFile({ filePath: mod.filePath })
+        const currentContent = typeof response === 'string' ? response : ''
+        
+        await jetbrainsRSocket.showDiff({
+          filePath: mod.filePath,
+          oldContent: originalContent,
+          newContent: currentContent,
+          title: `${mod.toolName}: ${mod.summary}`
+        })
+      }
+    } catch (error) {
+      console.error('Failed to show diff:', error)
+    }
+  }
+  // 浏览器模式：TODO 弹窗显示 DiffViewer
+}
+
+// 处理接受所有改动
+function handleAcceptAll() {
+  if (!fileChangesInstance) return
+  fileChangesInstance.acceptAll()
+}
+
+// 处理接受单个文件的所有改动
+function handleAcceptFile(filePath: string) {
+  if (!fileChangesInstance) return
+  fileChangesInstance.acceptFile(filePath)
+}
+
+// 处理接受单个修改
+function handleAcceptModification(filePath: string, historyTs: number) {
+  if (!fileChangesInstance) return
+  fileChangesInstance.acceptModification(filePath, historyTs)
 }
 
 // 处理回滚整个文件
@@ -163,8 +295,6 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
     alert(t('tools.rollbackFailed') + ': ' + result.error)
   }
 }
-
-
 </script>
 
 <style scoped>
@@ -182,6 +312,13 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 .rollback-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
   gap: 6px;
   font-size: 13px;
   color: var(--theme-warning);
@@ -189,7 +326,7 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   user-select: none;
 }
 
-.rollback-header:hover {
+.header-left:hover {
   opacity: 0.85;
 }
 
@@ -207,13 +344,36 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 }
 
 .expand-icon {
-  margin-left: auto;
   transition: transform 0.2s ease;
   font-size: 10px;
 }
 
 .expand-icon.expanded {
   transform: rotate(180deg);
+}
+
+.header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.accept-all-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-success) 50%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--theme-success) 10%, transparent);
+  color: var(--theme-success);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.accept-all-btn:hover {
+  background: color-mix(in srgb, var(--theme-success) 20%, transparent);
 }
 
 /* 收起状态：标签列表 */
@@ -286,12 +446,23 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   border-bottom: 1px solid var(--theme-border);
 }
 
+.file-collapse-btn {
+  font-size: 10px;
+  color: var(--theme-secondary-foreground);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  user-select: none;
+}
+
+.file-collapse-btn.collapsed {
+  transform: rotate(-90deg);
+}
+
 .file-icon {
   font-size: 12px;
 }
 
 .file-header .file-name {
-  flex: 1;
   font-size: 13px;
   font-weight: 500;
   color: var(--theme-link);
@@ -303,6 +474,35 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 
 .file-header .file-name:hover {
   text-decoration: underline;
+}
+
+.file-stats {
+  flex: 1;
+  font-size: 11px;
+  color: var(--theme-secondary-foreground);
+}
+
+.file-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.accept-file-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--theme-success) 40%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--theme-success);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.accept-file-btn:hover {
+  background: color-mix(in srgb, var(--theme-success) 15%, transparent);
 }
 
 .rollback-all-btn {
@@ -338,18 +538,13 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 6px 10px 6px 28px;
   font-size: 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--theme-border) 50%, transparent);
 }
 
 .modification-item:last-child {
   border-bottom: none;
-}
-
-.modification-item.rolled-back {
-  opacity: 0.5;
-  text-decoration: line-through;
 }
 
 .mod-tool {
@@ -368,33 +563,75 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
 }
 
-.rollback-mod-btn {
+.mod-summary:hover {
+  color: var(--theme-foreground);
+}
+
+.line-badge {
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.badge-add {
+  background: color-mix(in srgb, var(--theme-success) 15%, transparent);
+  color: var(--theme-success);
+}
+
+.badge-remove {
+  background: color-mix(in srgb, var(--theme-error) 15%, transparent);
+  color: var(--theme-error);
+}
+
+.mod-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.mod-action-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: none;
   border-radius: 3px;
   background: transparent;
-  color: var(--theme-secondary-foreground);
   cursor: pointer;
   font-size: 12px;
   transition: all 0.15s ease;
 }
 
-.rollback-mod-btn:hover {
-  background: color-mix(in srgb, var(--theme-warning) 20%, transparent);
-  color: var(--theme-warning);
+.mod-action-btn.accept-btn {
+  color: var(--theme-secondary-foreground);
 }
 
-.rolled-back-badge {
-  font-size: 10px;
+.mod-action-btn.accept-btn:hover {
+  background: color-mix(in srgb, var(--theme-success) 20%, transparent);
+  color: var(--theme-success);
+}
+
+.mod-action-btn.view-btn {
   color: var(--theme-secondary-foreground);
-  font-style: italic;
+}
+
+.mod-action-btn.view-btn:hover {
+  background: color-mix(in srgb, var(--theme-accent) 20%, transparent);
+  color: var(--theme-accent);
+}
+
+.mod-action-btn.rollback-btn {
+  color: var(--theme-secondary-foreground);
+}
+
+.mod-action-btn.rollback-btn:hover {
+  background: color-mix(in srgb, var(--theme-warning) 20%, transparent);
+  color: var(--theme-warning);
 }
 
 /* 加载状态 */
