@@ -60,7 +60,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { ToolCall } from '@/types/display'
+import type { ToolCall, GenericToolCall } from '@/types/display'
 import type { BackendType } from '@/types/backend'
 import { CLAUDE_TOOL_TYPE, OTHER_TOOL_TYPE } from '@/constants/toolTypes'
 import CompactToolCard from './CompactToolCard.vue'
@@ -180,7 +180,7 @@ const asClaudeBashToolCall = computed(() => {
       description: input.description
     },
     result: adaptCodexResultToClaudeFormat(props.toolCall.result, input.output || input.stdout)
-  }
+  } as unknown as GenericToolCall
 })
 
 /**
@@ -198,7 +198,7 @@ const asClaudeWriteToolCall = computed(() => {
       content: input.content || ''
     },
     result: adaptCodexResultToClaudeFormat(props.toolCall.result)
-  }
+  } as unknown as GenericToolCall
 })
 
 /**
@@ -217,7 +217,7 @@ const asClaudeEditToolCall = computed(() => {
       replace_all: input.replaceAll ?? false
     },
     result: adaptCodexResultToClaudeFormat(props.toolCall.result)
-  }
+  } as unknown as GenericToolCall
 })
 
 /**
@@ -395,7 +395,8 @@ const reasoningDisplayInfo = computed(() => ({
   icon: '🧠',
   actionType: 'Reasoning',
   primaryInfo: 'Thinking',
-  status: props.toolCall.status === 'SUCCESS' ? 'success' : 'pending'
+  secondaryInfo: '',
+  status: (props.toolCall.status === 'SUCCESS' ? 'success' : 'pending') as 'success' | 'error' | 'pending'
 }))
 
 const unknownToolDisplayInfo = computed(() => ({
@@ -403,7 +404,7 @@ const unknownToolDisplayInfo = computed(() => ({
   actionType: 'Unknown Tool',
   primaryInfo: props.toolCall.toolName,
   secondaryInfo: `Backend: ${props.backendType}`,
-  status: props.toolCall.status === 'SUCCESS' ? 'success' : 'error'
+  status: (props.toolCall.status === 'SUCCESS' ? 'success' : 'error') as 'success' | 'error' | 'pending'
 }))
 </script>
 

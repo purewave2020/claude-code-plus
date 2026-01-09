@@ -20,9 +20,9 @@ import type {
     RpcConnectOptions,
     RpcCapabilities,
     RpcPermissionMode,
-    RpcSetPermissionModeResult,
-    RpcMessage
+    RpcSetPermissionModeResult
 } from '@/types/rpc'
+import { RpcMessage } from '@/types/rpc/index'
 
 const log = loggers.agent
 
@@ -38,7 +38,8 @@ export type AgentStreamEvent = RpcStreamEvent
 /** 内容块（向后兼容别名） */
 export type ContentBlock = RpcContentBlock
 
-type MessageHandler = (message: RpcMessage) => void
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type MessageHandler = (message: any) => void
 type ErrorHandler = (error: Error) => void
 
 /**

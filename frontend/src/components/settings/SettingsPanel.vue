@@ -89,14 +89,14 @@
               @change="handlePermissionModeChange"
             >
               <el-option
-                v-for="(label, mode) in PERMISSION_MODE_LABELS"
-                :key="mode"
-                :value="mode"
-                :label="label"
+                v-for="option in permissionModeOptions"
+                :key="option.id"
+                :value="option.id"
+                :label="option.label"
               />
             </el-select>
             <p class="setting-description">
-              {{ PERMISSION_MODE_DESCRIPTIONS[localSettings.permissionMode] }}
+              {{ currentPermissionModeDescription }}
             </p>
           </div>
         </div>
@@ -266,11 +266,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useSettingsStore } from '@/stores/settingsStore'
-import {
-  PERMISSION_MODE_LABELS,
-  PERMISSION_MODE_DESCRIPTIONS,
-  type Settings
-} from '@/types/settings'
+import type { Settings } from '@/types/settings'
 
 interface Props {
   show: boolean
@@ -286,6 +282,32 @@ defineProps<Props>()
 const emit = defineEmits<Emits>()
 const settingsStore = useSettingsStore()
 const claudeModels = computed(() => settingsStore.getModelsForBackend('claude'))
+
+// 权限模式选项 - 从 ideSettings 动态获取
+const permissionModeOptions = computed(() => {
+  const options = settingsStore.ideSettings?.permissionModeOptions
+  if (options && options.length > 0) {
+    return options.map(opt => ({
+      id: opt.id,
+      label: opt.label,
+      description: opt.description || ''
+    }))
+  }
+  // 默认选项（后备）
+  return [
+    { id: 'default', label: '默认 - 需要确认', description: '每个工具调用都需要用户确认' },
+    { id: 'acceptEdits', label: '自动接受编辑', description: '自动接受文件编辑操作' },
+    { id: 'plan', label: '计划模式', description: '先制定计划,再执行操作' },
+    { id: 'bypassPermissions', label: '绕过权限检查', description: '自动执行所有操作(谨慎使用)' },
+  ]
+})
+
+// 当前选中的权限模式描述
+const currentPermissionModeDescription = computed(() => {
+  const mode = localSettings.value.permissionMode
+  const option = permissionModeOptions.value.find(opt => opt.id === mode)
+  return option?.description || ''
+})
 
 // 本地设置副本(用于编辑,不立即保存)
 const localSettings = ref<Settings>({

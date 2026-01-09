@@ -7,6 +7,8 @@ import com.asakii.rpc.proto.IdeThemeProto
 import com.asakii.rpc.proto.GetIdeSettingsResponse
 import com.asakii.rpc.proto.IdeSettings
 import com.asakii.rpc.proto.IdeSettingsChangedNotify
+import com.asakii.rpc.proto.OptionConfig as OptionConfigProto
+import com.asakii.settings.OptionConfig
 import com.asakii.rpc.proto.JetBrainsGetLocaleResponse
 import com.asakii.rpc.proto.JetBrainsGetProjectPathResponse
 import com.asakii.rpc.proto.JetBrainsGetThemeResponse
@@ -280,6 +282,12 @@ class JetBrainsRSocketHandler(
                     .build()
             }
 
+            // 转换配置选项列表为 Proto 格式
+            val codexEffortOptionsProto = settings.getCodexReasoningEffortOptions().map { it.toProto() }
+            val codexSummaryOptionsProto = settings.getCodexReasoningSummaryOptions().map { it.toProto() }
+            val codexSandboxOptionsProto = settings.getCodexSandboxModeOptions().map { it.toProto() }
+            val permissionModeOptionsProto = settings.getPermissionModeOptions().map { it.toProto() }
+
             val defaultModelInfo = settings.getModelById(settings.defaultModel)
             val defaultModelName = defaultModelInfo?.displayName ?: settings.defaultModel
             val ideSettings = IdeSettings.newBuilder()
@@ -300,6 +308,11 @@ class JetBrainsRSocketHandler(
                 .setCodexDefaultReasoningEffort(settings.codexDefaultReasoningEffort)
                 .setCodexDefaultReasoningSummary(settings.codexDefaultReasoningSummary)
                 .setCodexDefaultSandboxMode(settings.codexDefaultSandboxMode)
+                // 配置选项列表
+                .addAllCodexReasoningEffortOptions(codexEffortOptionsProto)
+                .addAllCodexReasoningSummaryOptions(codexSummaryOptionsProto)
+                .addAllCodexSandboxModeOptions(codexSandboxOptionsProto)
+                .addAllPermissionModeOptions(permissionModeOptionsProto)
                 .build()
 
             val response = GetIdeSettingsResponse.newBuilder()
@@ -846,4 +859,16 @@ class JetBrainsRSocketHandler(
     private fun buildErrorResponse(error: String): Payload {
         return buildOperationResponse(false, error)
     }
+}
+
+/**
+ * 将 OptionConfig 转换为 Proto 格式
+ */
+private fun OptionConfig.toProto(): OptionConfigProto {
+    return OptionConfigProto.newBuilder()
+        .setId(this.id)
+        .setLabel(this.label)
+        .setDescription(this.description)
+        .setIsDefault(this.isDefault)
+        .build()
 }

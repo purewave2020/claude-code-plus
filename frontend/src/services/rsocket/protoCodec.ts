@@ -49,6 +49,7 @@ import {
   type IdeSettingsChangedNotify,
   type IdeSettings,
   type ThinkingLevelConfig as ProtoThinkingLevelConfig,
+  type OptionConfig as ProtoOptionConfig,
   SessionCommandType,
   type ContentBlock,
   type AskUserQuestionRequest,
@@ -798,7 +799,7 @@ function mapRpcMessageFromProto(proto: any): RpcMessage {
         permissionMode: proto.message.value.permissionMode,
         apiKeySource: proto.message.value.apiKeySource,
         tools: proto.message.value.tools,
-        mcpServers: proto.message.value.mcpServers?.map(s => ({ name: s.name, status: s.status }))
+        mcpServers: proto.message.value.mcpServers?.map((s: { name: string; status: string }) => ({ name: s.name, status: s.status }))
       })
 
     default:
@@ -1151,7 +1152,7 @@ export interface DecodedServerCallRequest {
  * SessionCommand 参数类型
  */
 export interface SessionCommandParams {
-  type: 'switch' | 'create' | 'close' | 'rename' | 'toggleHistory' | 'setLocale' | 'unspecified'
+  type: 'switch' | 'create' | 'close' | 'rename' | 'toggleHistory' | 'setLocale' | 'delete' | 'reset' | 'unspecified'
   sessionId?: string
   newName?: string
   locale?: string
@@ -1382,6 +1383,16 @@ function mapActiveFileChangedFromProto(proto: ActiveFileChangedNotify): ActiveFi
 /**
  * 设置变更参数（从 IdeSettingsChangedNotify 解码）
  */
+/**
+ * 通用选项配置（用于下拉列表）
+ */
+export interface OptionConfigItem {
+  id: string
+  label: string
+  description: string
+  isDefault: boolean
+}
+
 export interface SettingsChangedParams {
   settings: {
     defaultModelId: string
@@ -1404,6 +1415,23 @@ export interface SettingsChangedParams {
       isCustom: boolean
     }>
     permissionMode: string
+    // 配置选项列表
+    codexReasoningEffortOptions: OptionConfigItem[]
+    codexReasoningSummaryOptions: OptionConfigItem[]
+    codexSandboxModeOptions: OptionConfigItem[]
+    permissionModeOptions: OptionConfigItem[]
+  }
+}
+
+/**
+ * 从 Proto 映射 OptionConfig
+ */
+function mapOptionConfigFromProto(opt: ProtoOptionConfig): OptionConfigItem {
+  return {
+    id: opt.id || '',
+    label: opt.label || '',
+    description: opt.description || '',
+    isDefault: opt.isDefault ?? false
   }
 }
 
@@ -1441,7 +1469,12 @@ function mapSettingsChangedFromProto(proto: IdeSettingsChangedNotify): SettingsC
             isCustom: level.isCustom
           }))
         : defaultThinkingLevels,
-      permissionMode: s?.permissionMode || 'default'
+      permissionMode: s?.permissionMode || 'default',
+      // 配置选项列表
+      codexReasoningEffortOptions: s?.codexReasoningEffortOptions?.map(mapOptionConfigFromProto) || [],
+      codexReasoningSummaryOptions: s?.codexReasoningSummaryOptions?.map(mapOptionConfigFromProto) || [],
+      codexSandboxModeOptions: s?.codexSandboxModeOptions?.map(mapOptionConfigFromProto) || [],
+      permissionModeOptions: s?.permissionModeOptions?.map(mapOptionConfigFromProto) || []
     }
   }
 }

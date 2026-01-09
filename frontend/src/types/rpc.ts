@@ -15,8 +15,8 @@ export type RpcSessionStatus = 'connected' | 'disconnected' | 'interrupted' | 'm
 
 export type RpcContentStatus = 'in_progress' | 'completed' | 'failed'
 
-/** 权限模式枚举 */
-export type RpcPermissionMode = 'default' | 'bypassPermissions' | 'acceptEdits' | 'plan'
+/** 权限模式（由后端动态返回，前端不做硬编码验证） */
+export type RpcPermissionMode = string
 
 // ============================================================================
 // RPC 消息类型 - 对应 Claude SDK Message
@@ -179,6 +179,13 @@ export interface RpcMessageStartInfo {
   id?: string
   model?: string
   content?: RpcContentBlock[]
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    cached_input_tokens?: number
+    cache_creation_tokens?: number
+    cache_read_tokens?: number
+  }
 }
 
 export interface RpcContentBlockStartEvent extends RpcStreamEventDataBase {
@@ -663,7 +670,6 @@ export {
   ImageBlock,
   CommandExecutionBlock,
   FileChangeBlock,
-  McpToolCallBlock,
   WebSearchBlock,
   TodoListBlock,
   ErrorBlock,

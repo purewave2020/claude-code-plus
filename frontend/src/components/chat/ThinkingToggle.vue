@@ -51,6 +51,10 @@ const levels = computed(() => props.thinkingLevels)
 
 /** 根据当前 token 数量找到对应的级别 ID */
 function findLevelIdByTokens(tokens: number): string {
+  if (!props.thinkingLevels || props.thinkingLevels.length === 0) {
+    return tokens === 0 ? 'off' : 'medium'
+  }
+
   // 精确匹配
   const exactMatch = props.thinkingLevels.find(l => l.tokens === tokens)
   if (exactMatch) return exactMatch.id
@@ -96,7 +100,7 @@ const tooltipText = computed(() => {
 
 /** 处理级别切换 */
 function onLevelChange() {
-  if (!canToggle.value) return
+  if (!canToggle.value || !props.thinkingLevels) return
 
   const selectedLevel = props.thinkingLevels.find(l => l.id === selectedLevelId.value)
   if (selectedLevel) {

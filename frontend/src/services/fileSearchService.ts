@@ -12,6 +12,7 @@ export interface IndexedFileInfo {
   fileType: string
   size: number
   lastModified: number
+  isDirectory?: boolean
 }
 
 /**

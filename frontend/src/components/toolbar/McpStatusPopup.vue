@@ -187,7 +187,7 @@ interface McpToolInputSchema {
 interface McpToolInfo {
   name: string
   description: string
-  inputSchema?: McpToolInputSchema
+  inputSchema?: McpToolInputSchema | string
 }
 
 const props = defineProps<{
@@ -348,17 +348,19 @@ interface ParsedParam {
 }
 
 function getToolParameters(tool: McpToolInfo): ParsedParam[] {
-  if (!tool.inputSchema?.properties) return []
+  // Skip if inputSchema is missing or is a string (not parsed)
+  if (!tool.inputSchema || typeof tool.inputSchema === 'string') return []
+  if (!tool.inputSchema.properties) return []
 
   const requiredSet = new Set(tool.inputSchema.required || [])
 
   return Object.entries(tool.inputSchema.properties)
     .map(([name, schema]) => ({
       name,
-      type: schema.type || 'any',
+      type: (schema as McpToolParameter).type || 'any',
       required: requiredSet.has(name),
-      description: schema.description,
-      default: schema.default
+      description: (schema as McpToolParameter).description,
+      default: (schema as McpToolParameter).default
     }))
     .sort((a, b) => {
       // Required parameters first

@@ -5,7 +5,7 @@
  * 在 ToolUseDisplay 中会被转换为 Claude 格式以复用现有显示组件。
  */
 
-import type { BaseToolCall, ToolResult } from './display'
+import { ToolCallStatus, type BaseToolCall, type ToolResult } from './display'
 
 // ============================================================================
 // Codex 工具结果格式
@@ -13,19 +13,19 @@ import type { BaseToolCall, ToolResult } from './display'
 
 /**
  * Codex 通用结果格式
- * 注意：与 Claude 的 ToolResult 格式不同
+ * 扩展 ToolResult 以保持类型兼容
  */
-export interface CodexToolResult {
+export interface CodexToolResult extends ToolResult {
   /** 是否成功 */
-  success: boolean
+  success?: boolean
   /** 输出内容（成功时） */
   output?: string
+  /** 标准输出（CommandExecution 替代格式） */
+  stdout?: string
   /** 错误信息（失败时） */
   error?: string
   /** 退出码（CommandExecution 专用） */
   exitCode?: number
-  /** 其他扩展字段 */
-  [key: string]: unknown
 }
 
 // ============================================================================
@@ -180,7 +180,7 @@ export interface CodexReasoningInput {
 /**
  * Codex Reasoning 结果
  */
-export interface CodexReasoningResult {
+export interface CodexReasoningResult extends ToolResult {
   /** 推理摘要文本 */
   summary?: string
   /** 详细推理内容（如果可用） */
@@ -361,7 +361,7 @@ export const exampleCodexCommandExecution: CodexCommandExecutionToolCall = {
   displayType: 'toolCall',
   toolName: 'CommandExecution',
   toolType: 'CODEX_TOOL' as any,
-  status: 'SUCCESS',
+  status: ToolCallStatus.SUCCESS,
   startTime: Date.now(),
   timestamp: Date.now(),
   input: {
@@ -386,7 +386,7 @@ export const exampleCodexFileCreate: CodexFileChangeToolCall = {
   displayType: 'toolCall',
   toolName: 'FileChange',
   toolType: 'CODEX_TOOL' as any,
-  status: 'SUCCESS',
+  status: ToolCallStatus.SUCCESS,
   startTime: Date.now(),
   timestamp: Date.now(),
   input: {
@@ -410,7 +410,7 @@ export const exampleCodexFileEdit: CodexFileChangeToolCall = {
   displayType: 'toolCall',
   toolName: 'FileChange',
   toolType: 'CODEX_TOOL' as any,
-  status: 'SUCCESS',
+  status: ToolCallStatus.SUCCESS,
   startTime: Date.now(),
   timestamp: Date.now(),
   input: {
@@ -436,7 +436,7 @@ export const exampleCodexMcpTool: CodexMcpToolCall = {
   displayType: 'toolCall',
   toolName: 'McpToolCall',
   toolType: 'CODEX_TOOL' as any,
-  status: 'SUCCESS',
+  status: ToolCallStatus.SUCCESS,
   startTime: Date.now(),
   timestamp: Date.now(),
   input: {

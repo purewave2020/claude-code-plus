@@ -26,8 +26,8 @@ const DEFAULT_THINKING_LEVELS: ThinkingLevelConfig[] = [
   { id: 'ultra', name: 'Ultra', tokens: 8096, isCustom: false }
 ]
 
-// 权限模式列表
-const PERMISSION_MODES: PermissionMode[] = ['default', 'acceptEdits', 'bypassPermissions', 'plan']
+// 默认权限模式列表（后备，当后端未返回时使用）
+const DEFAULT_PERMISSION_MODES: PermissionMode[] = ['default', 'acceptEdits', 'bypassPermissions', 'plan']
 
 // 模式图标映射
 const MODE_ICONS: Record<string, string> = {
@@ -122,6 +122,15 @@ export function useModelSelection(options: UseModelSelectionOptions = {}) {
   // 可用思考级别列表（从 IDE 设置获取）
   const thinkingLevels = computed((): ThinkingLevelConfig[] => {
     return settingsStore.ideSettings?.thinkingLevels || DEFAULT_THINKING_LEVELS
+  })
+
+  // 可用权限模式列表（从 IDE 设置获取）
+  const permissionModes = computed((): PermissionMode[] => {
+    const options = settingsStore.ideSettings?.permissionModeOptions
+    if (options && options.length > 0) {
+      return options.map(opt => opt.id as PermissionMode)
+    }
+    return DEFAULT_PERMISSION_MODES
   })
 
   // ========== 分离的模型列表（根据后端类型） ==========
@@ -297,9 +306,10 @@ export function useModelSelection(options: UseModelSelectionOptions = {}) {
    * 直接调用 RPC（立即生效于下一轮对话）
    */
   async function cyclePermissionMode() {
-    const currentIndex = PERMISSION_MODES.indexOf(selectedPermissionValue.value)
-    const nextIndex = (currentIndex + 1) % PERMISSION_MODES.length
-    const nextMode = PERMISSION_MODES[nextIndex]
+    const modes = permissionModes.value
+    const currentIndex = modes.indexOf(selectedPermissionValue.value)
+    const nextIndex = (currentIndex + 1) % modes.length
+    const nextMode = modes[nextIndex]
 
     console.log(`🔄 [cyclePermissionMode] 切换权限模式: ${nextMode}`)
 
@@ -363,7 +373,7 @@ export function useModelSelection(options: UseModelSelectionOptions = {}) {
     codexModelOptions,   // Codex 模型列表
     selectedCodexModel,  // 当前选中的 Codex 模型
     currentBackendType,  // 当前后端类型
-    PERMISSION_MODES,
+    permissionModes,     // 权限模式列表（从后端获取）
     // 方法
     getBaseModelLabel,
     getModeIcon,

@@ -244,7 +244,7 @@ function formatTerminalResult(toolName: string, data: Record<string, any>): stri
 
 const hasResult = computed(() => {
   const r = props.toolCall.result
-  return r && rawResultText.value
+  return !!(r && rawResultText.value)
 })
 
 const hasDetails = computed(() => Object.keys(params.value).length > 0 || hasResult.value)

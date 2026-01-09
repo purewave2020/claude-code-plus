@@ -383,4 +383,20 @@ export function useFileChanges(displayItems: Ref<DisplayItem[]> | ComputedRef<Di
 /**
  * useFileChanges 返回类型
  */
-export type FileChangesI
+export type FileChangesInstance = {
+  // 状态
+  fileChanges: ComputedRef<FileChange[]>
+  hasChanges: ComputedRef<boolean>
+  changedFileCount: ComputedRef<number>
+  totalEditCount: ComputedRef<number>
+
+  // 方法
+  addFileEdit: (toolCall: ToolCall) => boolean
+  canRollback: (toolUseId: string) => boolean
+  rollbackFile: (filePath: string) => Promise<RollbackResult>
+  rollbackModification: (filePath: string, historyTs: number) => Promise<RollbackResult>
+  rollbackByToolUseId: (toolUseId: string) => Promise<RollbackResult>
+  getModificationByToolUseId: (toolUseId: string) => FileModification | null
+  isRollingBack: (filePath: string) => boolean
+  clear: () => void
+}

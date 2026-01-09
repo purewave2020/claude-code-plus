@@ -190,7 +190,7 @@ function normalizeCodexToolResult(result: any): ToolResultContent {
       // 如果内容是对象，尝试提取 content 字段
       if (typeof content === 'object' && content !== null) {
         if ('content' in content) {
-          content = content.content
+          content = (content as { content: string | any[] }).content
         } else if (Array.isArray(content)) {
           // 保持数组格式
         } else {

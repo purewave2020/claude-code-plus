@@ -742,6 +742,11 @@ message IdeSettings {
   string codex_default_sandbox_mode = 15;      // Codex sandbox mode (read-only/workspace-write/danger-full-access)
   bool claude_default_auto_cleanup_contexts = 16; // Claude default auto cleanup contexts
   bool codex_default_auto_cleanup_contexts = 17;  // Codex default auto cleanup contexts
+  // 配置选项列表（用于前端下拉选择器）
+  repeated OptionConfig codex_reasoning_effort_options = 18;  // Codex 推理努力级别选项
+  repeated OptionConfig codex_reasoning_summary_options = 19; // Codex 推理总结模式选项
+  repeated OptionConfig codex_sandbox_mode_options = 20;      // Codex 沙盒模式选项
+  repeated OptionConfig permission_mode_options = 21;         // 权限模式选项
 }
 
 // 思考级别配置
@@ -750,6 +755,14 @@ message ThinkingLevelConfig {
   string name = 2;      // 显示名称
   int32 tokens = 3;     // token 数量
   bool is_custom = 4;   // 是否为自定义级别
+}
+
+// 通用选项配置（用于下拉列表）
+message OptionConfig {
+  string id = 1;           // 唯一标识
+  string label = 2;        // 显示名称
+  string description = 3;  // 描述（可选）
+  bool is_default = 4;     // 是否为默认值
 }
 
 // 设置变更通知（后端→前端推送）

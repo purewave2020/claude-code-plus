@@ -82,22 +82,3 @@ export const DEFAULT_SETTINGS: Settings = {
   includePartialMessages: true  // 默认包含部分消息
 }
 
-/**
- * 权限模式显示名称
- */
-export const PERMISSION_MODE_LABELS: Record<PermissionMode, string> = {
-  [PermissionMode.DEFAULT]: '默认 - 需要确认',
-  [PermissionMode.ACCEPT_EDITS]: '自动接受编辑',
-  [PermissionMode.PLAN]: '计划模式',
-  [PermissionMode.BYPASS_PERMISSIONS]: '绕过权限检查'
-}
-
-/**
- * 权限模式描述
- */
-export const PERMISSION_MODE_DESCRIPTIONS: Record<PermissionMode, string> = {
-  [PermissionMode.DEFAULT]: '每个工具调用都需要用户确认',
-  [PermissionMode.ACCEPT_EDITS]: '自动接受文件编辑操作',
-  [PermissionMode.PLAN]: '先制定计划,再执行操作',
-  [PermissionMode.BYPASS_PERMISSIONS]: '自动执行所有操作(谨慎使用)'
-}

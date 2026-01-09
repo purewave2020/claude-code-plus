@@ -1,8 +1,8 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { ideaBridge } from '@/services/ideaBridge'
-import { jetbrainsRSocket, type IdeSettings as BaseIdeSettings } from '@/services/jetbrainsRSocket'
-import { PermissionMode } from '@/types/settings'
+import { jetbrainsRSocket, type IdeSettings as BaseIdeSettings, type OptionConfig } from '@/services/jetbrainsRSocket'
+// PermissionMode 枚举仅用于参考，实际使用 string 类型
 import type {
   BackendType,
   CodexReasoningEffort,
@@ -27,7 +27,7 @@ import { updateAllModels, type ModelInfo as ClaudeModelInfo } from '@/constants/
 export interface Settings {
   // === 通用设置 ===
   defaultBackendType: BackendType           // 默认后端类型
-  permissionMode: PermissionMode            // 权限模式（通用）
+  permissionMode: string                    // 权限模式（通用）
   skipPermissions: boolean                  // Bypass 模式（通用）
   includePartialMessages: boolean           // 包含部分消息（通用）
   maxTurns: number | null                   // 最大轮次（通用）
@@ -56,6 +56,13 @@ export interface Settings {
   model?: string                            // @deprecated 使用 claudeModel
   thinkingEnabled?: boolean                 // @deprecated 使用 claudeThinkingEnabled
   maxThinkingTokens?: number                // @deprecated 使用 claudeThinkingTokens
+
+  // === 高级设置 ===
+  systemPrompt: string | null               // 系统提示词
+  continueConversation: boolean             // 继续对话
+  maxTokens: number | null                  // 最大 token 数
+  temperature: number | null                // 温度
+  verbose: boolean                          // 详细输出
 }
 
 /**
@@ -90,6 +97,12 @@ export interface IdeSettings extends BaseIdeSettings {
   defaultModelId?: string
   defaultThinkingLevelId?: string
   defaultThinkingTokens?: number
+
+  // === 配置选项列表（由后端动态返回）===
+  codexReasoningEffortOptions?: OptionConfig[]  // Codex 推理努力级别选项
+  codexReasoningSummaryOptions?: OptionConfig[] // Codex 推理总结模式选项
+  codexSandboxModeOptions?: OptionConfig[]      // Codex 沙盒模式选项
+  permissionModeOptions?: OptionConfig[]        // 权限模式选项
 }
 
 /**
@@ -154,6 +167,13 @@ const DEFAULT_SETTINGS: Settings = {
   codexReasoningEffort: 'medium',
   codexReasoningSummary: 'auto',
   codexSandboxMode: 'workspace-write',
+
+  // 高级设置
+  systemPrompt: null,
+  continueConversation: false,
+  maxTokens: null,
+  temperature: null,
+  verbose: false,
 }
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -496,8 +516,8 @@ export const useSettingsStore = defineStore('settings', () => {
     // 5. 应用 Codex 沙盒模式
     const codexSandboxMode = newIdeSettings.codexDefaultSandboxMode ?? newIdeSettings.codexSandboxMode
     if (codexSandboxMode) {
-      const rawMode = codexSandboxMode
-      updates.codexSandboxMode = rawMode === 'full-access' ? 'danger-full-access' : rawMode
+      const rawMode = codexSandboxMode as string
+      updates.codexSandboxMode = rawMode === 'full-access' ? 'danger-full-access' : rawMode as SandboxMode
       console.log('📦 [IdeSettings] Codex 沙盒模式:', updates.codexSandboxMode)
     }
 
@@ -531,7 +551,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
     // 10. 应用权限模式设置
     if (newIdeSettings.permissionMode) {
-      updates.permissionMode = newIdeSettings.permissionMode as PermissionMode
+      updates.permissionMode = newIdeSettings.permissionMode
       console.log('🔒 [IdeSettings] 权限模式:', newIdeSettings.permissionMode)
     }
 
@@ -641,8 +661,8 @@ export const useSettingsStore = defineStore('settings', () => {
 
         // 5. 应用 Codex 沙盒模式
         if (httpSettings.codexSandboxMode) {
-          const rawMode = httpSettings.codexSandboxMode
-          updates.codexSandboxMode = rawMode === 'full-access' ? 'danger-full-access' : rawMode
+          const rawMode = httpSettings.codexSandboxMode as string
+          updates.codexSandboxMode = rawMode === 'full-access' ? 'danger-full-access' : rawMode as SandboxMode
           console.log('📦 [DefaultSettings] Codex 沙盒模式:', updates.codexSandboxMode)
         }
 
@@ -720,8 +740,8 @@ export const useSettingsStore = defineStore('settings', () => {
   /**
    * 更新权限模式
    */
-  async function updatePermissionMode(mode: PermissionMode | string) {
-    return await saveSettings({ permissionMode: mode as PermissionMode })
+  async function updatePermissionMode(mode: string) {
+    return await saveSettings({ permissionMode: mode })
   }
 
   /**
@@ -831,7 +851,7 @@ export const useSettingsStore = defineStore('settings', () => {
       settings.value.claudeThinkingTokens = config.thinkingTokenBudget
     }
     if (config.permissionMode !== undefined) {
-      settings.value.permissionMode = config.permissionMode as PermissionMode
+      settings.value.permissionMode = config.permissionMode
     }
     if (config.skipPermissions !== undefined) {
       settings.value.skipPermissions = config.skipPermissions
@@ -868,12 +888,13 @@ export const useSettingsStore = defineStore('settings', () => {
       settings.value.codexReasoningSummary = config.reasoningSummary
     }
     if (config.sandboxMode !== undefined) {
-      settings.value.codexSandboxMode = config.sandboxMode === 'full-access'
+      const rawMode = config.sandboxMode as string
+      settings.value.codexSandboxMode = rawMode === 'full-access'
         ? 'danger-full-access'
-        : config.sandboxMode
+        : rawMode as SandboxMode
     }
     if (config.permissionMode !== undefined) {
-      settings.value.permissionMode = config.permissionMode as PermissionMode
+      settings.value.permissionMode = config.permissionMode
     }
     if (config.skipPermissions !== undefined) {
       settings.value.skipPermissions = config.skipPermissions

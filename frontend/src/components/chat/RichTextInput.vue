@@ -352,10 +352,10 @@ watch(() => props.modelValue, (newValue) => {
     // 尝试解析 JSON，如果失败则作为纯文本处理（兼容旧数据）
     try {
       const content = newValue ? JSON.parse(newValue) : ''
-      editor.value.commands.setContent(content, false, { preserveWhitespace: 'full' })
+      editor.value.commands.setContent(content, { emitUpdate: false })
     } catch {
       // 非 JSON 格式，作为纯文本处理
-      editor.value.commands.setContent(newValue || '', false, { preserveWhitespace: 'full' })
+      editor.value.commands.setContent(newValue || '', { emitUpdate: false })
     }
   }
 })
@@ -555,7 +555,7 @@ function getText(): string {
 
 // 设置内容（保留空白字符）
 function setContent(text: string) {
-  editor.value?.commands.setContent(text, false, { preserveWhitespace: 'full' })
+  editor.value?.commands.setContent(text, { emitUpdate: false })
 }
 
 // 删除从光标位置到行首的内容

@@ -571,9 +571,3 @@ export function isSystemMessage(item: DisplayItem): item is SystemMessage {
   return item.displayType === 'systemMessage'
 }
 
-/**
- * 通用工具调用 - 用于不需要特定类型的场景
- */
-export interface GenericToolCall extends BaseToolCall {
-  input: Record<string, unknown>
-}

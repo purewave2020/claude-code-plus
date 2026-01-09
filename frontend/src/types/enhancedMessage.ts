@@ -76,9 +76,9 @@ export type MessageTimelineItem =
 export interface TokenUsage {
   inputTokens: number         // 输入 token
   outputTokens: number        // 输出 token
-  cacheCreationTokens: number // 缓存创建 token
-  cacheReadTokens: number     // 缓存读取 token
-  totalTokens: number         // 总计 (input + output)
+  cacheCreationTokens?: number // 缓存创建 token
+  cacheReadTokens?: number     // 缓存读取 token
+  totalTokens?: number         // 总计 (input + output)
 }
 
 /**

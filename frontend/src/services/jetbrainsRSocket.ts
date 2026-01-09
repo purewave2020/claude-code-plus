@@ -314,6 +314,14 @@ function decodeSettingsResponse(data: Uint8Array): IdeSettings | null {
     }
   }
 
+  // 辅助函数：映射 OptionConfig
+  const mapOptionConfig = (opt: any): OptionConfig => ({
+    id: opt.id || '',
+    label: opt.label || '',
+    description: opt.description || '',
+    isDefault: opt.isDefault ?? false
+  })
+
   return {
     defaultModelId: s.defaultModelId || '',
     defaultModelName: s.defaultModelName || '',
@@ -338,7 +346,12 @@ function decodeSettingsResponse(data: Uint8Array): IdeSettings | null {
           isCustom: level.isCustom
         }))
       : defaultThinkingLevels,
-    permissionMode: s.permissionMode || 'default'
+    permissionMode: s.permissionMode || 'default',
+    // 配置选项列表
+    codexReasoningEffortOptions: s.codexReasoningEffortOptions?.map(mapOptionConfig) || [],
+    codexReasoningSummaryOptions: s.codexReasoningSummaryOptions?.map(mapOptionConfig) || [],
+    codexSandboxModeOptions: s.codexSandboxModeOptions?.map(mapOptionConfig) || [],
+    permissionModeOptions: s.permissionModeOptions?.map(mapOptionConfig) || []
   }
 }
 
@@ -453,28 +466,34 @@ export interface ActiveFileInfo {
   diffTitle?: string       // Diff 标题
 }
 
-// IDE 设置接口
+// IDE 设置接口（所有属性可选，以支持扩展和部分更新）
 export interface IdeSettings {
-  defaultModelId: string
-  defaultModelName: string
-  defaultBypassPermissions: boolean
-  claudeDefaultAutoCleanupContexts: boolean
-  codexDefaultAutoCleanupContexts: boolean
-  enableUserInteractionMcp: boolean
-  enableJetbrainsMcp: boolean
-  includePartialMessages: boolean
+  defaultModelId?: string
+  defaultModelName?: string
+  defaultBypassPermissions?: boolean
+  claudeDefaultAutoCleanupContexts?: boolean
+  codexDefaultAutoCleanupContexts?: boolean
+  enableUserInteractionMcp?: boolean
+  enableJetbrainsMcp?: boolean
+  includePartialMessages?: boolean
   codexDefaultModelId?: string
   codexDefaultReasoningEffort?: string
   codexDefaultReasoningSummary?: string
   codexDefaultSandboxMode?: string
   // 思考配置
-  defaultThinkingLevelId: string  // 默认思考级别 ID（如 "off", "think", "ultra", "custom_xxx"）
-  defaultThinkingTokens: number   // 默认思考 token 数量
-  thinkingLevels: ThinkingLevelConfig[]  // 所有可用的思考级别
+  defaultThinkingLevelId?: string  // 默认思考级别 ID（如 "off", "think", "ultra", "custom_xxx"）
+  defaultThinkingTokens?: number   // 默认思考 token 数量
+  thinkingLevels?: ThinkingLevelConfig[]  // 所有可用的思考级别
   // 旧字段，保留向后兼容
   defaultThinkingLevel?: string  // 思考等级枚举名称（如 "HIGH", "MEDIUM", "OFF"）
   // 权限模式
   permissionMode?: string  // 权限模式（default, acceptEdits, plan, bypassPermissions）
+
+  // 配置选项列表（由后端动态返回）
+  codexReasoningEffortOptions?: OptionConfig[]  // Codex 推理努力级别选项
+  codexReasoningSummaryOptions?: OptionConfig[] // Codex 推理总结模式选项
+  codexSandboxModeOptions?: OptionConfig[]      // Codex 沙盒模式选项
+  permissionModeOptions?: OptionConfig[]        // 权限模式选项
 }
 
 // 思考级别配置
@@ -483,6 +502,14 @@ export interface ThinkingLevelConfig {
   name: string      // 显示名称
   tokens: number    // token 数量
   isCustom: boolean // 是否为自定义级别
+}
+
+// 通用选项配置（用于下拉列表）
+export interface OptionConfig {
+  id: string           // 唯一标识
+  label: string        // 显示名称
+  description?: string // 描述（可选）
+  isDefault?: boolean  // 是否为默认值
 }
 
 // ========== RSocket 服务 ==========
@@ -597,6 +624,8 @@ class JetBrainsRSocketService {
           defaultModelId: settingsData.defaultModelId || '',
           defaultModelName: settingsData.defaultModelName || '',
           defaultBypassPermissions: settingsData.defaultBypassPermissions ?? false,
+          claudeDefaultAutoCleanupContexts: settingsData.claudeDefaultAutoCleanupContexts ?? true,
+          codexDefaultAutoCleanupContexts: settingsData.codexDefaultAutoCleanupContexts ?? true,
           enableUserInteractionMcp: settingsData.enableUserInteractionMcp ?? true,
           enableJetbrainsMcp: settingsData.enableJetbrainsMcp ?? true,
           includePartialMessages: settingsData.includePartialMessages ?? true,
@@ -612,7 +641,12 @@ class JetBrainsRSocketService {
             { id: 'think', name: 'Think', tokens: 2048, isCustom: false },
             { id: 'ultra', name: 'Ultra', tokens: 8096, isCustom: false }
           ],
-          permissionMode: settingsData.permissionMode || 'default'
+          permissionMode: settingsData.permissionMode || 'default',
+          // 配置选项列表
+          codexReasoningEffortOptions: settingsData.codexReasoningEffortOptions || [],
+          codexReasoningSummaryOptions: settingsData.codexReasoningSummaryOptions || [],
+          codexSandboxModeOptions: settingsData.codexSandboxModeOptions || [],
+          permissionModeOptions: settingsData.permissionModeOptions || []
         }
         console.log('[JetBrainsRSocket] 设置变更:', settings)
         this.settingsChangeHandlers.forEach(h => h(settings))

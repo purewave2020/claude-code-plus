@@ -81,6 +81,8 @@ export interface ScrollState {
     anchor: ScrollAnchor | null
     /** 新消息计数（browse 模式下累计） */
     newMessageCount: number
+    /** 是否接近底部 */
+    isNearBottom?: boolean
 }
 
 /**
@@ -143,6 +145,9 @@ export interface TabConnectOptions {
     skipPermissions?: boolean
     continueConversation?: boolean
     resumeSessionId?: string
+    // Codex 特定选项
+    reasoningEffort?: string
+    sandboxMode?: string
 }
 
 /**
@@ -1188,7 +1193,7 @@ export function useSessionTab(initialOrder: number = 0) {
         // 2. 断开当前连接（如果有）
         if (rsocketSession.value) {
             try {
-                await rsocketSession.value.disconnectSession()
+                rsocketSession.value.disconnect()
             } catch (e) {
                 // 忽略断开错误
             }
@@ -1999,7 +2004,7 @@ export function useSessionTab(initialOrder: number = 0) {
                     backendSession.value.respondToApproval({
                         requestId: event.requestId,
                         approved: response.approved,
-                        reason: response.reason
+                        reason: response.denyReason
                     })
                 }
             },

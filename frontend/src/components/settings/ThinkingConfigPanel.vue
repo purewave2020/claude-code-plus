@@ -141,15 +141,12 @@ import type {
   CodexThinkingConfig,
 } from '../../types/thinking'
 import {
-  CLAUDE_THINKING_PRESETS,
-  CODEX_EFFORT_LEVELS,
   getClaudeThinkingPresets,
-  getCodexEffortLevels,
-  getCodexSummaryModes,
   findClaudePresetByTokens,
   isClaudeThinking,
   isCodexThinking,
 } from '../../types/thinking'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 // Props
 const props = defineProps<{
@@ -191,23 +188,61 @@ const codexConfig = computed<CodexThinkingConfig>(() => {
   }
 })
 
+// Settings store
+const settingsStore = useSettingsStore()
+
 // Claude Presets
 const claudePresets = getClaudeThinkingPresets()
 const currentClaudePreset = computed(() => {
   return findClaudePresetByTokens(claudeConfig.value.tokenBudget)
 })
 
-// Codex Options
-const codexEffortLevels = getCodexEffortLevels()
-const codexSummaryModes = getCodexSummaryModes()
+// Codex Options - 从 ideSettings 动态获取
+const codexEffortLevels = computed(() => {
+  const options = settingsStore.ideSettings?.codexReasoningEffortOptions
+  if (options && options.length > 0) {
+    return options.map(opt => ({
+      id: opt.id,
+      label: opt.label,
+      description: opt.description || ''
+    }))
+  }
+  // 默认选项（后备）
+  return [
+    { id: 'none', label: 'None', description: 'No reasoning' },
+    { id: 'minimal', label: 'Minimal', description: 'Minimal reasoning' },
+    { id: 'low', label: 'Low', description: 'Low reasoning' },
+    { id: 'medium', label: 'Medium', description: 'Balanced reasoning (default)' },
+    { id: 'high', label: 'High', description: 'High reasoning' },
+    { id: 'xhigh', label: 'Extra High', description: 'Extra high reasoning' },
+  ]
+})
+
+const codexSummaryModes = computed(() => {
+  const options = settingsStore.ideSettings?.codexReasoningSummaryOptions
+  if (options && options.length > 0) {
+    return options.map(opt => ({
+      id: opt.id,
+      label: opt.label,
+      description: opt.description || ''
+    }))
+  }
+  // 默认选项（后备）
+  return [
+    { id: 'auto', label: 'Auto', description: 'Automatic summary' },
+    { id: 'concise', label: 'Concise', description: 'Brief summary' },
+    { id: 'detailed', label: 'Detailed', description: 'Full summary' },
+    { id: 'none', label: 'None', description: 'No summary' },
+  ]
+})
 
 const selectedCodexEffort = computed(() => {
   const effortValue = codexConfig.value.effort ?? 'medium'
-  return codexEffortLevels.find((level) => level.id === effortValue)
+  return codexEffortLevels.value.find((level) => level.id === effortValue)
 })
 
 const selectedCodexSummary = computed(() => {
-  return codexSummaryModes.find((mode) => mode.id === codexConfig.value.summary)
+  return codexSummaryModes.value.find((mode) => mode.id === codexConfig.value.summary)
 })
 
 // Format tokens for display

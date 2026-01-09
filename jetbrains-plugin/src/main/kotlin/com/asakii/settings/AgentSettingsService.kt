@@ -38,6 +38,19 @@ data class ThinkingLevelConfig(
 )
 
 /**
+ * 通用选项配置
+ *
+ * 用于下拉列表选项，支持动态返回给前端
+ */
+@Serializable
+data class OptionConfig(
+    val id: String,           // 唯一标识
+    val label: String,        // 显示名称
+    val description: String = "",  // 描述（可选）
+    val isDefault: Boolean = false // 是否为默认值
+)
+
+/**
  * 自定义模型配置
  *
  * 用于存储用户自定义的模型信息
@@ -1311,6 +1324,61 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
      */
     fun getThinkingLevelById(id: String): ThinkingLevelConfig? {
         return getAllThinkingLevels().find { it.id == id }
+    }
+
+    // ========== 配置选项列表（用于前端下拉选择器） ==========
+
+    /**
+     * 获取 Codex 推理努力级别选项
+     */
+    fun getCodexReasoningEffortOptions(): List<OptionConfig> {
+        val defaultId = state.codexDefaultReasoningEffort
+        return listOf(
+            OptionConfig("none", "None", "No reasoning", defaultId == "none"),
+            OptionConfig("minimal", "Minimal", "Minimal reasoning", defaultId == "minimal"),
+            OptionConfig("low", "Low", "Low reasoning", defaultId == "low"),
+            OptionConfig("medium", "Medium", "Balanced reasoning", defaultId == "medium"),
+            OptionConfig("high", "High", "High reasoning", defaultId == "high"),
+            OptionConfig("xhigh", "Extra High", "Extra high reasoning", defaultId == "xhigh")
+        )
+    }
+
+    /**
+     * 获取 Codex 推理总结模式选项
+     */
+    fun getCodexReasoningSummaryOptions(): List<OptionConfig> {
+        val defaultId = state.codexDefaultReasoningSummary
+        return listOf(
+            OptionConfig("auto", "Auto", "Automatic summary", defaultId == "auto"),
+            OptionConfig("concise", "Concise", "Brief summary", defaultId == "concise"),
+            OptionConfig("detailed", "Detailed", "Full summary", defaultId == "detailed"),
+            OptionConfig("none", "None", "No summary", defaultId == "none")
+        )
+    }
+
+    /**
+     * 获取 Codex 沙盒模式选项
+     */
+    fun getCodexSandboxModeOptions(): List<OptionConfig> {
+        val defaultId = state.codexDefaultSandboxMode
+        return listOf(
+            OptionConfig("read-only", "Read Only", "Read-only access", defaultId == "read-only"),
+            OptionConfig("workspace-write", "Workspace Write", "Write to workspace only", defaultId == "workspace-write"),
+            OptionConfig("danger-full-access", "Full Access", "Full file system access (dangerous)", defaultId == "danger-full-access")
+        )
+    }
+
+    /**
+     * 获取权限模式选项
+     */
+    fun getPermissionModeOptions(): List<OptionConfig> {
+        val defaultId = state.permissionMode
+        return listOf(
+            OptionConfig("default", "Default", "Normal permission checks", defaultId == "default"),
+            OptionConfig("acceptEdits", "Accept Edits", "Auto-accept file edits", defaultId == "acceptEdits"),
+            OptionConfig("plan", "Plan Mode", "Plan before execution", defaultId == "plan"),
+            OptionConfig("bypassPermissions", "Bypass", "Skip all permission checks", defaultId == "bypassPermissions")
+        )
     }
 
     /**

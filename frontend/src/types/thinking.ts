@@ -63,11 +63,11 @@ export function getClaudeThinkingPresets() {
 /**
  * Find preset by token value (closest match)
  */
-export function findClaudePresetByTokens(tokens: number): typeof CLAUDE_THINKING_PRESETS[ClaudeThinkingPresetId] {
+export function findClaudePresetByTokens(tokens: number): (typeof CLAUDE_THINKING_PRESETS)[keyof typeof CLAUDE_THINKING_PRESETS] {
   if (tokens === 0) return CLAUDE_THINKING_PRESETS.OFF
 
   const presets = Object.values(CLAUDE_THINKING_PRESETS)
-  let closest = CLAUDE_THINKING_PRESETS.HIGH
+  let closest: (typeof CLAUDE_THINKING_PRESETS)[keyof typeof CLAUDE_THINKING_PRESETS] = CLAUDE_THINKING_PRESETS.HIGH
 
   for (const preset of presets) {
     if (Math.abs(preset.tokens - tokens) < Math.abs(closest.tokens - tokens)) {

@@ -20,6 +20,7 @@ import {
   type HistoryLoadOptions,
   type HistoryLoadResult,
 } from './BackendSession'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 // ============================================================================
 // JSON-RPC Types
@@ -162,18 +163,18 @@ export class CodexSession extends BaseBackendSession {
     supportedTools: ['bash', 'write', 'edit', 'mcp'],
     availableModels: [
       {
-        id: 'gpt-5.1-codex-max',
+        modelId: 'gpt-5.1-codex-max',
         displayName: 'GPT-5.1-Codex-Max',
         isDefault: true,
         supportsThinking: true,
       },
       {
-        id: 'gpt-5.2-codex',
+        modelId: 'gpt-5.2-codex',
         displayName: 'GPT-5.2-Codex',
         supportsThinking: true,
       },
       {
-        id: 'gpt-5.2',
+        modelId: 'gpt-5.2',
         displayName: 'GPT-5.2',
         supportsThinking: true,
       },
@@ -326,7 +327,17 @@ export class CodexSession extends BaseBackendSession {
   // ==========================================================================
 
   getCapabilities(): BackendCapabilities {
-    return CodexSession.CAPABILITIES
+    // 动态获取沙盒模式选项
+    const settingsStore = useSettingsStore()
+    const sandboxOptions = settingsStore.ideSettings?.codexSandboxModeOptions
+    const sandboxModes = sandboxOptions && sandboxOptions.length > 0
+      ? sandboxOptions.map(opt => opt.id) as BackendCapabilities['sandboxModes']
+      : CodexSession.CAPABILITIES.sandboxModes
+
+    return {
+      ...CodexSession.CAPABILITIES,
+      sandboxModes
+    }
   }
 
   // ==========================================================================
@@ -924,6 +935,10 @@ export class CodexSession extends BaseBackendSession {
   ): 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null {
     // Handle Codex config directly
     if (config.type === 'codex') {
+      // 'none' maps to null (no reasoning)
+      if (config.effort === 'none' || config.effort === null) {
+        return null
+      }
       return config.effort
     }
 

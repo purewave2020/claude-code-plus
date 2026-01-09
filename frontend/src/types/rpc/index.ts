@@ -49,7 +49,6 @@ export {
   ImageBlock,
   CommandExecutionBlock,
   FileChangeBlock,
-  McpToolCallBlock,
   WebSearchBlock,
   TodoListBlock,
   ErrorBlock,

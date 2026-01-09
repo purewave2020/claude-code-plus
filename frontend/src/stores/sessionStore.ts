@@ -67,7 +67,7 @@ function getConnectOptionsForBackend(backendType: BackendType, settingsStore: Re
     return {
       model: globalSettings.claudeModel || 'claude-opus-4-5-20251101',
       thinkingLevel: globalSettings.claudeThinkingTokens ?? 8096,
-      permissionMode: globalSettings.permissionMode,
+      permissionMode: globalSettings.permissionMode as RpcPermissionMode,
       skipPermissions: globalSettings.skipPermissions,
     }
   } else {
@@ -76,7 +76,7 @@ function getConnectOptionsForBackend(backendType: BackendType, settingsStore: Re
       model: globalSettings.codexModel || 'gpt-5.2-codex',
       thinkingLevel: undefined, // Codex 使用 effort level，不是 token budget
       reasoningEffort: globalSettings.codexReasoningEffort || 'medium',
-      permissionMode: globalSettings.permissionMode,
+      permissionMode: globalSettings.permissionMode as RpcPermissionMode,
       skipPermissions: globalSettings.skipPermissions,
       sandboxMode: globalSettings.codexSandboxMode || 'workspace-write',
     }
@@ -288,7 +288,7 @@ export const useSessionStore = defineStore('session', () => {
     if (!currentTab.value) return null
     return {
       modelId: currentTab.value.modelId.value,
-      thinkingEnabled: currentTab.value.thinkingEnabled.value,
+      thinkingEnabled: currentTab.value.thinkingLevel.value > 0,
       permissionMode: currentTab.value.permissionMode.value,
       skipPermissions: currentTab.value.skipPermissions.value
     }
@@ -797,7 +797,12 @@ export const useSessionStore = defineStore('session', () => {
     if (!currentTab.value) return
 
     if (settings.modelId !== undefined) currentTab.value.modelId.value = settings.modelId
-    if (settings.thinkingEnabled !== undefined) currentTab.value.thinkingEnabled.value = settings.thinkingEnabled
+    if (settings.thinkingEnabled !== undefined) {
+      // thinkingEnabled 映射到 thinkingLevel: false -> 0, true -> 保持当前值或默认 8096
+      currentTab.value.thinkingLevel.value = settings.thinkingEnabled
+        ? (currentTab.value.thinkingLevel.value || 8096)
+        : 0
+    }
     if (settings.permissionMode !== undefined) currentTab.value.permissionMode.value = settings.permissionMode
     if (settings.skipPermissions !== undefined) currentTab.value.skipPermissions.value = settings.skipPermissions
   }
