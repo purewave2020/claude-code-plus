@@ -195,6 +195,7 @@ export default {
     rollbackAll: 'すべてロールバック',
     rollbackModification: 'この変更をロールバック',
     rollbackFileConfirm: '{file} を変更前のバージョンにロールバックしますか？',
+    rollbackAllConfirm: 'すべてのファイルの変更をロールバックしますか？この操作は元に戻せません。',
     rollbackModificationConfirm: 'この変更をロールバックしますか？この変更とその後の変更がすべて元に戻されます。',
     rollbackFailed: 'ロールバックに失敗しました',
     rolledBack: 'ロールバック済み',

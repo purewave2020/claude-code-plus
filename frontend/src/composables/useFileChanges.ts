@@ -446,6 +446,11 @@ export function useFileChanges(displayItems: Ref<DisplayItem[]> | ComputedRef<Di
   // 监听 displayItems 变化
   // 1. 自动检测并添加新完成的 JetBrains MCP 工具调用（仅在生成中）
   // 2. 清理已删除的工具调用
+  // 
+  // 使用 deep: true 是因为：
+  // - 工具调用状态从 RUNNING 变为 SUCCESS 时，只是更新了数组元素的 status 属性
+  // - 数组引用本身不会变化，shallow watch 无法检测到这种变化
+  // - 需要 deep watch 来检测 toolCall.status 的变化
   watch(
     displayItems,
     (newItems) => {
@@ -477,7 +482,7 @@ export function useFileChanges(displayItems: Ref<DisplayItem[]> | ComputedRef<Di
         console.log(`[useFileChanges] Cleaned ${before - fileEdits.value.length} stale file edits`)
       }
     },
-    { deep: false }
+    { deep: true }
   )
   
   return {

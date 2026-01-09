@@ -16,6 +16,13 @@
         >
           ✓ {{ t('tools.acceptAll') }}
         </button>
+        <button
+          class="rollback-all-header-btn"
+          :title="t('tools.rollbackAll')"
+          @click="handleRollbackAll"
+        >
+          ↩ {{ t('tools.rollbackAll') }}
+        </button>
       </div>
     </div>
 
@@ -28,24 +35,27 @@
       >
         <!-- 文件头部 -->
         <div class="file-header">
-          <span 
-            class="file-collapse-btn"
-            :class="{ collapsed: !isFileExpanded(file.filePath) }"
-            @click="toggleFileExpanded(file.filePath)"
-          >
-            ▾
-          </span>
-          <span class="file-icon">📄</span>
-          <span 
-            class="file-name" 
-            :title="file.filePath"
-            @click="openFile(file.filePath)"
-          >
-            {{ file.fileName }}
-          </span>
-          <span class="file-stats">
-            {{ getFileStats(file) }}
-          </span>
+          <div class="file-header-left" @click="toggleFileExpanded(file.filePath)">
+            <span 
+              class="file-collapse-btn"
+              :class="{ collapsed: !isFileExpanded(file.filePath) }"
+            >
+              ▾
+            </span>
+            <span class="file-icon">📄</span>
+            <span 
+              class="file-name" 
+              :title="file.filePath"
+              @click.stop="openFile(file.filePath)"
+            >
+              {{ file.fileName }}
+            </span>
+            <span class="file-stats">
+              {{ getFileStatsData(file).editCount }} edit{{ getFileStatsData(file).editCount > 1 ? 's' : '' }}<template v-if="getFileStatsData(file).totalAdded > 0 || getFileStatsData(file).totalRemoved > 0">,</template>
+              <span v-if="getFileStatsData(file).totalAdded > 0" class="stats-added">+{{ getFileStatsData(file).totalAdded }}</span>
+              <span v-if="getFileStatsData(file).totalRemoved > 0" class="stats-removed">-{{ getFileStatsData(file).totalRemoved }}</span>
+            </span>
+          </div>
           <div class="file-actions">
             <button
               class="accept-file-btn"
@@ -86,18 +96,18 @@
             <span v-if="mod.linesRemoved" class="line-badge badge-remove">-{{ mod.linesRemoved }}</span>
             <div class="mod-actions">
               <button
-                class="mod-action-btn accept-btn"
-                :title="t('tools.acceptModification')"
-                @click="handleAcceptModification(file.filePath, mod.historyTs)"
-              >
-                ✓
-              </button>
-              <button
                 class="mod-action-btn view-btn"
                 :title="t('tools.viewDiff')"
                 @click="handleViewDiff(mod)"
               >
                 👁
+              </button>
+              <button
+                class="mod-action-btn accept-btn"
+                :title="t('tools.acceptModification')"
+                @click="handleAcceptModification(file.filePath, mod.historyTs)"
+              >
+                ✓
               </button>
               <button
                 class="mod-action-btn rollback-btn"
@@ -171,29 +181,19 @@ function getActiveModifications(file: FileChange) {
   return file.modifications.filter(m => !m.rolledBack && !m.accepted)
 }
 
-// 获取文件统计信息
-function getFileStats(file: FileChange): string {
+// 获取文件统计信息（返回对象）
+function getFileStatsData(file: FileChange) {
   const mods = getActiveModifications(file)
   const editCount = mods.length
   const totalAdded = mods.reduce((sum, m) => sum + (m.linesAdded || 0), 0)
   const totalRemoved = mods.reduce((sum, m) => sum + (m.linesRemoved || 0), 0)
-  
-  let stats = `${editCount} edit${editCount > 1 ? 's' : ''}`
-  if (totalAdded > 0 || totalRemoved > 0) {
-    stats += ','
-    if (totalAdded > 0) stats += ` +${totalAdded}`
-    if (totalRemoved > 0) stats += ` -${totalRemoved}`
-  }
-  return stats
+  return { editCount, totalAdded, totalRemoved }
 }
 
 // 切换整体展开/收起
 function toggleExpanded() {
   expanded.value = !expanded.value
-  // 展开时默认展开所有文件
-  if (expanded.value) {
-    fileChanges.value.forEach(f => expandedFiles.value.add(f.filePath))
-  }
+  // 展开时不自动展开所有文件，保持折叠状态
 }
 
 // 检查文件是否展开
@@ -251,6 +251,25 @@ function handleAcceptAll() {
   fileChangesInstance.acceptAll()
 }
 
+// 处理回滚所有改动
+async function handleRollbackAll() {
+  if (!fileChangesInstance) return
+  
+  // 确认对话框
+  const confirmed = confirm(t('tools.rollbackAllConfirm'))
+  if (!confirmed) return
+  
+  // 依次回滚每个文件
+  for (const file of fileChanges.value) {
+    const result = await fileChangesInstance.rollbackFile(file.filePath)
+    if (!result.success) {
+      console.error('Rollback failed for', file.filePath, ':', result.error)
+      alert(t('tools.rollbackFailed') + ': ' + result.error)
+      break
+    }
+  }
+}
+
 // 处理接受单个文件的所有改动
 function handleAcceptFile(filePath: string) {
   if (!fileChangesInstance) return
@@ -301,12 +320,12 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 .file-rollback-bar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 8px 10px;
   background: color-mix(in srgb, var(--theme-warning) 8%, var(--theme-panel-background));
   border: 1px solid color-mix(in srgb, var(--theme-warning) 25%, transparent);
-  border-radius: 8px;
-  margin-bottom: 8px;
+  border-radius: 6px;
+  margin-bottom: 6px;
 }
 
 .rollback-header {
@@ -376,6 +395,25 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   background: color-mix(in srgb, var(--theme-success) 20%, transparent);
 }
 
+.rollback-all-header-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-warning) 50%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--theme-warning) 10%, transparent);
+  color: var(--theme-warning);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rollback-all-header-btn:hover {
+  background: color-mix(in srgb, var(--theme-warning) 20%, transparent);
+}
+
 /* 收起状态：标签列表 */
 .file-tags {
   display: flex;
@@ -427,23 +465,37 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 .file-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
 
 .file-group {
   background: var(--theme-panel-background);
   border: 1px solid var(--theme-border);
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .file-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 4px 8px;
   background: color-mix(in srgb, var(--theme-foreground) 3%, transparent);
-  border-bottom: 1px solid var(--theme-border);
+}
+
+.file-header-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.file-header-left:hover {
+  opacity: 0.85;
 }
 
 .file-collapse-btn {
@@ -459,11 +511,11 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 }
 
 .file-icon {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .file-header .file-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--theme-link);
   cursor: pointer;
@@ -482,6 +534,16 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   color: var(--theme-secondary-foreground);
 }
 
+.stats-added {
+  color: var(--theme-success);
+  font-weight: 500;
+}
+
+.stats-removed {
+  color: var(--theme-error);
+  font-weight: 500;
+}
+
 .file-actions {
   display: flex;
   gap: 6px;
@@ -490,13 +552,13 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 .accept-file-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 3px;
+  padding: 2px 6px;
   border: 1px solid color-mix(in srgb, var(--theme-success) 40%, transparent);
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: var(--theme-success);
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -508,13 +570,13 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 .rollback-all-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 3px;
+  padding: 2px 6px;
   border: 1px solid color-mix(in srgb, var(--theme-warning) 40%, transparent);
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: var(--theme-warning);
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -537,9 +599,9 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 .modification-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 28px;
-  font-size: 12px;
+  gap: 6px;
+  padding: 4px 8px 4px 24px;
+  font-size: 11px;
   border-bottom: 1px solid color-mix(in srgb, var(--theme-border) 50%, transparent);
 }
 

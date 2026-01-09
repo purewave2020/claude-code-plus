@@ -213,6 +213,7 @@ export default {
     rollbackAll: '全部回滚',
     rollbackModification: '回滚此修改',
     rollbackFileConfirm: '确定要将 {file} 回滚到修改前的版本吗？',
+    rollbackAllConfirm: '确定要回滚所有文件的修改吗？此操作不可撤销。',
     rollbackModificationConfirm: '确定要回滚此修改吗？该修改及之后的修改都将被还原。',
     rollbackFailed: '回滚失败',
     rolledBack: '已回滚',
