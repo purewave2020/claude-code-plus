@@ -18,7 +18,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler
 import org.eclipse.jetty.ee10.servlet.ServletHolder
 import org.eclipse.jetty.server.Server
@@ -27,7 +27,7 @@ import java.time.Duration
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("McpHttpGateway")
 
 object McpHttpGateway {
     private data class EndpointKey(

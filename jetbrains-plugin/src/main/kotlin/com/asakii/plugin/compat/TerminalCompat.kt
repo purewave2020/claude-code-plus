@@ -1,10 +1,10 @@
 package com.asakii.plugin.compat
 
 import com.intellij.terminal.JBTerminalWidget
-import mu.KotlinLogging
+import com.asakii.logging.*
 import org.jetbrains.plugins.terminal.ShellTerminalWidget
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("TerminalCompat")
 
 /**
  * 命令完成等待结果

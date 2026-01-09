@@ -3,7 +3,7 @@ package com.asakii.claude.agent.sdk.mcp
 import com.asakii.claude.agent.sdk.mcp.annotations.*
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
-import mu.KotlinLogging
+import com.asakii.logging.*
 import kotlin.reflect.*
 import kotlin.reflect.full.*
 
@@ -32,7 +32,7 @@ import kotlin.reflect.full.*
  * ```
  */
 abstract class McpServerBase : McpServer {
-    private val logger = KotlinLogging.logger {}
+    private val logger = getLogger("McpServerBase")
     private val registeredTools = mutableMapOf<String, ToolHandlerBase>()
     private var initialized = false
     
@@ -55,16 +55,16 @@ abstract class McpServerBase : McpServer {
      */
     private suspend fun ensureInitialized() {
         if (!initialized) {
-            logger.info("🔧 初始化 MCP Server: $name")
-            
+            logger.info { "🔧 初始化 MCP Server: $name" }
+
             // 扫描并注册注解工具
             scanAndRegisterAnnotatedTools()
-            
+
             // 调用用户自定义初始化
             onInitialize()
-            
+
             initialized = true
-            logger.info("✅ MCP Server '$name' 初始化完成，已注册 ${registeredTools.size} 个工具")
+            logger.info { "✅ MCP Server '$name' 初始化完成，已注册 ${registeredTools.size} 个工具" }
         }
     }
     
@@ -80,15 +80,15 @@ abstract class McpServerBase : McpServer {
      */
     private suspend fun scanAndRegisterAnnotatedTools() {
         val kClass = this::class
-        
+
         kClass.memberFunctions.forEach { function ->
             val mcpTool = function.findAnnotation<McpTool>()
             if (mcpTool != null) {
                 registerAnnotatedTool(function, mcpTool)
             }
         }
-        
-        logger.info("📋 从注解扫描到 ${registeredTools.size} 个工具")
+
+        logger.info { "📋 从注解扫描到 ${registeredTools.size} 个工具" }
     }
     
     /**
@@ -112,7 +112,7 @@ abstract class McpServerBase : McpServer {
         )
         
         registeredTools[toolName] = handler
-        logger.info("🔧 注册工具: $toolName - $description")
+        logger.info { "🔧 注册工具: $toolName - $description" }
     }
     
     /**
@@ -176,7 +176,7 @@ abstract class McpServerBase : McpServer {
                 function.call(*args.toTypedArray())
             } ?: Unit
         } catch (e: Exception) {
-            logger.error("❌ 工具调用失败: ${function.name}, 错误: ${e.message}")
+            logger.error { "❌ 工具调用失败: ${function.name}, 错误: ${e.message}" }
             throw e
         }
     }
@@ -328,7 +328,7 @@ abstract class McpServerBase : McpServer {
         )
         
         registeredTools[name] = toolHandler
-        logger.info("🔧 手动注册工具: $name - $description")
+        logger.info { "🔧 手动注册工具: $name - $description" }
     }
     
     /**
@@ -391,7 +391,7 @@ abstract class McpServerBase : McpServer {
         )
 
         registeredTools[name] = toolHandler
-        logger.info("🔧 手动注册工具(完整Schema): $name - $description")
+        logger.info { "🔧 手动注册工具(完整Schema): $name - $description" }
     }
 
     /**
@@ -423,7 +423,7 @@ abstract class McpServerBase : McpServer {
         )
 
         registeredTools[name] = toolHandler
-        logger.info("🔧 注册工具(从Schema): $name - $description")
+        logger.info { "🔧 注册工具(从Schema): $name - $description" }
     }
 
     /**
@@ -447,10 +447,10 @@ abstract class McpServerBase : McpServer {
             ?: return ToolResult.error("工具 '$toolName' 未找到")
 
         return try {
-            logger.info("🎯 调用工具: $toolName, 参数: $arguments")
+            logger.info { "🎯 调用工具: $toolName, 参数: $arguments" }
             handler.handler(arguments)
         } catch (e: Exception) {
-            logger.error("❌ 工具 '$toolName' 执行失败: ${e.message}")
+            logger.error { "❌ 工具 '$toolName' 执行失败: ${e.message}" }
             ToolResult.error("工具执行失败: ${e.message}")
         }
     }
@@ -472,12 +472,12 @@ abstract class McpServerBase : McpServer {
             ?: return ToolResult.error("工具 '$toolName' 未找到")
 
         return try {
-            logger.info("🎯 调用工具: $toolName, 参数: $arguments, toolUseId: $toolUseId")
+            logger.info { "🎯 调用工具: $toolName, 参数: $arguments, toolUseId: $toolUseId" }
             withContext(ToolUseContext(toolUseId)) {
                 handler.handler(arguments)
             }
         } catch (e: Exception) {
-            logger.error("❌ 工具 '$toolName' 执行失败: ${e.message}")
+            logger.error { "❌ 工具 '$toolName' 执行失败: ${e.message}" }
             ToolResult.error("工具执行失败: ${e.message}")
         }
     }

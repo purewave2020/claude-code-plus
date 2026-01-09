@@ -34,6 +34,12 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
+    // Claude Agent SDK (includes unified-logging for SLF4J logging)
+    implementation(project(":claude-agent-sdk"))
+
+    // Test dependencies
+    testImplementation(kotlin("test"))
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 }
 
 kotlin {

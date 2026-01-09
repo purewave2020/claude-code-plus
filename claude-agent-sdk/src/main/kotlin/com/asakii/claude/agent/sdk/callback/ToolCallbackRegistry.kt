@@ -1,7 +1,7 @@
 package com.asakii.claude.agent.sdk.callback
 
 import java.util.concurrent.ConcurrentHashMap
-import mu.KotlinLogging
+import com.asakii.logging.*
 
 /**
  * 工具回调注册表 - 管理所有自定义工具回调
@@ -23,7 +23,7 @@ import mu.KotlinLogging
  * ```
  */
 class ToolCallbackRegistry {
-    private val logger = KotlinLogging.logger {}
+    private val logger = getLogger("ToolCallbackRegistry")
     private val callbacks = ConcurrentHashMap<String, ToolCallback>()
 
     /**
@@ -35,10 +35,10 @@ class ToolCallbackRegistry {
     fun register(callback: ToolCallback) {
         val existing = callbacks.putIfAbsent(callback.toolName, callback)
         if (existing != null) {
-            logger.warn("⚠️ [ToolCallbackRegistry] 工具 '${callback.toolName}' 已注册，覆盖旧回调")
+            logger.warn { "⚠️ [ToolCallbackRegistry] 工具 '${callback.toolName}' 已注册，覆盖旧回调" }
             callbacks[callback.toolName] = callback
         } else {
-            logger.info("✅ [ToolCallbackRegistry] 注册工具回调: ${callback.toolName}")
+            logger.info { "✅ [ToolCallbackRegistry] 注册工具回调: ${callback.toolName}" }
         }
     }
 
@@ -71,7 +71,7 @@ class ToolCallbackRegistry {
     fun unregister(toolName: String): ToolCallback? {
         val removed = callbacks.remove(toolName)
         if (removed != null) {
-            logger.info("🗑️ [ToolCallbackRegistry] 移除工具回调: $toolName")
+            logger.info { "🗑️ [ToolCallbackRegistry] 移除工具回调: $toolName" }
         }
         return removed
     }
@@ -88,6 +88,6 @@ class ToolCallbackRegistry {
      */
     fun clear() {
         callbacks.clear()
-        logger.info("🧹 [ToolCallbackRegistry] 已清空所有工具回调")
+        logger.info { "🧹 [ToolCallbackRegistry] 已清空所有工具回调" }
     }
 }

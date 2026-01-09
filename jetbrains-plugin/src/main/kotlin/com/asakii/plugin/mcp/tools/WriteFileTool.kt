@@ -12,10 +12,10 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import kotlinx.serialization.json.JsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.io.File
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("WriteFileTool")
 
 /**
  * 写入文件工具

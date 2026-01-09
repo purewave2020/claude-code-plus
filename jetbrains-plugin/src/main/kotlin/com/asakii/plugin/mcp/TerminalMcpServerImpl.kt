@@ -15,10 +15,10 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.util.concurrent.ConcurrentHashMap
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("TerminalMcpServerImpl")
 
 /**
  * JetBrains Terminal MCP server implementation.

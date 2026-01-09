@@ -2,7 +2,7 @@ package com.asakii.claude.agent.sdk.utils
 
 import kotlinx.serialization.json.*
 import java.io.File
-import mu.KotlinLogging
+import com.asakii.logging.*
 import kotlinx.coroutines.*
 
 /**
@@ -24,7 +24,7 @@ data class SessionMetadata(
  * 并提取会话元数据
  */
 object ClaudeSessionScanner {
-    private val logger = KotlinLogging.logger {}
+    private val logger = getLogger("ClaudeSessionScanner")
     private val jsonParser = Json { ignoreUnknownKeys = true }
 
     /**

@@ -29,7 +29,7 @@ import kotlinx.coroutines.*
 import kotlinx.io.Buffer
 import kotlinx.io.readByteArray
 import kotlinx.io.write
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.util.concurrent.ConcurrentHashMap
 import com.asakii.rpc.proto.JetBrainsOpenFileRequest as ProtoOpenFileRequest
 import com.asakii.rpc.proto.JetBrainsShowDiffRequest as ProtoShowDiffRequest
@@ -68,7 +68,7 @@ import com.asakii.rpc.proto.JetBrainsSessionCommand as ProtoSessionCommand
 class JetBrainsRSocketHandler(
     private val jetbrainsApi: JetBrainsApi
 ) : JetBrainsRSocketHandlerProvider {
-    private val logger = KotlinLogging.logger {}
+    private val logger = getLogger("JetBrainsRSocketHandler")
 
     // 客户端 requester（用于反向调用）
     private var clientRequester: RSocket? = null

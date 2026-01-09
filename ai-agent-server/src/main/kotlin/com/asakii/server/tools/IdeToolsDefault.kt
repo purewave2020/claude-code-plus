@@ -1,7 +1,7 @@
 package com.asakii.server.tools
 
 import com.asakii.rpc.api.*
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.io.File
 import java.util.Locale
 
@@ -12,7 +12,7 @@ import java.util.Locale
  * - IDEA 特有功能（openFile、showDiff）返回 UnsupportedOperationException
  * - jetbrains-plugin 模块中的 IdeToolsImpl 继承此类，覆盖 IDEA 特有方法
  */
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("IdeToolsDefault")
 
 open class IdeToolsDefault(
     private val _projectPath: String? = null

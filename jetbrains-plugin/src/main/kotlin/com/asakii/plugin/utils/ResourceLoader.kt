@@ -3,10 +3,10 @@ package com.asakii.plugin.utils
 import com.asakii.claude.agent.sdk.types.AgentDefinition
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.util.concurrent.atomic.AtomicReference
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("ResourceLoader")
 
 /**
  * 子代理配置文件的 JSON 结构

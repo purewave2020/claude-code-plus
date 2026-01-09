@@ -7,8 +7,7 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.Closeable
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
-import java.util.logging.Level
-import java.util.logging.Logger
+import com.asakii.logging.*
 
 /**
  * Codex App-Server 楂樺眰 API 瀹㈡埛绔?
@@ -43,7 +42,7 @@ class CodexAppServerClient private constructor(
     private val process: CodexAppServerProcess,
     private val scope: CoroutineScope
 ) : Closeable {
-    private val logger = Logger.getLogger(CodexAppServerClient::class.java.name)
+    private val logger = getLogger("CodexAppServerClient")
 
     private val rpc = process.client
     private var initialized = false
@@ -132,10 +131,8 @@ class CodexAppServerClient private constructor(
                 else -> null
             }
         } catch (e: Exception) {
-            logger.warning("Failed to parse notification ${notification.method}: ${e.message}")
-            if (logger.isLoggable(Level.FINE)) {
-                logger.fine("Notification params: ${notification.params}")
-            }
+            logger.warn { "Failed to parse notification ${notification.method}: ${e.message}" }
+            logger.debug { "Notification params: ${notification.params}" }
             null
         }
 

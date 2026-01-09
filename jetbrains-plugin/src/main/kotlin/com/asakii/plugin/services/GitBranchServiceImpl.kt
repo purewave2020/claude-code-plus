@@ -3,9 +3,9 @@ package com.asakii.plugin.services
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import git4idea.repo.GitRepositoryManager
-import mu.KotlinLogging
+import com.asakii.logging.*
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("GitBranchServiceImpl")
 
 /**
  * Git4Idea 实现 - 当 Git4Idea 插件安装时使用

@@ -113,18 +113,16 @@ class SimpleFileIndexService(
     
     override suspend fun getRecentFiles(maxResults: Int): List<IndexedFileInfo> = withContext(Dispatchers.IO) {
         try {
-            println("[SimpleFileIndexService] getRecentFiles 被调用，maxResults=$maxResults")
-            
+            logger.debug("getRecentFiles 被调用，maxResults=$maxResults")
+
             ReadAction.compute<List<IndexedFileInfo>, Exception> {
                 val results = mutableListOf<IndexedFileInfo>()
-                
+
                 // 获取项目的所有源文件根目录
                 val contentRoots = ProjectRootManager.getInstance(project).contentRoots
-                println("[SimpleFileIndexService] 找到 ${contentRoots.size} 个内容根目录")
-                
+                logger.debug("找到 ${contentRoots.size} 个内容根目录")
+
                 for (root in contentRoots) {
-                    println("[SimpleFileIndexService] 遍历根目录: ${root.path}")
-                    
                     VfsUtilCore.iterateChildrenRecursively(root, null) { virtualFile ->
                         if (!virtualFile.isDirectory && results.size < maxResults) {
                             // 过滤常用文件类型
@@ -134,11 +132,10 @@ class SimpleFileIndexService(
                                 "md", "txt", "json", "yaml", "yml", "xml", "html", "css", "scss", "less",
                                 "gradle", "properties", "kts"
                             )
-                            
+
                             if (isCommonFile) {
                                 createFileInfo(virtualFile)?.let { fileInfo ->
                                     results.add(fileInfo)
-                                    println("[SimpleFileIndexService] 添加文件: ${fileInfo.name}")
                                 }
                             }
                         }
@@ -156,13 +153,11 @@ class SimpleFileIndexService(
                     }
                 }.thenBy { it.name.lowercase() })
                 
-                println("[SimpleFileIndexService] 找到 ${sortedResults.size} 个文件")
+                logger.info("找到 ${sortedResults.size} 个文件")
                 sortedResults.take(maxResults)
             }
         } catch (e: Exception) {
-            logger.warn("获取最近文件失败: ${e.message}")
-            println("[SimpleFileIndexService] 获取最近文件异常: ${e.message}")
-            e.printStackTrace()
+            logger.warn("获取最近文件失败: ${e.message}", e)
             emptyList()
         }
     }

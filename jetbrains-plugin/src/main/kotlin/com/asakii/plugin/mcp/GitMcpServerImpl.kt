@@ -14,9 +14,9 @@ import com.intellij.openapi.project.Project
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("GitMcpServerImpl")
 
 /**
  * Git MCP server implementation.

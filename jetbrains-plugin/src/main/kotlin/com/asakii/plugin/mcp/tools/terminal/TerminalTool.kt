@@ -5,9 +5,9 @@ import com.asakii.plugin.mcp.getLong
 import com.asakii.plugin.mcp.getString
 import com.asakii.settings.AgentSettingsService
 import kotlinx.serialization.json.JsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("TerminalTool")
 
 /**
  * Terminal 工具 - 执行命令

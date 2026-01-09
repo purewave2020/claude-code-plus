@@ -7,9 +7,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import kotlinx.serialization.json.JsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("GetVcsStatusTool")
 
 /**
  * 获取 VCS 状态工具

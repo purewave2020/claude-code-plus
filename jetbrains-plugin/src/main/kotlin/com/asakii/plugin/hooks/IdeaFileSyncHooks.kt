@@ -7,7 +7,7 @@ import com.asakii.claude.agent.sdk.types.HookMatcher
 import com.asakii.claude.agent.sdk.types.ToolType
 import com.asakii.plugin.services.IdeaPlatformService
 import com.intellij.openapi.project.Project
-import mu.KotlinLogging
+import com.asakii.logging.*
 
 /**
  * IDEA 文件同步 Hooks
@@ -20,7 +20,7 @@ import mu.KotlinLogging
  */
 object IdeaFileSyncHooks {
 
-    private val logger = KotlinLogging.logger {}
+    private val logger = getLogger("IdeaFileSyncHooks")
 
     /**
      * 需要文件同步的工具配置

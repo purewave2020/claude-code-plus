@@ -9,9 +9,9 @@ import com.asakii.settings.AgentSettingsService
 import com.asakii.settings.McpDefaults
 import com.intellij.openapi.project.Project
 import kotlinx.serialization.json.*
-import mu.KotlinLogging
+import com.asakii.logging.*
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("JetBrainsFileMcpServerImpl")
 
 /**
  * JetBrains File MCP 服务器实现

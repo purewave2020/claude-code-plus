@@ -3,9 +3,9 @@ package com.asakii.plugin.mcp.tools.terminal
 import com.asakii.plugin.mcp.getBoolean
 import com.asakii.plugin.mcp.getStringList
 import kotlinx.serialization.json.JsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("TerminalKillTool")
 
 /**
  * TerminalKill 工具 - 终止终端会话（支持批量）

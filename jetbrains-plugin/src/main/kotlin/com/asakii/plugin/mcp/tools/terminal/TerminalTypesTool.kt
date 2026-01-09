@@ -1,9 +1,9 @@
 package com.asakii.plugin.mcp.tools.terminal
 
 import kotlinx.serialization.json.JsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("TerminalTypesTool")
 
 /**
  * TerminalTypes 工具 - 获取可用的 Shell 类型

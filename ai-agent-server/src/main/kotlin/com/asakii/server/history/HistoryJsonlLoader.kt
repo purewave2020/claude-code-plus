@@ -15,7 +15,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.io.File
 import java.io.RandomAccessFile
 import java.util.concurrent.ConcurrentHashMap
@@ -34,7 +34,7 @@ import kotlin.io.path.useLines
  * 2. 从尾部高效加载 - 使用 RandomAccessFile 从尾部向前读取
  */
 object HistoryJsonlLoader {
-    private val log = KotlinLogging.logger {}
+    private val log = getLogger("HistoryJsonlLoader")
     private val parser = Json { ignoreUnknownKeys = true }
 
     // ========== 消息树数据结构（复刻官方 CLI） ==========
@@ -81,12 +81,12 @@ object HistoryJsonlLoader {
                         messages[uuid] = JsonlEntry(uuid, parentUuid, type, timestamp, json)
                     }
                 } catch (e: Exception) {
-                    log.debug("[History] 解析消息树行失败: ${e.message}")
+                    log.debug { "[History] 解析消息树行失败: ${e.message}" }
                 }
             }
         }
 
-        log.debug("[History] 消息树构建完成: ${messages.size} 条消息")
+        log.debug { "[History] 消息树构建完成: ${messages.size} 条消息" }
         return messages
     }
 
@@ -105,7 +105,7 @@ object HistoryJsonlLoader {
 
         // 叶节点 = uuid 不在 referencedAsParent 中的消息
         val leafNodes = messages.values.filter { it.uuid !in referencedAsParent }
-        log.debug("[History] 找到 ${leafNodes.size} 个叶节点")
+        log.debug { "[History] 找到 ${leafNodes.size} 个叶节点" }
         return leafNodes
     }
 
@@ -150,7 +150,7 @@ object HistoryJsonlLoader {
             current = current.parentUuid?.let { messages[it] }
         }
 
-        log.debug("[History] 构建路径完成: ${path.size} 条消息")
+        log.debug { "[History] 构建路径完成: ${path.size} 条消息" }
         return path
     }
 
@@ -171,7 +171,7 @@ object HistoryJsonlLoader {
         // Step 1: 构建消息树
         val messages = parseMessageTree(file)
         if (messages.isEmpty()) {
-            log.debug("[History] 消息树为空")
+            log.debug { "[History] 消息树为空" }
             return emptyList()
         }
 
@@ -182,7 +182,7 @@ object HistoryJsonlLoader {
                 log.info("[History] 使用指定的 leafUuid: $leafUuid")
                 found
             } else {
-                log.warn("[History] 指定的 leafUuid 不存在: $leafUuid，回退到自动选择")
+                log.warn { "[History] 指定的 leafUuid 不存在: $leafUuid，回退到自动选择" }
                 null
             }
         } else {
@@ -193,13 +193,13 @@ object HistoryJsonlLoader {
         val selectedLeaf = targetLeaf ?: run {
             val leafNodes = findLeafNodes(messages)
             if (leafNodes.isEmpty()) {
-                log.warn("[History] 未找到叶节点，回退到线性读取")
+                log.warn { "[History] 未找到叶节点，回退到线性读取" }
                 return loadLinear(file)
             }
 
             val latestLeaf = selectLatestLeaf(leafNodes)
             if (latestLeaf == null) {
-                log.warn("[History] 无法选择最新叶节点，回退到线性读取")
+                log.warn { "[History] 无法选择最新叶节点，回退到线性读取" }
                 return loadLinear(file)
             }
             log.info("[History] 自动选择最新分支: uuid=${latestLeaf.uuid}, timestamp=${latestLeaf.timestamp}")
@@ -238,7 +238,7 @@ object HistoryJsonlLoader {
                         result.add(uiEvent)
                     }
                 } catch (e: Exception) {
-                    log.debug("[History] 线性读取解析行失败: ${e.message}")
+                    log.debug { "[History] 线性读取解析行失败: ${e.message}" }
                 }
             }
         }
@@ -367,14 +367,14 @@ object HistoryJsonlLoader {
         val historyFile = File(claudeDir, "projects/$projectId/$sessionId.jsonl")
 
         if (!historyFile.exists()) {
-            log.debug("[History] 查找 custom-title 失败: 文件不存在 ${historyFile.absolutePath}")
+            log.debug { "[History] 查找 custom-title 失败: 文件不存在 ${historyFile.absolutePath}" }
             return null
         }
 
         return try {
             findCustomTitleFromTail(historyFile)
         } catch (e: Exception) {
-            log.warn("[History] 查找 custom-title 失败: ${e.message}")
+            log.warn { "[History] 查找 custom-title 失败: ${e.message}" }
             null
         }
     }
@@ -440,7 +440,7 @@ object HistoryJsonlLoader {
             }
         }
 
-        log.debug("[History] 未找到 custom-title 记录")
+        log.debug { "[History] 未找到 custom-title 记录" }
         return null
     }
 
@@ -491,7 +491,7 @@ object HistoryJsonlLoader {
         leafUuid: String? = null
     ): List<UiStreamEvent> {
         if (sessionId.isNullOrBlank() || projectPath.isNullOrBlank()) {
-            log.warn("[History] sessionId/projectPath 缺失，跳过加载")
+            log.warn { "[History] sessionId/projectPath 缺失，跳过加载" }
             return emptyList()
         }
 
@@ -499,7 +499,7 @@ object HistoryJsonlLoader {
         val projectId = ProjectPathUtils.projectPathToDirectoryName(projectPath)
         val historyFile = File(claudeDir, "projects/$projectId/$sessionId.jsonl")
         if (!historyFile.exists()) {
-            log.warn("[History] 文件不存在: ${historyFile.absolutePath}")
+            log.warn { "[History] 文件不存在: ${historyFile.absolutePath}" }
             return emptyList()
         }
 
@@ -587,7 +587,7 @@ object HistoryJsonlLoader {
                             result.add(0, uiEvent)  // 添加到头部，保持从旧到新的顺序
                         }
                     } catch (e: Exception) {
-                        log.debug("[History] 尾部加载解析行失败: ${e.message}")
+                        log.debug { "[History] 尾部加载解析行失败: ${e.message}" }
                     }
                 }
 
@@ -612,12 +612,12 @@ object HistoryJsonlLoader {
                             }
                         }
                     } catch (e: Exception) {
-                        log.debug("[History] 尾部加载解析首行失败: ${e.message}")
+                        log.debug { "[History] 尾部加载解析首行失败: ${e.message}" }
                     }
                 }
             }
 
-            log.debug("[History] 尾部加载扫描了 $linesRead 行")
+            log.debug { "[History] 尾部加载扫描了 $linesRead 行" }
         }
 
         return result
@@ -795,7 +795,7 @@ object HistoryJsonlLoader {
         val historyFile = File(claudeDir, "projects/$projectId/$sessionId.jsonl")
 
         if (!historyFile.exists()) {
-            log.warn("[History] Truncate failed: file does not exist ${historyFile.absolutePath}")
+            log.warn { "[History] Truncate failed: file does not exist ${historyFile.absolutePath}" }
             throw IllegalStateException("History file does not exist: ${historyFile.absolutePath}")
         }
 
@@ -841,14 +841,14 @@ object HistoryJsonlLoader {
             if (!foundUuid) {
                 // Clean up temp file
                 tempFile.delete()
-                log.warn("[History] Truncate failed: UUID not found $messageUuid")
+                log.warn { "[History] Truncate failed: UUID not found $messageUuid" }
                 throw IllegalStateException("Message UUID not found in history: $messageUuid")
             }
 
             // Replace original file with temp file
             // On Windows, rename might fail if the file is locked, so use copy + delete
             if (!tempFile.renameTo(historyFile)) {
-                log.debug("[History] rename failed, using copy + delete")
+                log.debug { "[History] rename failed, using copy + delete" }
                 tempFile.copyTo(historyFile, overwrite = true)
                 tempFile.delete()
             }

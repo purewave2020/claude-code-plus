@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
-import mu.KotlinLogging
+import com.asakii.logging.*
 
 /**
  * Control protocol handler for managing bidirectional communication with Claude CLI.
@@ -49,33 +49,33 @@ class ControlProtocol(
     private val _initializationResult = CompletableDeferred<JsonObject>()
     
     // Logger
-    private val logger = KotlinLogging.logger {}
+    private val logger = getLogger("ControlProtocol")
     
     /**
      * Start processing messages from transport.
      */
     fun startMessageProcessing(scope: CoroutineScope) {
-        logger.info("🚀 [ControlProtocol] 开始消息处理任务")
+        logger.info { "🚀 [ControlProtocol] 开始消息处理任务" }
         messageProcessingJob = scope.launch {
             var messageCount = 0
             try {
                 transport.readMessages().collect { jsonElement ->
                     messageCount++
                     try {
-                        logger.info("📥 [ControlProtocol] 从 Transport 收到原始消息 #$messageCount")
+                        logger.info { "📥 [ControlProtocol] 从 Transport 收到原始消息 #$messageCount" }
                         routeMessage(jsonElement)
                     } catch (e: Exception) {
-                        logger.error("❌ [ControlProtocol] 处理消息失败: ${e.message}")
+                        logger.error { "❌ [ControlProtocol] 处理消息失败: ${e.message}" }
                         e.printStackTrace()
                     }
                 }
             } catch (e: CancellationException) {
-                logger.info("ℹ️ [ControlProtocol] 消息处理任务被取消")
+                logger.info { "ℹ️ [ControlProtocol] 消息处理任务被取消" }
                 throw e
             } catch (e: Exception) {
                 val errorMessage = e.message ?: e::class.simpleName ?: "Unknown transport error"
-                logger.error("❌ [ControlProtocol] 从 Transport 读取消息失败: $errorMessage")
-                logger.error("📊 [ControlProtocol] 统计: 共处理 $messageCount 条消息")
+                logger.error { "❌ [ControlProtocol] 从 Transport 读取消息失败: $errorMessage" }
+                logger.error { "📊 [ControlProtocol] 统计: 共处理 $messageCount 条消息" }
                 e.printStackTrace()
                 // Push an error result so上层能够收到错误事件而不是卡死
                 _sdkMessages.trySend(
@@ -90,7 +90,7 @@ class ControlProtocol(
                     )
                 )
                 _sdkMessages.close()
-                logger.info("🔒 [ControlProtocol] sdkMessages channel 已关闭")
+                logger.info { "🔒 [ControlProtocol] sdkMessages channel 已关闭" }
             }
         }
     }
@@ -180,8 +180,8 @@ class ControlProtocol(
         // CLAUDE_CODE_STREAM_CLOSE_TIMEOUT 单位是毫秒，转换为秒
         val timeoutMs = System.getenv("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT")?.toLongOrNull() ?: 60000L
         val initializeTimeout = maxOf(timeoutMs, 60000L) // 至少 60 秒
-        
-        logger.info("⏱️ [ControlProtocol] Initialize 超时设置: ${initializeTimeout}ms")
+
+        logger.info { "⏱️ [ControlProtocol] Initialize 超时设置: ${initializeTimeout}ms" }
 
         // 发送初始化请求（与 Python SDK 一致，如果超时会抛出异常）
         val response = sendControlRequestInternal(initRequest, initializeTimeout)
@@ -209,14 +209,14 @@ class ControlProtocol(
     private suspend fun routeMessage(jsonElement: JsonElement) {
         val jsonObject = jsonElement.jsonObject
         val type = jsonObject["type"]?.jsonPrimitive?.content
-        
-        logger.info("🔀 [ControlProtocol] 路由消息: type=$type")
-        
+
+        logger.info { "🔀 [ControlProtocol] 路由消息: type=$type" }
+
         // Route messages based on type
         when (type) {
             "system" -> {
                 val subtype = jsonObject["subtype"]?.jsonPrimitive?.content
-                logger.info("🔧 [ControlProtocol] 系统消息: subtype=$subtype")
+                logger.info { "🔧 [ControlProtocol] 系统消息: subtype=$subtype" }
                 when (subtype) {
                     "init" -> {
                         handleSystemInit(jsonElement)
@@ -225,11 +225,11 @@ class ControlProtocol(
                         // 状态消息（如 compacting）- 解析并发送到 sdkMessages
                         try {
                             val message = messageParser.parseMessage(jsonElement)
-                            logger.info("📊 [ControlProtocol] 状态消息: ${(message as? StatusSystemMessage)?.status}")
+                            logger.info { "📊 [ControlProtocol] 状态消息: ${(message as? StatusSystemMessage)?.status}" }
                             _sdkMessages.send(message)
-                            logger.info("✅ [ControlProtocol] 状态消息已发送")
+                            logger.info { "✅ [ControlProtocol] 状态消息已发送" }
                         } catch (e: Exception) {
-                            logger.warn("⚠️ [ControlProtocol] 解析状态消息失败: ${e.message}")
+                            logger.warn { "⚠️ [ControlProtocol] 解析状态消息失败: ${e.message}" }
                         }
                     }
                     "compact_boundary" -> {
@@ -237,55 +237,55 @@ class ControlProtocol(
                         try {
                             val message = messageParser.parseMessage(jsonElement)
                             val compactMsg = message as? CompactBoundaryMessage
-                            logger.info("📦 [ControlProtocol] 压缩边界消息: preTokens=${compactMsg?.compactMetadata?.preTokens}, trigger=${compactMsg?.compactMetadata?.trigger}")
+                            logger.info { "📦 [ControlProtocol] 压缩边界消息: preTokens=${compactMsg?.compactMetadata?.preTokens}, trigger=${compactMsg?.compactMetadata?.trigger}" }
                             _sdkMessages.send(message)
-                            logger.info("✅ [ControlProtocol] 压缩边界消息已发送")
+                            logger.info { "✅ [ControlProtocol] 压缩边界消息已发送" }
                         } catch (e: Exception) {
-                            logger.warn("⚠️ [ControlProtocol] 解析压缩边界消息失败: ${e.message}")
+                            logger.warn { "⚠️ [ControlProtocol] 解析压缩边界消息失败: ${e.message}" }
                         }
                     }
                     else -> {
                         // 其他系统消息（需要有 data 字段）
                         try {
                             val message = messageParser.parseMessage(jsonElement)
-                            logger.info("📤 [ControlProtocol] 发送系统消息到 sdkMessages: ${message::class.simpleName}")
+                            logger.info { "📤 [ControlProtocol] 发送系统消息到 sdkMessages: ${message::class.simpleName}" }
                             _sdkMessages.send(message)
-                            logger.info("✅ [ControlProtocol] 系统消息已发送")
+                            logger.info { "✅ [ControlProtocol] 系统消息已发送" }
                         } catch (e: Exception) {
-                            logger.error("❌ [ControlProtocol] 解析系统消息失败: ${e.message}")
+                            logger.error { "❌ [ControlProtocol] 解析系统消息失败: ${e.message}" }
                             e.printStackTrace()
                         }
                     }
                 }
             }
             "control_request" -> {
-                logger.info("🎮 [ControlProtocol] 控制请求消息")
+                logger.info { "🎮 [ControlProtocol] 控制请求消息" }
                 val (requestId, request) = messageParser.parseControlRequest(jsonElement)
                 handleControlRequest(requestId, request)
             }
             "control_response" -> {
                 val response = messageParser.parseControlResponse(jsonElement)
-                logger.info("🎮 [ControlProtocol] 控制响应消息: requestId=${response.requestId}, subtype=${response.subtype}, error=${response.error}")
+                logger.info { "🎮 [ControlProtocol] 控制响应消息: requestId=${response.requestId}, subtype=${response.subtype}, error=${response.error}" }
                 val deferred = pendingRequests.remove(response.requestId)
                 if (deferred != null) {
                     deferred.complete(response)
-                    logger.info("✅ [ControlProtocol] 响应已匹配到等待的请求: ${response.requestId}")
+                    logger.info { "✅ [ControlProtocol] 响应已匹配到等待的请求: ${response.requestId}" }
                 } else {
-                    logger.warn("⚠️ [ControlProtocol] 未找到匹配的等待请求: ${response.requestId}, pendingRequests=${pendingRequests.keys}")
+                    logger.warn { "⚠️ [ControlProtocol] 未找到匹配的等待请求: ${response.requestId}, pendingRequests=${pendingRequests.keys}" }
                 }
             }
             "assistant", "user", "result", "stream_event" -> {
                 // Regular SDK messages
-                logger.info("📨 [ControlProtocol] SDK 消息: type=$type")
+                logger.info { "📨 [ControlProtocol] SDK 消息: type=$type" }
                 try {
                     val message = messageParser.parseMessage(jsonElement)
                     val messageType = message::class.simpleName
-                    logger.info("📤 [ControlProtocol] 解析成功，准备发送到 sdkMessages: $messageType")
-                    
+                    logger.info { "📤 [ControlProtocol] 解析成功，准备发送到 sdkMessages: $messageType" }
+
                     // 记录消息详情
                     when (message) {
                         is ResultMessage -> {
-                            logger.info("🎯 [ControlProtocol] ResultMessage 详情: subtype=${message.subtype}, isError=${message.isError}, sessionId=${message.sessionId}")
+                            logger.info { "🎯 [ControlProtocol] ResultMessage 详情: subtype=${message.subtype}, isError=${message.isError}, sessionId=${message.sessionId}" }
                         }
                         is StreamEvent -> {
                             val eventType = try {
@@ -293,37 +293,37 @@ class ControlProtocol(
                             } catch (e: Exception) {
                                 "parse_error"
                             }
-                            logger.info("🌊 [ControlProtocol] StreamEvent 详情: eventType=$eventType, sessionId=${message.sessionId}, uuid=${message.uuid}")
+                            logger.info { "🌊 [ControlProtocol] StreamEvent 详情: eventType=$eventType, sessionId=${message.sessionId}, uuid=${message.uuid}" }
                         }
                         is AssistantMessage -> {
-                            logger.info("🤖 [ControlProtocol] AssistantMessage 详情: model=${message.model}, contentBlocks=${message.content.size}, parentToolUseId=${message.parentToolUseId}")
+                            logger.info { "🤖 [ControlProtocol] AssistantMessage 详情: model=${message.model}, contentBlocks=${message.content.size}, parentToolUseId=${message.parentToolUseId}" }
                         }
                         is SystemMessage -> {
-                            logger.info("🔧 [ControlProtocol] SystemMessage 详情: subtype=${message.subtype}")
+                            logger.info { "🔧 [ControlProtocol] SystemMessage 详情: subtype=${message.subtype}" }
                         }
                         is UserMessage -> {
-                            logger.info("👤 [ControlProtocol] UserMessage 详情: sessionId=${message.sessionId}, parentToolUseId=${message.parentToolUseId}, isReplay=${message.isReplay}")
+                            logger.info { "👤 [ControlProtocol] UserMessage 详情: sessionId=${message.sessionId}, parentToolUseId=${message.parentToolUseId}, isReplay=${message.isReplay}" }
                         }
                         is StatusSystemMessage -> {
-                            logger.info("📊 [ControlProtocol] StatusSystemMessage 详情: status=${message.status}, sessionId=${message.sessionId}")
+                            logger.info { "📊 [ControlProtocol] StatusSystemMessage 详情: status=${message.status}, sessionId=${message.sessionId}" }
                         }
                         is CompactBoundaryMessage -> {
-                            logger.info("📦 [ControlProtocol] CompactBoundaryMessage 详情: preTokens=${message.compactMetadata?.preTokens}, trigger=${message.compactMetadata?.trigger}")
+                            logger.info { "📦 [ControlProtocol] CompactBoundaryMessage 详情: preTokens=${message.compactMetadata?.preTokens}, trigger=${message.compactMetadata?.trigger}" }
                         }
                         else -> {
-                            logger.info("📄 [ControlProtocol] 其他消息类型: $messageType")
+                            logger.info { "📄 [ControlProtocol] 其他消息类型: $messageType" }
                         }
                     }
-                    
+
                     _sdkMessages.send(message)
-                    logger.info("✅ [ControlProtocol] SDK 消息 ($messageType) 已发送到 sdkMessages channel")
+                    logger.info { "✅ [ControlProtocol] SDK 消息 ($messageType) 已发送到 sdkMessages channel" }
                 } catch (e: Exception) {
-                    logger.error("❌ [ControlProtocol] 解析 SDK 消息失败: type=$type, error=${e.message}")
+                    logger.error { "❌ [ControlProtocol] 解析 SDK 消息失败: type=$type, error=${e.message}" }
                     e.printStackTrace()
                 }
             }
             else -> {
-                logger.warn("⚠️ [ControlProtocol] 未知消息类型: $type")
+                logger.warn { "⚠️ [ControlProtocol] 未知消息类型: $type" }
             }
         }
     }
@@ -392,7 +392,7 @@ class ControlProtocol(
                 tools = tools,
                 mcpServers = mcpServers
             )
-            logger.info("📤 [ControlProtocol] 发送 SystemInitMessage 到 sdkMessages: sessionId=$sessionId, model=$modelId")
+            logger.info { "📤 [ControlProtocol] 发送 SystemInitMessage 到 sdkMessages: sessionId=$sessionId, model=$modelId" }
             _sdkMessages.send(systemInitMessage)
 
             logger.info { "System initialization received: $serverInfo" }
@@ -412,7 +412,7 @@ class ControlProtocol(
      * Handle incoming control requests from CLI.
      */
     private suspend fun handleControlRequest(requestId: String, request: ControlRequest) {
-        logger.info("🎯 [handleControlRequest] 收到控制请求: requestId=$requestId, subtype=${request.subtype}, type=${request::class.simpleName}")
+        logger.info { "🎯 [handleControlRequest] 收到控制请求: requestId=$requestId, subtype=${request.subtype}, type=${request::class.simpleName}" }
         try {
             val response = when (request) {
                 is HookCallbackRequest -> handleHookCallback(request)
@@ -453,11 +453,11 @@ class ControlProtocol(
      * Handle tool permission requests.
      */
     private suspend fun handlePermissionRequest(request: PermissionRequest): JsonElement {
-        logger.info("🔐 [handlePermissionRequest] ==========================================")
-        logger.info("🔐 [handlePermissionRequest] 收到权限请求: toolName=${request.toolName}, toolUseId=${request.toolUseId}")
-        logger.info("🔐 [handlePermissionRequest] input keys: ${(request.input as? JsonObject)?.keys}")
-        logger.info("🔐 [handlePermissionRequest] suggestions count: ${request.permissionSuggestions?.size ?: 0}")
-        logger.info("🔐 [handlePermissionRequest] canUseTool callback configured: ${options.canUseTool != null}")
+        logger.info { "🔐 [handlePermissionRequest] ==========================================" }
+        logger.info { "🔐 [handlePermissionRequest] 收到权限请求: toolName=${request.toolName}, toolUseId=${request.toolUseId}" }
+        logger.info { "🔐 [handlePermissionRequest] input keys: ${(request.input as? JsonObject)?.keys}" }
+        logger.info { "🔐 [handlePermissionRequest] suggestions count: ${request.permissionSuggestions?.size ?: 0}" }
+        logger.info { "🔐 [handlePermissionRequest] canUseTool callback configured: ${options.canUseTool != null}" }
 
         val canUseTool = options.canUseTool
             ?: throw ControlProtocolException("No permission callback configured")
@@ -597,20 +597,20 @@ class ControlProtocol(
         try {
             // ✅ 使用 Json.encodeToString 而不是 toString()，避免 BOM 问题
             val jsonStr = json.encodeToString(requestMessage)
-            logger.info("📤 [ControlProtocol] 发送控制请求: requestId=$requestId, subtype=$subtype")
-            logger.debug("📤 [ControlProtocol] 请求内容: $jsonStr")
+            logger.info { "📤 [ControlProtocol] 发送控制请求: requestId=$requestId, subtype=$subtype" }
+            logger.debug { "📤 [ControlProtocol] 请求内容: $jsonStr" }
             transport.write(jsonStr)
-            logger.info("⏳ [ControlProtocol] 等待响应: requestId=$requestId, timeout=${timeoutMs}ms")
+            logger.info { "⏳ [ControlProtocol] 等待响应: requestId=$requestId, timeout=${timeoutMs}ms" }
             return withTimeout(timeoutMs) {
                 deferred.await()
             }
         } catch (e: TimeoutCancellationException) {
             pendingRequests.remove(requestId)
-            logger.error("❌ [ControlProtocol] 控制请求超时: requestId=$requestId, subtype=$subtype, timeout=${timeoutMs}ms")
+            logger.error { "❌ [ControlProtocol] 控制请求超时: requestId=$requestId, subtype=$subtype, timeout=${timeoutMs}ms" }
             throw ControlProtocolException("Control request timeout for $requestId after ${timeoutMs}ms")
         } catch (e: Exception) {
             pendingRequests.remove(requestId)
-            logger.error("❌ [ControlProtocol] 控制请求失败: requestId=$requestId, subtype=$subtype, error=${e.message}")
+            logger.error { "❌ [ControlProtocol] 控制请求失败: requestId=$requestId, subtype=$subtype, error=${e.message}" }
             throw ControlProtocolException("Failed to send control request", e)
         }
     }
@@ -662,16 +662,16 @@ class ControlProtocol(
             targetId?.let { put("target_id", it) }
         }
         val targetInfo = targetId ?: "latest"
-        logger.info("📤 [ControlProtocol] 发送 agent_run_to_background 请求 (target: $targetInfo)")
+        logger.info { "📤 [ControlProtocol] 发送 agent_run_to_background 请求 (target: $targetInfo)" }
 
         val response = sendControlRequestInternal(request)
-        logger.info("📥 [ControlProtocol] 收到 agent_run_to_background 响应: subtype=${response.subtype}, error=${response.error}")
+        logger.info { "📥 [ControlProtocol] 收到 agent_run_to_background 响应: subtype=${response.subtype}, error=${response.error}" }
 
         if (response.subtype == "error") {
             throw ControlProtocolException("Agent run to background failed: ${response.error}")
         }
 
-        logger.info("✅ [ControlProtocol] Agent 已切换到后台运行 (target: $targetInfo)")
+        logger.info { "✅ [ControlProtocol] Agent 已切换到后台运行 (target: $targetInfo)" }
     }
 
     /**
@@ -694,7 +694,7 @@ class ControlProtocol(
         if (response.subtype == "error") {
             throw ControlProtocolException("Set max thinking tokens failed: ${response.error}")
         }
-        logger.info("✅ [ControlProtocol] 设置 maxThinkingTokens = $maxThinkingTokens")
+        logger.info { "✅ [ControlProtocol] 设置 maxThinkingTokens = $maxThinkingTokens" }
     }
 
     /**
@@ -714,7 +714,7 @@ class ControlProtocol(
         if (response.subtype == "error") {
             throw ControlProtocolException("Set model failed: ${response.error}")
         }
-        logger.info("✅ [ControlProtocol] 设置 model = $model")
+        logger.info { "✅ [ControlProtocol] 设置 model = $model" }
     }
 
     /**
@@ -730,7 +730,7 @@ class ControlProtocol(
         if (response.subtype == "error") {
             throw ControlProtocolException("Set permission mode failed: ${response.error}")
         }
-        logger.info("✅ [ControlProtocol] 设置 permissionMode = $mode")
+        logger.info { "✅ [ControlProtocol] 设置 permissionMode = $mode" }
     }
 
     /**

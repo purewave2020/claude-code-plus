@@ -5,7 +5,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.io.*
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -37,7 +37,7 @@ class CodexProcessManager(
     private val maxRestartAttempts: Int = 3,
     private val healthCheckInterval: Long = 5000L
 ) {
-    private val logger = KotlinLogging.logger {}
+    private val logger = getLogger("CodexProcessManager")
 
     // 进程状态
     private var process: Process? = null
@@ -226,7 +226,7 @@ class CodexProcessManager(
                     lines.forEach { line ->
                         if (isActive) {
                             _stdout.trySend(line)
-                            logger.trace { "[STDOUT] $line" }
+                            logger.debug { "[STDOUT] $line" }
                         }
                     }
                 }
@@ -244,7 +244,7 @@ class CodexProcessManager(
                     lines.forEach { line ->
                         if (isActive) {
                             _stderr.trySend(line)
-                            logger.trace { "[STDERR] $line" }
+                            logger.debug { "[STDERR] $line" }
                         }
                     }
                 }
@@ -315,7 +315,7 @@ class CodexProcessManager(
             process?.errorStream?.close()
             process?.outputStream?.close()
         } catch (e: Exception) {
-            logger.debug(e) { "Error closing process streams" }
+            logger.debug { "Error closing process streams: ${e.message}" }
         }
 
         process = null

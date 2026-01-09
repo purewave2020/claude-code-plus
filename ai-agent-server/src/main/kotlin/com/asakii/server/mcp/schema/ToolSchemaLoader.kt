@@ -2,9 +2,9 @@ package com.asakii.server.mcp.schema
 
 import com.asakii.server.mcp.UserInteractionMcpServer
 import kotlinx.serialization.json.*
-import mu.KotlinLogging
+import com.asakii.logging.*
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("ToolSchemaLoader")
 
 /**
  * 工具 Schema 加载器

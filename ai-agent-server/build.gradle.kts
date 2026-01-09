@@ -54,8 +54,9 @@ dependencies {
     // JSON Schema 校验
     implementation("com.networknt:json-schema-validator:3.0.0")
 
-    // Logging
-    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    // 统一日志模块 (SLF4J)
+    api(project(":unified-logging"))
+    // Logback 实现 (Standalone 环境)
     implementation("ch.qos.logback:logback-classic:1.4.14")
     implementation("org.slf4j:jul-to-slf4j:2.0.13")
 

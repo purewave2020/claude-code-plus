@@ -12,10 +12,10 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import kotlinx.serialization.json.JsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.io.File
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("EditFileTool")
 
 /**
  * 编辑文件工具

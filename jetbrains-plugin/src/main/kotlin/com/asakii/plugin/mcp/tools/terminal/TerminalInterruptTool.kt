@@ -2,9 +2,9 @@ package com.asakii.plugin.mcp.tools.terminal
 
 import com.asakii.plugin.mcp.getString
 import kotlinx.serialization.json.JsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("TerminalInterruptTool")
 
 /**
  * TerminalInterrupt 工具 - 发送终端控制信号

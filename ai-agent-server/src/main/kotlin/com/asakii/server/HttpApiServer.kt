@@ -64,7 +64,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.coroutines.runBlocking
 import java.awt.Color
 import java.io.IOException
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.seconds
 
@@ -103,7 +103,7 @@ data class FileSearchResponse(
  * - HTTP: 静态资源 + REST API
  * - SSE: 实时事件推送（主题变化、Claude 消息等）
  */
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("HttpApiServer")
 
 /**
  * JetBrains RSocket Handler 接口

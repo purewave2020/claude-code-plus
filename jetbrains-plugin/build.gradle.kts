@@ -156,8 +156,8 @@ dependencies {
     val rsocketVersion = "0.20.0"
     implementation("io.rsocket.kotlin:rsocket-core:$rsocketVersion")
 
-    // Logging (用于 JetBrainsRSocketHandler)
-    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    // 统一日志模块 (SLF4J) - IDEA 内置 SLF4J 实现会将日志写入 idea.log
+    implementation(project(":unified-logging"))
 
     // Ktor 服务器依赖 - 使用 3.0.3 版本（支持 SSE 和 WebSocket）
     val ktorVersion = "3.0.3"
@@ -169,6 +169,15 @@ dependencies {
     implementation("io.ktor:ktor-server-cors:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
 
+}
+
+// 🔧 排除 Logback 依赖，避免与 IDEA 内置 SLF4J 实现冲突
+// - IDEA 内置 SLF4J 实现会将日志写入 idea.log
+// - 保留 slf4j-api（unified-logging 需要）
+configurations.all {
+    exclude(group = "ch.qos.logback", module = "logback-classic")
+    exclude(group = "ch.qos.logback", module = "logback-core")
+    exclude(group = "org.slf4j", module = "jul-to-slf4j")
 }
 
 // 从 CHANGELOG.md 提取最新版本的变更日志

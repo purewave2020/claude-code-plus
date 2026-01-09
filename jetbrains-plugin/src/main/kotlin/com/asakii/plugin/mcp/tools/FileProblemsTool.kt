@@ -28,10 +28,10 @@ import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiRecursiveElementVisitor
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.io.File
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("FileProblemsTool")
 
 /**
  * 问题严重级别

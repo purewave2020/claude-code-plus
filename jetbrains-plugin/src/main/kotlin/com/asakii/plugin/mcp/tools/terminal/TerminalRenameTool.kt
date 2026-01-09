@@ -2,9 +2,9 @@ package com.asakii.plugin.mcp.tools.terminal
 
 import com.asakii.plugin.mcp.getString
 import kotlinx.serialization.json.JsonObject
-import mu.KotlinLogging
+import com.asakii.logging.*
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("TerminalRenameTool")
 
 /**
  * TerminalRename 工具 - 重命名终端会话

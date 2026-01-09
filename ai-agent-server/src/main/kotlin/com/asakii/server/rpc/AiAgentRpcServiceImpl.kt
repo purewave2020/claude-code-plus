@@ -59,10 +59,8 @@ import com.asakii.server.mcp.McpHttpGateway
 import com.asakii.server.mcp.UserInteractionMcpServer
 import com.asakii.server.mcp.McpProviders
 import com.asakii.server.services.FileContentCache
-import com.asakii.server.logging.StandaloneLogging
-import com.asakii.server.logging.asyncInfo
+import com.asakii.logging.*
 import com.asakii.server.settings.ClaudeSettingsLoader
-import mu.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -107,7 +105,7 @@ class AiAgentRpcServiceImpl(
 ) : AiAgentRpcService {
 
     // 使用 server.log 专用 logger（SDK 日志）
-    private val sdkLog = KotlinLogging.logger(StandaloneLogging.SDK_LOGGER)
+    private val sdkLog = getLogger("AiAgentRpcService")
     private val jsonPretty = Json { prettyPrint = true; ignoreUnknownKeys = true }
     private val sessionId = UUID.randomUUID().toString()
     private val messageHistory = mutableListOf<RpcMessage>()
@@ -187,16 +185,16 @@ class AiAgentRpcServiceImpl(
     private val connectTimeoutMs = 30_000L
 
     override suspend fun connect(options: RpcConnectOptions?): RpcConnectResult {
-        sdkLog.info("🔌 [SDK] 建立会话: sessionId=$sessionId")
+        sdkLog.info { "🔌 [SDK] 建立会话: sessionId=$sessionId" }
         var normalizedOptions = options ?: lastConnectOptions ?: RpcConnectOptions()
-        sdkLog.debug("🔌 [SDK] 连接选项: provider=${normalizedOptions.provider}, model=${normalizedOptions.model}, permissionMode=${normalizedOptions.permissionMode}")
+        sdkLog.debug { "🔌 [SDK] 连接选项: provider=${normalizedOptions.provider}, model=${normalizedOptions.model}, permissionMode=${normalizedOptions.permissionMode}" }
 
         // Codex sandbox 模式变更检测：如果 sandbox 模式改变，需要创建新线程而不是恢复旧线程
         // 因为 Codex 的 sandbox 参数只在 thread/start 时设置，resumeThread 不支持修改
         val lastSandbox = lastConnectOptions?.sandboxMode
         val newSandbox = normalizedOptions.sandboxMode
         if (lastSandbox != null && newSandbox != null && lastSandbox != newSandbox) {
-            sdkLog.info("🔄 [SDK] Codex sandbox 模式变更: $lastSandbox -> $newSandbox，清除 resumeSessionId 以创建新线程")
+            sdkLog.info { "🔄 [SDK] Codex sandbox 模式变更: $lastSandbox -> $newSandbox，清除 resumeSessionId 以创建新线程" }
             normalizedOptions = normalizedOptions.copy(resumeSessionId = null)
         }
 
@@ -204,12 +202,12 @@ class AiAgentRpcServiceImpl(
 
         val connectOptions = buildConnectOptions(normalizedOptions)
         currentProvider = connectOptions.provider
-        sdkLog.info("[connect] provider=${connectOptions.provider}, model=${connectOptions.model ?: "default"}")
+        sdkLog.info { "[connect] provider=${connectOptions.provider}, model=${connectOptions.model ?: "default"}" }
 
-        sdkLog.info("🔌 [SDK] 创建 ${connectOptions.provider} 客户端...")
+        sdkLog.info { "🔌 [SDK] 创建 ${connectOptions.provider} 客户端..." }
         val permissionRequester = buildPermissionRequester()
         val newClient = UnifiedAgentClientFactory.create(connectOptions.provider, permissionRequester)
-        sdkLog.info("[connect] clientImpl=${newClient::class.qualifiedName}, clientProvider=${newClient.provider}")
+        sdkLog.info { "[connect] clientImpl=${newClient::class.qualifiedName}, clientProvider=${newClient.provider}" }
 
         // 添加超时保护，避免无限阻塞
         try {
@@ -218,18 +216,19 @@ class AiAgentRpcServiceImpl(
             }
         } catch (e: NodeNotFoundException) {
             // Node.js 未找到或配置路径无效，转换为自定义 RSocket 错误码
-            sdkLog.error("❌ [SDK] Node.js 未找到: ${e.message}")
+            sdkLog.error { "❌ [SDK] Node.js 未找到: ${e.message}" }
             throw RSocketError.Custom(RSocketErrorCodes.NODE_NOT_FOUND, e.message ?: "Node.js not found")
         } catch (e: CLINotFoundException) {
             // Claude CLI 未找到，转换为自定义 RSocket 错误码
-            sdkLog.error("❌ [SDK] Claude CLI 未找到: ${e.message}")
+            sdkLog.error { "❌ [SDK] Claude CLI 未找到: ${e.message}" }
             throw RSocketError.Custom(RSocketErrorCodes.CLI_NOT_FOUND, e.message ?: "Claude CLI not found")
         } catch (e: TimeoutCancellationException) {
-            sdkLog.error("❌ [SDK] 连接超时 (${connectTimeoutMs}ms)，请检查网络或 Claude CLI 状态")
-            throw RuntimeException("连接超时：Claude CLI 未能在 ${connectTimeoutMs / 1000} 秒内启动", e)
+            val providerName = connectOptions.provider.name
+            sdkLog.error { "❌ [SDK] 连接超时 (${connectTimeoutMs}ms)，请检查网络或 $providerName 状态" }
+            throw RuntimeException("连接超时：$providerName 未能在 ${connectTimeoutMs / 1000} 秒内启动", e)
         }
         client = newClient
-        sdkLog.info("[connect] client connected: isConnected=${newClient.isConnected()}")
+        sdkLog.info { "[connect] client connected: isConnected=${newClient.isConnected()}" }
 
         if (connectOptions.provider == AiAgentProvider.CODEX) {
             scope.launch {
@@ -237,9 +236,9 @@ class AiAgentRpcServiceImpl(
                     withTimeout(10_000L) { newClient.getMcpStatus() }
                 }.onSuccess { statusList ->
                     val summary = statusList.joinToString { info -> "${info.name}:${info.status}" }
-                    sdkLog.info("[MCP] Codex status auto-check: ${statusList.size} server(s) -> $summary")
+                    sdkLog.info { "[MCP] Codex status auto-check: ${statusList.size} server(s) -> $summary" }
                 }.onFailure { e ->
-                    sdkLog.warn("[MCP] Codex status auto-check failed: ${e.message}")
+                    sdkLog.warn { "[MCP] Codex status auto-check failed: ${e.message}" }
                 }
             }
         }
@@ -256,13 +255,13 @@ class AiAgentRpcServiceImpl(
             resumeSessionId = providerSessionId ?: normalizedOptions.resumeSessionId
         )
 
-        sdkLog.info("✅ [SDK] 已连接: provider=${connectOptions.provider}, model=${connectOptions.model ?: "default"}")
+        sdkLog.info { "✅ [SDK] 已连接: provider=${connectOptions.provider}, model=${connectOptions.model ?: "default"}" }
 
         // 设置当前 AI 会话 ID，用于终端默认会话关联
         mcpProviders.terminal.setCurrentAiSession(sessionId)
 
         val capabilities = newClient.getCapabilities().toRpcCapabilities()
-        sdkLog.debug("✅ [SDK] 能力: canInterrupt=${capabilities.canInterrupt}, canThink=${capabilities.canThink}")
+        sdkLog.debug { "✅ [SDK] 能力: canInterrupt=${capabilities.canInterrupt}, canThink=${capabilities.canThink}" }
 
         val projectCwd = ideTools.getProjectPath().takeIf { it.isNotBlank() }
 
@@ -279,8 +278,8 @@ class AiAgentRpcServiceImpl(
 
     override fun query(message: String): Flow<RpcMessage> {
         val clientName = client?.javaClass?.simpleName ?: "null"
-        sdkLog.info("[query] provider=$currentProvider, client=$clientName")
-        sdkLog.info("📤 [SDK] query: message=${message.take(200)}${if (message.length > 200) "..." else ""}")
+        sdkLog.info { "[query] provider=$currentProvider, client=$clientName" }
+        sdkLog.info { "📤 [SDK] query: message=${message.take(200)}${if (message.length > 200) "..." else ""}" }
         return executeTurn { unifiedClient ->
             unifiedClient.sendMessage(
                 AgentMessageInput(text = message, sessionId = sessionId)
@@ -290,13 +289,13 @@ class AiAgentRpcServiceImpl(
 
     override fun queryWithContent(content: List<RpcContentBlock>): Flow<RpcMessage> {
         val clientName = client?.javaClass?.simpleName ?: "null"
-        sdkLog.info("[queryWithContent] provider=$currentProvider, client=$clientName")
-        sdkLog.info("📤 [SDK] queryWithContent: blocks=${content.size}")
+        sdkLog.info { "[queryWithContent] provider=$currentProvider, client=$clientName" }
+        sdkLog.info { "📤 [SDK] queryWithContent: blocks=${content.size}" }
         content.forEachIndexed { idx, block ->
             when (block) {
-                is RpcTextBlock -> sdkLog.debug("📤 [SDK]   [$idx] TextBlock: ${block.text.take(100)}...")
-                is RpcImageBlock -> sdkLog.debug("📤 [SDK]   [$idx] ImageBlock: ${block.source.mediaType}")
-                else -> sdkLog.debug("📤 [SDK]   [$idx] ${block::class.simpleName}")
+                is RpcTextBlock -> sdkLog.debug { "📤 [SDK]   [$idx] TextBlock: ${block.text.take(100)}..." }
+                is RpcImageBlock -> sdkLog.debug { "📤 [SDK]   [$idx] ImageBlock: ${block.source.mediaType}" }
+                else -> sdkLog.debug { "📤 [SDK]   [$idx] ${block::class.simpleName}" }
             }
         }
         return executeTurn { unifiedClient ->
@@ -308,26 +307,26 @@ class AiAgentRpcServiceImpl(
     }
 
     override suspend fun interrupt(): RpcStatusResult {
-        sdkLog.info("⏹️ [SDK] 中断当前回合")
+        sdkLog.info { "⏹️ [SDK] 中断当前回合" }
         // 直接调用 SDK 的 interrupt，不再等待 query 流的完成信号
         client?.interrupt()
-        sdkLog.info("✅ [SDK] interrupt 请求已提交")
+        sdkLog.info { "✅ [SDK] interrupt 请求已提交" }
         return RpcStatusResult(status = RpcSessionStatus.INTERRUPTED)
     }
 
     override suspend fun runInBackground(): RpcStatusResult {
-        sdkLog.info("🔄 [SDK] 将任务移到后台运行")
+        sdkLog.info { "🔄 [SDK] 将任务移到后台运行" }
         val activeClient = client ?: error("AI Agent 尚未连接，请先调用 connect()")
         activeClient.runInBackground()
-        sdkLog.info("✅ [SDK] runInBackground 请求已提交")
+        sdkLog.info { "✅ [SDK] runInBackground 请求已提交" }
         return RpcStatusResult(status = RpcSessionStatus.CONNECTED)
     }
 
     override suspend fun setMaxThinkingTokens(maxThinkingTokens: Int?): RpcSetMaxThinkingTokensResult {
-        sdkLog.info("🧠 [SDK] 设置思考 token 上限: $maxThinkingTokens")
+        sdkLog.info { "🧠 [SDK] 设置思考 token 上限: $maxThinkingTokens" }
         val activeClient = client ?: error("AI Agent 尚未连接，请先调用 connect()")
         activeClient.setMaxThinkingTokens(maxThinkingTokens)
-        sdkLog.info("✅ [SDK] setMaxThinkingTokens 请求已提交: $maxThinkingTokens")
+        sdkLog.info { "✅ [SDK] setMaxThinkingTokens 请求已提交: $maxThinkingTokens" }
         return RpcSetMaxThinkingTokensResult(maxThinkingTokens = maxThinkingTokens)
     }
 
@@ -338,7 +337,7 @@ class AiAgentRpcServiceImpl(
     }
 
     override suspend fun setModel(model: String): RpcSetModelResult {
-        sdkLog.info("鈿欙笍 [AI-Agent] 鍒囨崲妯″瀷 -> $model")
+        sdkLog.info { "鈿欙笍 [AI-Agent] 鍒囨崲妯″瀷 -> $model" }
         val base = lastConnectOptions ?: RpcConnectOptions()
         val updated = base.copy(model = model)
         connect(updated)
@@ -346,7 +345,7 @@ class AiAgentRpcServiceImpl(
     }
 
     override suspend fun setPermissionMode(mode: RpcPermissionMode): RpcSetPermissionModeResult {
-        sdkLog.info("鈿欙笍 [AI-Agent] 鍒囨崲鏉冮檺妯″紡 -> $mode")
+        sdkLog.info { "鈿欙笍 [AI-Agent] 鍒囨崲鏉冮檺妯″紡 -> $mode" }
         val activeClient = client ?: error("AI Agent 灏氭湭杩炴帴锛岃鍏堣皟鐢?connect()")
 
         // 灏?RPC 鏉冮檺妯″紡杞崲涓?SDK 鏉冮檺妯″紡

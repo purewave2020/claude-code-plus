@@ -21,7 +21,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import mu.KotlinLogging
+import com.asakii.logging.*
 
 @Serializable
 data class UserAnswerItem(
@@ -136,7 +136,7 @@ data class ClaudeOptionItem(
     val description: String = ""
 )
 
-private val mcpLogger = KotlinLogging.logger {}
+private val mcpLogger = getLogger("UserInteractionMcpServer")
 
 @McpServerConfig(
     name = "user_interaction",

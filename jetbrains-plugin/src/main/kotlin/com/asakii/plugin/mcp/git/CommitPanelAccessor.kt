@@ -6,10 +6,10 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.CheckinProjectPanel
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ChangeListManager
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.lang.ref.WeakReference
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("CommitPanelAccessor")
 
 /**
  * Commit 面板访问器（项目级单例）

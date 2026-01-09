@@ -15,7 +15,7 @@ import kotlinx.serialization.json.*
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
-import mu.KotlinLogging
+import com.asakii.logging.*
 import kotlin.jvm.JvmOverloads
 
 /**
@@ -96,7 +96,7 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
         encodeDefaults = true
     }
     
-    private val logger = KotlinLogging.logger {}
+    private val logger = getLogger("ClaudeCodeSdkClient")
     
     /**
      * Format systemPrompt for logging (handles String, SystemPromptPreset, or null).
@@ -121,73 +121,73 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
      */
     @JvmOverloads
     suspend fun connect(prompt: String? = null) {
-        logger.info("🔌 [SDK] 开始连接到Claude CLI...")
-        
+        logger.info { "🔌 [SDK] 开始连接到Claude CLI..." }
+
         // 打印 connect 参数
-        logger.info("📋 [SDK] connect 调用参数:")
-        logger.info("  - prompt: ${prompt ?: "null"}")
-        logger.info("📋 [SDK] 客户端配置 (在创建时传入):")
-        logger.info("  - model: ${options.model}")
-        logger.info("  - permissionMode: ${options.permissionMode}")
-        logger.info("  - maxTurns: ${options.maxTurns}")
-        logger.info("  - systemPrompt: ${formatSystemPrompt(options.systemPrompt)}")
-        logger.info("  - dangerouslySkipPermissions: ${options.dangerouslySkipPermissions}")
-        logger.info("  - allowDangerouslySkipPermissions: ${options.allowDangerouslySkipPermissions}")
-        logger.info("  - allowedTools: ${options.allowedTools}")
-        logger.info("  - includePartialMessages: ${options.includePartialMessages}")
-        logger.info("  - canUseTool: ${options.canUseTool != null}")
-        logger.info("  - permissionPromptToolName: ${options.permissionPromptToolName}")
+        logger.info { "📋 [SDK] connect 调用参数:" }
+        logger.info { "  - prompt: ${prompt ?: "null"}" }
+        logger.info { "📋 [SDK] 客户端配置 (在创建时传入):" }
+        logger.info { "  - model: ${options.model}" }
+        logger.info { "  - permissionMode: ${options.permissionMode}" }
+        logger.info { "  - maxTurns: ${options.maxTurns}" }
+        logger.info { "  - systemPrompt: ${formatSystemPrompt(options.systemPrompt)}" }
+        logger.info { "  - dangerouslySkipPermissions: ${options.dangerouslySkipPermissions}" }
+        logger.info { "  - allowDangerouslySkipPermissions: ${options.allowDangerouslySkipPermissions}" }
+        logger.info { "  - allowedTools: ${options.allowedTools}" }
+        logger.info { "  - includePartialMessages: ${options.includePartialMessages}" }
+        logger.info { "  - canUseTool: ${options.canUseTool != null}" }
+        logger.info { "  - permissionPromptToolName: ${options.permissionPromptToolName}" }
         
         // Create or use provided transport
         actualTransport = transport ?: SubprocessTransport(options, streamingMode = true)
-        logger.info("🚀 创建SubprocessTransport，流模式: true")
-        
+        logger.info { "🚀 创建SubprocessTransport，流模式: true" }
+
         // Create control protocol
         controlProtocol = ControlProtocol(actualTransport!!, options).apply {
             systemInitCallback = { modelId -> onSystemInit(modelId) }
         }
-        logger.info("📡 创建ControlProtocol")
-        
+        logger.info { "📡 创建ControlProtocol" }
+
         // Create client scope for background tasks
         clientScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-        logger.info("⚡ 创建ClientScope")
-        
+        logger.info { "⚡ 创建ClientScope" }
+
         try {
             // Start transport
-            logger.info("🚀 启动Transport连接...")
+            logger.info { "🚀 启动Transport连接..." }
             actualTransport!!.connect()
-            logger.info("✅ Transport连接成功")
-            
+            logger.info { "✅ Transport连接成功" }
+
             // 注册 MCP 服务器 - 必须在 startMessageProcessing 之前！
             // 因为 CLI 启动后会立即发送 mcp_message 请求
-            logger.info("📦 注册 MCP 服务器...")
+            logger.info { "📦 注册 MCP 服务器..." }
             controlProtocol!!.registerMcpServers()
-            logger.info("✅ MCP 服务器注册完成")
+            logger.info { "✅ MCP 服务器注册完成" }
 
             // Start message processing
-            logger.info("📥 启动消息处理...")
+            logger.info { "📥 启动消息处理..." }
             controlProtocol!!.startMessageProcessing(clientScope!!)
-            logger.info("✅ 消息处理已启动")
+            logger.info { "✅ 消息处理已启动" }
 
             // Initialize control protocol (registers hooks)
-            logger.info("🔧 初始化控制协议...")
+            logger.info { "🔧 初始化控制协议..." }
             controlProtocol!!.initialize()
-            logger.info("✅ 控制协议初始化完成")
+            logger.info { "✅ 控制协议初始化完成" }
 
             serverInfo = buildJsonObject {
                 put("status", "connected")
                 put("mode", "stream-json")
             }
-            logger.info("🎉 Claude SDK客户端连接成功!")
-            
+            logger.info { "🎉 Claude SDK客户端连接成功!" }
+
             // Send initial prompt if provided
-            prompt?.let { 
-                logger.info("📝 发送初始提示: $it")
-                query(it) 
+            prompt?.let {
+                logger.info { "📝 发送初始提示: $it" }
+                query(it)
             }
-            
+
         } catch (e: Exception) {
-            logger.error("❌ 连接失败: ${e.message}")
+            logger.error { "❌ 连接失败: ${e.message}" }
             // Cleanup on failure
             disconnect()
             throw e
@@ -232,12 +232,12 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
         runCommand {
             ensureConnected()
 
-            logger.info("💬 发送用户消息 [session=${message.sessionId}]: ${message.message.content.size} 个内容块")
+            logger.info { "💬 发送用户消息 [session=${message.sessionId}]: ${message.message.content.size} 个内容块" }
 
             val jsonString = streamJsonFormat.encodeToString(StreamJsonUserMessage.serializer(), message)
-            logger.info("📤 发送JSON消息: $jsonString")
+            logger.info { "📤 发送JSON消息: $jsonString" }
             actualTransport!!.write(jsonString)
-            logger.info("✅ 消息已发送到CLI")
+            logger.info { "✅ 消息已发送到CLI" }
         }
     }
 
@@ -267,7 +267,7 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
      */
     fun receiveResponse(): Flow<Message> {
         ensureConnected()
-        logger.info("📬 [receiveResponse] 开始接收Claude响应消息...")
+        logger.info { "📬 [receiveResponse] 开始接收Claude响应消息..." }
 
         var messageCount = 0
 
@@ -276,23 +276,23 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
             .onEach { message ->
                 messageCount++
                 val messageType = message::class.simpleName
-                logger.info("📨 [receiveResponse] 收到消息 #$messageCount: $messageType")
+                logger.info { "📨 [receiveResponse] 收到消息 #$messageCount: $messageType" }
 
                 when (message) {
                     is AssistantMessage -> {
                         val content = message.content.filterIsInstance<TextBlock>()
                             .joinToString("") { it.text }
-                        logger.info("🤖 [receiveResponse] Claude回复: ${content.take(100)}${if (content.length > 100) "..." else ""}")
+                        logger.info { "🤖 [receiveResponse] Claude回复: ${content.take(100)}${if (content.length > 100) "..." else ""}" }
                     }
                     is ResultMessage -> {
-                        logger.info("🎯 [receiveResponse] 结果消息: subtype=${message.subtype}, isError=${message.isError}")
-                        logger.info("📊 [receiveResponse] 统计: 共收到 $messageCount 条消息")
+                        logger.info { "🎯 [receiveResponse] 结果消息: subtype=${message.subtype}, isError=${message.isError}" }
+                        logger.info { "📊 [receiveResponse] 统计: 共收到 $messageCount 条消息" }
                     }
                     is UserMessage -> {
-                        logger.info("👤 [receiveResponse] 用户消息: isReplay=${message.isReplay}")
+                        logger.info { "👤 [receiveResponse] 用户消息: isReplay=${message.isReplay}" }
                     }
                     else -> {
-                        logger.info("📄 [receiveResponse] 其他消息: $messageType")
+                        logger.info { "📄 [receiveResponse] 其他消息: $messageType" }
                     }
                 }
             }
@@ -303,11 +303,11 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
             }
             .onCompletion { cause ->
                 if (cause == null) {
-                    logger.info("✅ [receiveResponse] Flow 正常完成，共收到 $messageCount 条消息")
+                    logger.info { "✅ [receiveResponse] Flow 正常完成，共收到 $messageCount 条消息" }
                 } else if (cause is kotlinx.coroutines.CancellationException) {
-                    logger.info("ℹ️ [receiveResponse] Flow 被取消，共收到 $messageCount 条消息")
+                    logger.info { "ℹ️ [receiveResponse] Flow 被取消，共收到 $messageCount 条消息" }
                 } else {
-                    logger.warn("⚠️ [receiveResponse] Flow 异常结束: ${cause.message}")
+                    logger.warn { "⚠️ [receiveResponse] Flow 异常结束: ${cause.message}" }
                 }
             }
     }
@@ -362,11 +362,11 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
         runCommand {
             ensureConnected()
             val targetInfo = targetId?.let { "(agent:$it)" } ?: ""
-            logger.info("⏸️  将当前任务移到后台运行 $targetInfo")
+            logger.info { "⏸️  将当前任务移到后台运行 $targetInfo" }
 
             controlProtocol!!.agentRunToBackground(targetId)
 
-            logger.info("✅ 任务已移到后台")
+            logger.info { "✅ 任务已移到后台" }
         }
     }
 
@@ -454,11 +454,11 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
         runCommand {
             ensureConnected()
             val modeString = mode.toCliString()
-            logger.info("🔐 设置权限模式: $mode ($modeString)")
+            logger.info { "🔐 设置权限模式: $mode ($modeString)" }
 
             controlProtocol!!.setPermissionMode(modeString)
 
-            logger.info("✅ 权限模式已更新为: $mode")
+            logger.info { "✅ 权限模式已更新为: $mode" }
         }
     }
 
@@ -500,7 +500,7 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
      */
     suspend fun setModel(model: String?): String? = runCommand {
         ensureConnected()
-        logger.info("🤖 设置模型: ${model ?: "default"}")
+        logger.info { "🤖 设置模型: ${model ?: "default"}" }
 
         val deferred = CompletableDeferred<String?>()
         pendingModelUpdate?.cancel()
@@ -517,14 +517,14 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
         val result = try {
             withTimeout(5_000) { deferred.await() }
         } catch (e: TimeoutCancellationException) {
-            logger.warn("等待模型切换确认超时，使用请求模型作为回退: ${model ?: "default"}")
+            logger.warn { "等待模型切换确认超时，使用请求模型作为回退: ${model ?: "default"}" }
             model
         } finally {
             pendingModelUpdate = null
         }
 
         updateCachedModel(result ?: model)
-        logger.info("✅ 模型已更新为: ${result ?: model ?: "default"}")
+        logger.info { "✅ 模型已更新为: ${result ?: model ?: "default"}" }
         result ?: model
     }
 
@@ -538,9 +538,9 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
      */
     suspend fun setMaxThinkingTokens(maxThinkingTokens: Int?) = runCommand {
         ensureConnected()
-        logger.info("🧠 设置思考 token 上限: $maxThinkingTokens")
+        logger.info { "🧠 设置思考 token 上限: $maxThinkingTokens" }
         controlProtocol!!.setMaxThinkingTokens(maxThinkingTokens)
-        logger.info("✅ 思考 token 上限已设置为: $maxThinkingTokens")
+        logger.info { "✅ 思考 token 上限已设置为: $maxThinkingTokens" }
     }
 
     /**
@@ -555,11 +555,11 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
         val transportConnected = actualTransport?.isConnected() == true
         val hasBasicConnection = serverInfo != null
 
-        logger.error("🔍 [isConnected] transport=${transportConnected}, hasBasicConnection=${hasBasicConnection}, serverInfo=$serverInfo")
+        logger.error { "🔍 [isConnected] transport=${transportConnected}, hasBasicConnection=${hasBasicConnection}, serverInfo=$serverInfo" }
 
         // 如果transport连接且有基本连接信息（包括fallback模式），则认为已连接
         val result = transportConnected && hasBasicConnection
-        logger.error("🔍 [isConnected] 最终结果: $result")
+        logger.error { "🔍 [isConnected] 最终结果: $result" }
         return result
     }
     

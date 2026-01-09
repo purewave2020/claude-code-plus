@@ -11,8 +11,7 @@ import java.io.*
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.logging.Level
-import java.util.logging.Logger
+import com.asakii.logging.*
 
 /**
  * Codex App-Server JSON-RPC 2.0 客户端
@@ -28,7 +27,7 @@ class CodexJsonRpcClient(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 ) : Closeable {
     @PublishedApi
-    internal val logger = Logger.getLogger(CodexJsonRpcClient::class.java.name)
+    internal val logger = getLogger("CodexJsonRpcClient")
 
     @PublishedApi
     internal val json = Json {
@@ -73,15 +72,13 @@ class CodexJsonRpcClient(
                     try {
                         processMessage(line)
                     } catch (e: Exception) {
-                        logger.warning("Error processing message: ${e.message}")
-                        if (logger.isLoggable(Level.FINE)) {
-                            logger.fine("Failed message payload: ${line.take(500)}")
-                        }
+                        logger.warn { "Error processing message: ${e.message}" }
+                        logger.debug { "Failed message payload: ${line.take(500)}" }
                     }
                 }
             } catch (e: IOException) {
                 if (isRunning.get()) {
-                    logger.warning("Reader error: ${e.message}")
+                    logger.warn { "Reader error: ${e.message}" }
                 }
             } finally {
                 isRunning.set(false)
@@ -98,9 +95,9 @@ class CodexJsonRpcClient(
             obj.containsKey("id") && (obj.containsKey("result") || obj.containsKey("error")) -> {
                 val response = json.decodeFromJsonElement<JsonRpcResponse>(jsonElement)
                 if (response.error != null) {
-                    logger.warning("RPC response error: id=${response.id} code=${response.error.code} msg=${response.error.message}")
-                } else if (logger.isLoggable(Level.FINE)) {
-                    logger.fine("RPC response: id=${response.id}")
+                    logger.warn { "RPC response error: id=${response.id} code=${response.error.code} msg=${response.error.message}" }
+                } else {
+                    logger.debug { "RPC response: id=${response.id}" }
                 }
                 pendingRequests.remove(response.id)?.complete(response)
             }
@@ -108,15 +105,13 @@ class CodexJsonRpcClient(
             obj.containsKey("id") && obj.containsKey("method") -> {
                 val rawId = obj["id"]!!  // 保留原始 id（整数或字符串）
                 val request = json.decodeFromJsonElement<JsonRpcRequest>(jsonElement)
-                logger.info("RPC server request: method=${request.method} id=${request.id}")
+                logger.info { "RPC server request: method=${request.method} id=${request.id}" }
                 handleServerRequest(request, rawId)
             }
             // 通知: 只有 method，没有 id
             obj.containsKey("method") && !obj.containsKey("id") -> {
                 val notification = json.decodeFromJsonElement<JsonRpcNotification>(jsonElement)
-                if (logger.isLoggable(Level.FINE)) {
-                    logger.fine("RPC notification: method=${notification.method}")
-                }
+                logger.debug { "RPC notification: method=${notification.method}" }
                 _notifications.emit(notification)
             }
         }
@@ -154,9 +149,7 @@ class CodexJsonRpcClient(
         val requestId = UUID.randomUUID().toString()
         val deferred = CompletableDeferred<JsonRpcResponse>()
         pendingRequests[requestId] = deferred
-        if (logger.isLoggable(Level.FINE)) {
-            logger.fine("RPC request: method=$method id=$requestId")
-        }
+        logger.debug { "RPC request: method=$method id=$requestId" }
 
         val request = buildJsonObject {
             put("method", method)
@@ -194,9 +187,7 @@ class CodexJsonRpcClient(
         val notification = buildJsonObject {
             put("method", method)
         }
-        if (logger.isLoggable(Level.FINE)) {
-            logger.fine("RPC notify: method=$method")
-        }
+        logger.debug { "RPC notify: method=$method" }
         sendLine(json.encodeToString(notification))
     }
 
@@ -211,9 +202,7 @@ class CodexJsonRpcClient(
                 put("params", encodeToJsonElementSafely(it))
             }
         }
-        if (logger.isLoggable(Level.FINE)) {
-            logger.fine("RPC notify: method=$method")
-        }
+        logger.debug { "RPC notify: method=$method" }
         sendLine(json.encodeToString(notification))
     }
 
@@ -229,9 +218,7 @@ class CodexJsonRpcClient(
             put("id", rawId)  // 使用原始类型
             put("result", encodeToJsonElementSafely(result))
         }
-        if (logger.isLoggable(Level.FINE)) {
-            logger.fine("RPC response to server request: id=$rawId")
-        }
+        logger.debug { "RPC response to server request: id=$rawId" }
         sendLine(json.encodeToString(response))
     }
 
@@ -245,9 +232,7 @@ class CodexJsonRpcClient(
             put("id", requestId)
             put("result", encodeToJsonElementSafely(result))
         }
-        if (logger.isLoggable(Level.FINE)) {
-            logger.fine("RPC response to server request: id=$requestId")
-        }
+        logger.debug { "RPC response to server request: id=$requestId" }
         sendLine(json.encodeToString(response))
     }
 

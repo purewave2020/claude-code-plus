@@ -6,7 +6,7 @@ import java.io.File
 import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
-import java.util.logging.Logger
+import com.asakii.logging.*
 
 /**
  * Codex App-Server 进程管理器
@@ -58,7 +58,7 @@ class CodexAppServerProcess private constructor(
     }
 
     companion object {
-        private val logger = Logger.getLogger(CodexAppServerProcess::class.java.name)
+        private val logger = getLogger("CodexAppServerProcess")
 
         /**
          * 启动 Codex App-Server 进程
@@ -77,9 +77,9 @@ class CodexAppServerProcess private constructor(
             scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         ): CodexAppServerProcess {
             val executablePath = codexPath?.toString() ?: findCodexExecutable()
-            logger.info(
+            logger.info {
                 "Starting codex app-server: path=$executablePath cwd=${workingDirectory?.toAbsolutePath() ?: "default"} configOverrides=$configOverrides"
-            )
+            }
 
             val command = mutableListOf(executablePath)
             command.add("app-server")
@@ -117,7 +117,7 @@ class CodexAppServerProcess private constructor(
 
             startStderrLogger(process, scope)
             process.onExit().thenAccept { exited ->
-                logger.warning("codex app-server exited: code=${exited.exitValue()}")
+                logger.warn { "codex app-server exited: code=${exited.exitValue()}" }
             }
 
             val stdin = process.outputStream
@@ -206,12 +206,12 @@ class CodexAppServerProcess private constructor(
                     stderr.bufferedReader(Charsets.UTF_8).useLines { lines ->
                         lines.forEach { line ->
                             if (line.isNotBlank()) {
-                                logger.warning("[codex stderr] $line")
+                                logger.warn { "[codex stderr] $line" }
                             }
                         }
                     }
                 } catch (e: Exception) {
-                    logger.warning("[codex stderr] reader failed: ${e.message}")
+                    logger.warn { "[codex stderr] reader failed: ${e.message}" }
                 }
             }
         }

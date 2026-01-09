@@ -1,7 +1,7 @@
 package com.asakii.server.settings
 
 import kotlinx.serialization.json.Json
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Claude settings 加载与合并工具。
  */
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("ClaudeSettingsLoader")
 
 object ClaudeSettingsLoader {
 

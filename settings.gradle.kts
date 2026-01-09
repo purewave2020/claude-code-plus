@@ -40,5 +40,6 @@ include(
     "ai-agent-sdk",
     "ai-agent-rpc-api",
     "ai-agent-proto",  // RSocket + Protobuf 通信模块
-    "ai-agent-server"
+    "ai-agent-server",
+    "unified-logging"  // 统一日志模块 (SLF4J)
 )

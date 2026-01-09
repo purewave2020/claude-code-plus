@@ -1,6 +1,6 @@
 package com.asakii.server.services
 
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.io.File
 import java.nio.file.Files
 import java.util.UUID
@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
  * 2. 提供图片保存、读取功能
  * 3. 定期清理超过 24 小时的临时文件
  */
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("TempImageService")
 
 object TempImageService {
 

@@ -26,7 +26,7 @@ import java.io.OutputStreamWriter
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Properties
-import mu.KotlinLogging
+import com.asakii.logging.*
 
 /**
  * Transport implementation using subprocess for Claude CLI communication.
@@ -66,7 +66,7 @@ class SubprocessTransport(
         isLenient = true
     }
 
-    private val logger = KotlinLogging.logger {}
+    private val logger = getLogger("SubprocessTransport")
 
     /**
      * 检测当前操作系统是否为 Windows
@@ -108,7 +108,7 @@ class SubprocessTransport(
     override suspend fun connect() = withContext(Dispatchers.IO) {
         try {
             val command = buildCommand()
-            logger.info("🔧 构建的命令: ${command.joinToString(" ")}")
+            logger.info { "🔧 构建的命令: ${command.joinToString(" ")}" }
 
             val processBuilder = ProcessBuilder(command)
             processBuilder.directory(options.cwd?.toFile() ?: java.io.File(System.getProperty("user.dir")))
@@ -119,12 +119,12 @@ class SubprocessTransport(
                 env[key] = value
             }
 
-            logger.info("⚡ 启动Claude CLI进程...")
+            logger.info { "⚡ 启动Claude CLI进程..." }
 
             // 通过 shell 执行命令，自动加载用户环境变量
             process = processBuilder.start()
 
-            logger.info("✅ Claude CLI进程启动成功, PID: ${process?.pid()}")
+            logger.info { "✅ Claude CLI进程启动成功, PID: ${process?.pid()}" }
 
             // 检查进程是否立即退出
             delay(100) // 短暂等待
@@ -135,8 +135,8 @@ class SubprocessTransport(
                 } catch (e: Exception) {
                     "无法读取stderr: ${e.message}"
                 }
-                logger.error("❌ Claude CLI进程立即退出，退出代码: $exitCode")
-                logger.error("❌ stderr内容: $stderrContent")
+                logger.error { "❌ Claude CLI进程立即退出，退出代码: $exitCode" }
+                logger.error { "❌ stderr内容: $stderrContent" }
                 throw CLIConnectionException("Claude CLI process exited immediately with code $exitCode. stderr: $stderrContent")
             }
 
@@ -144,20 +144,20 @@ class SubprocessTransport(
             writer = BufferedWriter(OutputStreamWriter(process!!.outputStream, Charsets.UTF_8))
             reader = BufferedReader(InputStreamReader(process!!.inputStream, Charsets.UTF_8))
             errorReader = BufferedReader(InputStreamReader(process!!.errorStream, Charsets.UTF_8))
-            logger.info("📡 I/O流设置完成（包含stderr）")
+            logger.info { "📡 I/O流设置完成（包含stderr）" }
 
             isConnectedFlag = true
-            logger.info("🎉 SubprocessTransport连接成功!")
+            logger.info { "🎉 SubprocessTransport连接成功!" }
         } catch (e: java.io.IOException) {
-            logger.error("❌ Claude CLI进程启动失败: ${e.message}")
+            logger.error { "❌ Claude CLI进程启动失败: ${e.message}" }
             // Check if it's a file not found error (CLI not installed)
-            if (e.message?.contains("No such file") == true || 
+            if (e.message?.contains("No such file") == true ||
                 e.message?.contains("not found") == true) {
                 throw CLINotFoundException.withInstallInstructions(isNodeInstalled())
             }
             throw CLIConnectionException("Failed to start Claude CLI process", e)
         } catch (e: Exception) {
-            logger.error("❌ Claude CLI进程启动失败: ${e.message}")
+            logger.error { "❌ Claude CLI进程启动失败: ${e.message}" }
             throw CLIConnectionException("Failed to start Claude CLI process", e)
         }
     }
@@ -165,14 +165,14 @@ class SubprocessTransport(
     override suspend fun write(data: String) = withContext(Dispatchers.IO) {
         try {
             writer?.let { w ->
-                logger.info("📤 向CLI写入数据: $data")
+                logger.info { "📤 向CLI写入数据: $data" }
                 w.write(data)
                 w.newLine()
                 w.flush()
-                logger.info("✅ 数据写入CLI成功")
+                logger.info { "✅ 数据写入CLI成功" }
             } ?: throw TransportException("Transport not connected")
         } catch (e: Exception) {
-            logger.error("❌ 向CLI写入数据失败: ${e.message}")
+            logger.error { "❌ 向CLI写入数据失败: ${e.message}" }
             throw TransportException("Failed to write to CLI stdin", e)
         }
     }
@@ -187,9 +187,9 @@ class SubprocessTransport(
             var currentLine: String? = null
             while (isConnected() && reader?.readLine().also { currentLine = it } != null) {
                 currentLine?.let { line ->
-                    logger.info("📥 从 CLI 读取到原始行: $line")
+                    logger.info { "📥 从 CLI 读取到原始行: $line" }
                     jsonBuffer.append(line)
-                    
+
                     // Parse JSON character by character to detect complete objects
                     for (char in line) {
                         when {
@@ -200,19 +200,19 @@ class SubprocessTransport(
                             !inString && char == '}' -> braceCount--
                         }
                     }
-                    
+
                     // If we have a complete JSON object
                     if (braceCount == 0 && jsonBuffer.isNotEmpty()) {
                         try {
                             val jsonElement = json.parseToJsonElement(jsonBuffer.toString())
-                            logger.info("📨 从CLI读取到完整JSON: ${jsonBuffer.toString()}")
+                            logger.info { "📨 从CLI读取到完整JSON: ${jsonBuffer.toString()}" }
                             emit(jsonElement)
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             // 协程被取消（正常的断开连接），直接重新抛出
-                            logger.info("ℹ️ 消息处理被取消（连接断开）")
+                            logger.info { "ℹ️ 消息处理被取消（连接断开）" }
                             throw e
                         } catch (e: Exception) {
-                            logger.warn("⚠️ JSON解析失败: ${jsonBuffer.toString()}, error: ${e.message}")
+                            logger.warn { "⚠️ JSON解析失败: ${jsonBuffer.toString()}, error: ${e.message}" }
                             throw JSONDecodeException(
                                 "Failed to decode JSON from CLI output",
                                 originalLine = jsonBuffer.toString(),
@@ -225,7 +225,7 @@ class SubprocessTransport(
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             // 协程被取消，正常断开连接，不报错
-            logger.info("ℹ️ Transport 读取被取消（连接断开）")
+            logger.info { "ℹ️ Transport 读取被取消（连接断开）" }
             throw e
         } catch (e: Exception) {
             if (isConnected()) {
@@ -244,7 +244,7 @@ class SubprocessTransport(
                             } catch (e: Exception) {
                                 "Failed to read stderr: ${e.message}"
                             }
-                            logger.error("❌ Claude CLI进程失败，退出代码: $exitCode, stderr: $stderrContent")
+                            logger.error { "❌ Claude CLI进程失败，退出代码: $exitCode, stderr: $stderrContent" }
                             throw ProcessException(
                                 "Command failed with exit code $exitCode",
                                 exitCode = exitCode,
@@ -286,9 +286,9 @@ class SubprocessTransport(
             tempFiles.forEach { tempFile ->
                 try {
                     Files.deleteIfExists(tempFile)
-                    logger.info("🗑️ 清理临时文件: $tempFile")
+                    logger.info { "🗑️ 清理临时文件: $tempFile" }
                 } catch (e: Exception) {
-                    logger.warn("⚠️ 清理临时文件失败: $tempFile - ${e.message}")
+                    logger.warn { "⚠️ 清理临时文件失败: $tempFile - ${e.message}" }
                 }
             }
             tempFiles.clear()
@@ -359,7 +359,7 @@ class SubprocessTransport(
                     // 使用 --system-prompt-file 避免 Windows 命令行长度限制问题
                     // 参考: https://github.com/anthropics/claude-agent-sdk-python/issues/238
                     val tempFile = getOrCreateSystemPromptFile(prompt)
-                    logger.info("📝 将 system-prompt 写入临时文件: $tempFile")
+                    logger.info { "📝 将 system-prompt 写入临时文件: $tempFile" }
                     command.add("--system-prompt-file")
                     command.add(tempFile.toAbsolutePath().toString())
                 }
@@ -372,7 +372,7 @@ class SubprocessTransport(
                             // 参考: https://github.com/anthropics/claude-code/issues/3411
                             // 多行文本在 Windows 上会破坏后续命令行参数的解析
                             val tempFile = getOrCreateSystemPromptFile(appendText)
-                            logger.info("📝 将 append-system-prompt 写入临时文件: $tempFile")
+                            logger.info { "📝 将 append-system-prompt 写入临时文件: $tempFile" }
                             command.add("--append-system-prompt-file")
                             command.add(tempFile.toAbsolutePath().toString())
                         }
@@ -393,7 +393,7 @@ class SubprocessTransport(
         // Append system prompt file（独立参数，用于 MCP 场景追加提示词）
         options.appendSystemPromptFile?.let { appendContent ->
             val tempFile = getOrCreateSystemPromptFile(appendContent)
-            logger.info("📝 将 appendSystemPromptFile 写入临时文件: $tempFile")
+            logger.info { "📝 将 appendSystemPromptFile 写入临时文件: $tempFile" }
             command.add("--append-system-prompt-file")
             command.add(wrapArgForPlatform(tempFile.toAbsolutePath().toString(), isWindows))
         }
@@ -430,7 +430,7 @@ class SubprocessTransport(
 
                 // 根据平台处理 JSON（Windows 需要转义，Unix 直接传递）
                 command.addAll(listOf("--agents", wrapJsonForPlatform(agentsJson, isWindows)))
-                logger.info("🤖 配置自定义代理: ${agents.keys.joinToString(", ")}")
+                logger.info { "🤖 配置自定义代理: ${agents.keys.joinToString(", ")}" }
             }
         }
 
@@ -458,13 +458,13 @@ class SubprocessTransport(
         // Permission prompt tool - 配置授权请求使用的方式
         // 当设置为 "stdio" 时，Claude CLI 会通过控制协议 (control_request/control_response) 发送权限请求
         // SDK 的 ControlProtocol.handlePermissionRequest() 会处理 subtype="can_use_tool" 并调用 canUseTool 回调
-        logger.info("🔍 [buildCommand] options.canUseTool=${options.canUseTool != null}, options.permissionPromptToolName=${options.permissionPromptToolName}")
+        logger.info { "🔍 [buildCommand] options.canUseTool=${options.canUseTool != null}, options.permissionPromptToolName=${options.permissionPromptToolName}" }
         // 如果提供了 canUseTool 回调，自动设置为 "stdio" 以启用控制协议权限请求
         val effectivePermissionPromptTool = options.permissionPromptToolName
             ?: if (options.canUseTool != null) "stdio" else null
         effectivePermissionPromptTool?.let { tool ->
             command.addAll(listOf("--permission-prompt-tool", tool))
-            logger.info("🔐 配置授权工具: $tool")
+            logger.info { "🔐 配置授权工具: $tool" }
         }
 
         // Continue conversation
@@ -540,7 +540,7 @@ class SubprocessTransport(
                 if (serverConfig != null) {
                     serversForCli[name] = serverConfig
                     val typeLabel = serverConfig["type"]?.jsonPrimitive?.contentOrNull ?: "unknown"
-                    logger.info("Added MCP server config $name -> type=$typeLabel")
+                    logger.info { "Added MCP server config $name -> type=$typeLabel" }
                 }
             }
 
@@ -565,8 +565,8 @@ class SubprocessTransport(
 
                 // --mcp-config 参数接受文件路径（不需要 @ 前缀）
                 command.addAll(listOf("--mcp-config", tempFile.toAbsolutePath().toString()))
-                logger.info("🔧 MCP 配置（使用文件）: $tempFile")
-                logger.debug("🔧 MCP 配置内容: $mcpConfigJson")
+                logger.info { "🔧 MCP 配置（使用文件）: $tempFile" }
+                logger.debug { "🔧 MCP 配置内容: $mcpConfigJson" }
             }
         }
         
@@ -576,15 +576,15 @@ class SubprocessTransport(
         when (options.chromeEnabled) {
             true -> {
                 command.add("--chrome")
-                logger.info("🌐 Chrome 集成已启用 (--chrome)")
+                logger.info { "🌐 Chrome 集成已启用 (--chrome)" }
             }
             false -> {
                 command.add("--no-chrome")
-                logger.info("🌐 Chrome 集成已禁用 (--no-chrome)")
+                logger.info { "🌐 Chrome 集成已禁用 (--no-chrome)" }
             }
             null -> {
                 // null: use CLI default (respects user config)
-                logger.debug("🌐 Chrome 集成使用默认配置")
+                logger.debug { "🌐 Chrome 集成使用默认配置" }
             }
         }
 
@@ -604,11 +604,7 @@ class SubprocessTransport(
             command.add("--print")
         }
 
-        logger.info("🔧 完整构建的Claude CLI命令: ${command.joinToString(" ")}")
-
-        // 输出到控制台，方便调试
-        println("📋 原始 Claude CLI 命令:")
-        println("   ${command.joinToString(" ")}")
+        logger.info { "🔧 完整构建的Claude CLI命令: ${command.joinToString(" ")}" }
 
         return command
     }
@@ -623,7 +619,7 @@ class SubprocessTransport(
     private fun findClaudeExecutable(): List<String> {
         // 1. 用户指定路径（最高优先级）
         options.cliPath?.let { customPath ->
-            logger.info("✅ 使用用户指定的 CLI: $customPath")
+            logger.info { "✅ 使用用户指定的 CLI: $customPath" }
             return listOf(customPath.toString())
         }
 
@@ -631,7 +627,7 @@ class SubprocessTransport(
         val bundledCliJs = findBundledCliJs()
         if (bundledCliJs != null) {
             val nodeCommand = findNodeExecutable()
-            logger.info("✅ 使用 SDK 绑定的 CLI: $nodeCommand $bundledCliJs")
+            logger.info { "✅ 使用 SDK 绑定的 CLI: $nodeCommand $bundledCliJs" }
             return listOf(nodeCommand, bundledCliJs)
         }
 
@@ -659,26 +655,26 @@ class SubprocessTransport(
         options.nodePath?.takeIf { it.isNotBlank() }?.let { userPath ->
             val file = java.io.File(userPath)
             if (!file.exists()) {
-                logger.error("❌ 用户配置的 Node.js 路径不存在: $userPath")
+                logger.error { "❌ 用户配置的 Node.js 路径不存在: $userPath" }
                 throw NodeNotFoundException.invalidConfiguredPath(userPath)
             }
             if (!file.canExecute()) {
-                logger.error("❌ 用户配置的 Node.js 路径不可执行: $userPath")
+                logger.error { "❌ 用户配置的 Node.js 路径不可执行: $userPath" }
                 throw NodeNotFoundException.invalidConfiguredPath(userPath)
             }
-            logger.info("✅ 使用用户配置的 Node.js 路径: $userPath")
+            logger.info { "✅ 使用用户配置的 Node.js 路径: $userPath" }
             return userPath
         }
 
         // 2. 尝试自动检测 Node.js 路径
         val detectedPath = detectNodePath()
         if (detectedPath.isNotEmpty()) {
-            logger.info("✅ 检测到 Node.js 路径: $detectedPath")
+            logger.info { "✅ 检测到 Node.js 路径: $detectedPath" }
             return detectedPath
         }
 
         // 3. 无法找到 Node.js → 抛出异常（不再回退到 "node"）
-        logger.error("❌ 未找到 Node.js，请在设置中配置路径或确保 Node.js 在系统 PATH 中")
+        logger.error { "❌ 未找到 Node.js，请在设置中配置路径或确保 Node.js 在系统 PATH 中" }
         throw NodeNotFoundException.notFound()
     }
 
@@ -712,7 +708,7 @@ class SubprocessTransport(
                 return result
             }
         } catch (e: Exception) {
-            logger.debug("⚠️ 检测 Node.js 路径失败: ${e.message}")
+            logger.debug { "⚠️ 检测 Node.js 路径失败: ${e.message}" }
         }
 
         return ""
@@ -734,14 +730,14 @@ class SubprocessTransport(
             }
             val cliVersion = versionProps.getProperty("cli.version")
             if (cliVersion == null) {
-                logger.warn("⚠️ 未找到 cli-version.properties 或 cli.version 属性")
+                logger.warn { "⚠️ 未找到 cli-version.properties 或 cli.version 属性" }
                 return null
             }
 
             // 查找增强版 CLI（使用 .mjs 扩展名）
             val cliJsName = "claude-cli-$cliVersion-enhanced.mjs"
             val resourcePath = "bundled/$cliJsName"
-            logger.info("🔍 查找绑定的 CLI: $resourcePath")
+            logger.info { "🔍 查找绑定的 CLI: $resourcePath" }
             val resource = this::class.java.classLoader.getResource(resourcePath)
 
             if (resource != null) {
@@ -757,29 +753,29 @@ class SubprocessTransport(
 
                     // 如果文件已存在且大小匹配，直接复用
                     if (targetFile.exists() && targetFile.length() == content.size.toLong()) {
-                        logger.info("📦 复用已缓存的 CLI: ${targetFile.absolutePath}")
+                        logger.info { "📦 复用已缓存的 CLI: ${targetFile.absolutePath}" }
                         return targetFile.absolutePath
                     }
 
                     // 否则提取到目录
                     cacheDir.mkdirs()
                     targetFile.writeBytes(content)
-                    logger.info("📦 从 JAR 提取 CLI: ${targetFile.absolutePath}")
+                    logger.info { "📦 从 JAR 提取 CLI: ${targetFile.absolutePath}" }
                     return targetFile.absolutePath
                 } else {
                     // 资源在文件系统中（开发模式）
                     val file = java.io.File(resource.toURI())
                     if (file.exists()) {
-                        logger.info("📦 找到本地绑定的 CLI: ${file.absolutePath}")
+                        logger.info { "📦 找到本地绑定的 CLI: ${file.absolutePath}" }
                         return file.absolutePath
                     }
                 }
             }
 
-            logger.warn("⚠️ 未找到绑定的 CLI: $cliJsName")
+            logger.warn { "⚠️ 未找到绑定的 CLI: $cliJsName" }
             null
         } catch (e: Exception) {
-            logger.debug("查找绑定 CLI 失败: ${e.message}")
+            logger.debug { "查找绑定 CLI 失败: ${e.message}" }
             null
         }
     }
@@ -927,7 +923,7 @@ class SubprocessTransport(
         // 尝试从缓存获取
         val cachedPath = systemPromptFileCache.get(digest)
         if (cachedPath != null && Files.exists(cachedPath)) {
-            logger.info("📦 使用缓存的系统提示词文件: $cachedPath (digest: $digest)")
+            logger.info { "📦 使用缓存的系统提示词文件: $cachedPath (digest: $digest)" }
             return cachedPath
         }
 
@@ -939,7 +935,7 @@ class SubprocessTransport(
         // 确保子目录存在
         if (!Files.exists(promptDir)) {
             Files.createDirectories(promptDir)
-            logger.info("📁 创建系统提示词目录: $promptDir")
+            logger.info { "📁 创建系统提示词目录: $promptDir" }
         }
 
         val tempFile = promptDir.resolve("prompt-$digest.md")
@@ -950,7 +946,7 @@ class SubprocessTransport(
 
         // 存入缓存
         systemPromptFileCache.put(digest, tempFile)
-        logger.info("📝 创建新的系统提示词文件: $tempFile (digest: $digest)")
+        logger.info { "📝 创建新的系统提示词文件: $tempFile (digest: $digest)" }
 
         return tempFile
     }

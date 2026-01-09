@@ -28,10 +28,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.nio.file.Paths
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("GenerateCommitMessageService")
 
 /**
  * Generate Commit Message Service

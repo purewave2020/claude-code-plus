@@ -1,6 +1,6 @@
 package com.asakii.claude.agent.sdk.util
 
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.io.File
 
 /**
@@ -11,7 +11,7 @@ import java.io.File
  * 2. Check if the Claude extension ID exists in any profile's Extensions folder
  */
 object ChromeExtensionDetector {
-    private val logger = KotlinLogging.logger {}
+    private val logger = getLogger("ChromeExtensionDetector")
 
     // Claude Chrome extension ID
     private const val CLAUDE_EXTENSION_ID = "fcoeoabgfenejglbffodgkkbkcdhcgfn"

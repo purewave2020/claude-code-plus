@@ -27,9 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withTimeout
-import com.asakii.server.logging.StandaloneLogging
-import com.asakii.server.logging.asyncInfo
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -62,8 +60,8 @@ class RSocketHandler(
     private val mcpProviders: McpProviders = McpProviders.DEFAULT,  // All MCP Server Providers
     private val serviceConfigProvider: () -> com.asakii.server.config.AiAgentServiceConfig = { com.asakii.server.config.AiAgentServiceConfig() }  // 服务配置提供者（每次 connect 时获取最新配置）
 ) {
-    // 使用 ws.log 专用 logger
-    private val wsLog = KotlinLogging.logger(StandaloneLogging.WS_LOGGER)
+    // 使用 SLF4J logger（IDEA 环境自动输出到 idea.log）
+    private val wsLog = getLogger("RSocketHandler")
 
     /**
      * 创建 RSocket 请求处理器
@@ -76,7 +74,7 @@ class RSocketHandler(
      * 连接关闭时自动清理所有资源。
      */
     fun createHandler(): RSocket {
-        wsLog.info("🔌 [RSocket] [$connectionId] 创建请求处理器")
+        wsLog.info { "🔌 [RSocket] [$connectionId] 创建请求处理器" }
 
         // 反向调用支持
         val callIdCounter = AtomicInteger(0)
@@ -98,8 +96,8 @@ class RSocketHandler(
             requestResponse { request ->
                 val route = extractRoute(request)
                 val dataBytes = request.data.readByteArray()
-                wsLog.info("📨 [RSocket] ← Request-Response: $route")
-                wsLog.debug("📨 [RSocket] ← Request data (${dataBytes.size} bytes)")
+                wsLog.info { "📨 [RSocket] ← Request-Response: $route" }
+                wsLog.debug { "📨 [RSocket] ← Request data (${dataBytes.size} bytes)" }
 
                 val response = when (route) {
                     "agent.connect" -> handleConnect(dataBytes, rpcService)
@@ -120,7 +118,7 @@ class RSocketHandler(
                 }
 
                 val responseBytes = response.data.readByteArray()
-                wsLog.info("📨 [RSocket] → Response: $route (${responseBytes.size} bytes)")
+                wsLog.info { "📨 [RSocket] → Response: $route (${responseBytes.size} bytes)" }
                 buildPayload { data(responseBytes) }
             }
 
@@ -129,8 +127,8 @@ class RSocketHandler(
             requestStream { request ->
                 val route = extractRoute(request)
                 val dataBytes = request.data.readByteArray()
-                wsLog.info("📡 [RSocket] ← Request-Stream: $route")
-                wsLog.debug("📡 [RSocket] ← Request data (${dataBytes.size} bytes)")
+                wsLog.info { "📡 [RSocket] ← Request-Stream: $route" }
+                wsLog.debug { "📡 [RSocket] ← Request data (${dataBytes.size} bytes)" }
 
                 when (route) {
                     "agent.query" -> handleQuery(dataBytes, rpcService)
@@ -151,7 +149,7 @@ class RSocketHandler(
                     }
                     wsLog.info("✅ [RSocket] [$connectionId] SDK 资源已清理")
                 } catch (e: Exception) {
-                    wsLog.warn("⚠️ [RSocket] [$connectionId] 清理 SDK 资源时出错: ${e.message}")
+                    wsLog.warn { "⚠️ [RSocket] [$connectionId] 清理 SDK 资源时出错: ${e.message}" }
                 }
             }
         }
@@ -165,36 +163,36 @@ class RSocketHandler(
     private suspend fun handleConnect(dataBytes: ByteArray, rpcService: AiAgentRpcService): Payload {
         val options = if (dataBytes.isNotEmpty()) {
             val protoOptions = ConnectOptions.parseFrom(dataBytes)
-            wsLog.debug("📥 [RSocket] connect options: provider=${protoOptions.provider}, model=${protoOptions.model}")
+            wsLog.debug { "📥 [RSocket] connect options: provider=${protoOptions.provider}, model=${protoOptions.model}" }
             protoOptions.toRpc()
         } else {
-            wsLog.debug("📥 [RSocket] connect options: (default)")
+            wsLog.debug { "📥 [RSocket] connect options: (default)" }
             null
         }
 
         val result = rpcService.connect(options)
-        wsLog.info("📤 [RSocket] connect result: sessionId=${result.sessionId}, provider=${result.provider}")
+        wsLog.info { "📤 [RSocket] connect result: sessionId=${result.sessionId}, provider=${result.provider}" }
         return buildPayload { data(result.toProto().toByteArray()) }
     }
 
     private suspend fun handleInterrupt(rpcService: AiAgentRpcService): Payload {
-        wsLog.info("📥 [RSocket] interrupt request")
+        wsLog.info { "📥 [RSocket] interrupt request" }
         val result = rpcService.interrupt()
-        wsLog.info("📤 [RSocket] interrupt result: status=${result.status}")
+        wsLog.info { "📤 [RSocket] interrupt result: status=${result.status}" }
         return buildPayload { data(result.toProto().toByteArray()) }
     }
 
     private suspend fun handleRunInBackground(rpcService: AiAgentRpcService): Payload {
-        wsLog.info("📥 [RSocket] runInBackground request")
+        wsLog.info { "📥 [RSocket] runInBackground request" }
         val result = rpcService.runInBackground()
-        wsLog.info("📤 [RSocket] runInBackground result: status=${result.status}")
+        wsLog.info { "📤 [RSocket] runInBackground result: status=${result.status}" }
         return buildPayload { data(result.toProto().toByteArray()) }
     }
 
     private suspend fun handleSetMaxThinkingTokens(dataBytes: ByteArray, rpcService: AiAgentRpcService): Payload {
         val req = com.asakii.rpc.proto.SetMaxThinkingTokensRequest.parseFrom(dataBytes)
         val maxThinkingTokens = if (req.hasMaxThinkingTokens()) req.maxThinkingTokens else null
-        wsLog.info("📥 [RSocket] setMaxThinkingTokens request: maxThinkingTokens=$maxThinkingTokens")
+        wsLog.info { "📥 [RSocket] setMaxThinkingTokens request: maxThinkingTokens=$maxThinkingTokens" }
         val result = rpcService.setMaxThinkingTokens(maxThinkingTokens)
         wsLog.info("📤 [RSocket] setMaxThinkingTokens result: maxThinkingTokens=${result.maxThinkingTokens}")
         return buildPayload { data(result.toProto().toByteArray()) }
@@ -373,8 +371,8 @@ class RSocketHandler(
         val msgType = message::class.simpleName ?: "Unknown"
         val counter = streamMessageCounter  // 捕获当前计数器值
 
-        // 记录完整消息内容（格式化在日志线程执行）
-        wsLog.asyncInfo { "📤 [RSocket] #$counter ($route) $msgType: ${formatRpcMessage(message)}" }
+        // 记录完整消息内容
+        wsLog.info { "📤 [RSocket] #$counter ($route) $msgType: ${formatRpcMessage(message)}" }
 
         val protoMessage = message.toProto()
         buildPayload { data(protoMessage.toByteArray()) }

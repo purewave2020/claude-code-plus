@@ -4,7 +4,7 @@ import com.networknt.schema.InputFormat
 import com.networknt.schema.SchemaRegistry
 import com.networknt.schema.dialect.Dialects
 import com.networknt.schema.Error
-import mu.KotlinLogging
+import com.asakii.logging.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -16,7 +16,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("SchemaValidator")
 
 /**
  * 参数校验错误

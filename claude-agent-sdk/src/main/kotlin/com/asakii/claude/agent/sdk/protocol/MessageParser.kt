@@ -2,8 +2,11 @@ package com.asakii.claude.agent.sdk.protocol
 
 import com.asakii.claude.agent.sdk.exceptions.MessageParsingException
 import com.asakii.claude.agent.sdk.types.*
+import com.asakii.logging.*
 import kotlinx.serialization.json.*
 import kotlinx.serialization.decodeFromString
+
+private val logger = getLogger("MessageParser")
 
 /**
  * Parser for converting raw JSON messages to typed objects.
@@ -54,7 +57,7 @@ class MessageParser {
             // 旧格式：{"type": "user", "content": "..."}
             jsonObject["content"] ?: run {
                 // 容错处理：某些系统消息可能被错误标记为user类型
-                println("[MessageParser] ⚠️ User message missing content field, using empty content for compatibility")
+                logger.warn("User message missing content field, using empty content for compatibility")
                 JsonPrimitive("")
             }
         }
@@ -238,8 +241,7 @@ class MessageParser {
             "text" -> {
                 val text = jsonObject["text"]?.jsonPrimitive?.content
                     ?: throw MessageParsingException("Missing 'text' in text block")
-                println("[MessageParser] 📝 解析TextBlock，文本长度: ${text.length}")
-                println("[MessageParser] 📝 TextBlock内容: ${text.take(200)}")
+                logger.debug { "解析TextBlock，文本长度: ${text.length}" }
                 TextBlock(text)
             }
             "thinking" -> {
@@ -256,15 +258,14 @@ class MessageParser {
                 val input = jsonObject["input"]
                     ?: throw MessageParsingException("Missing 'input' in tool_use block")
 
-                // 🔍 调试：打印解析到的 input
-                println("🔍 [MessageParser] parseContentBlock tool_use: id=$id, name=$name, inputType=${input.javaClass.simpleName}, input=${input.toString().take(200)}")
+                logger.debug { "parseContentBlock tool_use: id=$id, name=$name, inputType=${input.javaClass.simpleName}" }
 
                 // 创建基础的ToolUseBlock
                 val basicToolUse = ToolUseBlock(id, name, input)
 
                 // 使用ToolTypeParser将其转换为具体的工具类型
                 val result = ToolTypeParser.parseToolUseBlock(basicToolUse)
-                println("🔍 [MessageParser] parseToolUseBlock result: ${result::class.simpleName}, input=${result.input.toString().take(200)}")
+                logger.debug { "parseToolUseBlock result: ${result::class.simpleName}" }
                 result
             }
             "tool_result" -> {

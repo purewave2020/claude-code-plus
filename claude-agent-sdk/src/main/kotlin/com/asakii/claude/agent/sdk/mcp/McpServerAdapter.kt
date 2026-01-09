@@ -10,7 +10,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.serialization.json.*
-import mu.KotlinLogging
+import com.asakii.logging.*
 
 /**
  * 适配器：将官方 MCP Kotlin SDK 的 Server 转换为我们的 McpServer 接口
@@ -34,7 +34,7 @@ class McpServerAdapter(
     override val version: String
 ) : McpServer {
 
-    private val logger = KotlinLogging.logger {}
+    private val logger = getLogger("McpServerAdapter")
 
     override val description: String = ""
 
@@ -49,14 +49,14 @@ class McpServerAdapter(
                 )
             }
         } catch (e: Exception) {
-            logger.warn("获取工具列表失败: ${e.message}")
+            logger.warn { "获取工具列表失败: ${e.message}" }
             emptyList()
         }
     }
 
     override suspend fun callTool(toolName: String, arguments: JsonObject): ToolResult {
         return try {
-            logger.info("🔧 调用官方 SDK 工具: $toolName, 参数: $arguments")
+            logger.info { "🔧 调用官方 SDK 工具: $toolName, 参数: $arguments" }
 
             // 查找注册的工具
             val registeredTool = server.tools[toolName]
@@ -92,7 +92,7 @@ class McpServerAdapter(
                 ToolResult.Success(content = content)
             }
         } catch (e: Exception) {
-            logger.error("❌ 工具调用失败: ${e.message}")
+            logger.error { "❌ 工具调用失败: ${e.message}" }
             ToolResult.error(e.message ?: "Unknown error")
         }
     }

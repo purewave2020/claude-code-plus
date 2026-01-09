@@ -142,6 +142,110 @@ getMode(): 'ide' | 'browser' {
 
 ---
 
+## 📋 日志架构
+
+### 设计目标
+
+本项目使用**统一日志抽象层**，实现以下目标：
+1. **环境自适应**: 在 IDEA 插件模式下输出到 `idea.log`，独立运行时输出到控制台
+2. **模块独立**: 各模块不依赖第三方日志库（如 kotlin-logging）
+3. **零配置**: 通过反射自动检测运行环境，无需手动配置
+
+### 核心组件
+
+#### UnifiedLogger (`ai-agent-server`)
+
+**位置**: `ai-agent-server/src/main/kotlin/com/asakii/server/logging/UnifiedLogger.kt`
+
+**功能**:
+- 反射检测 `com.intellij.openapi.diagnostic.Logger` 是否可用
+- IDEA 模式：使用 IDEA Logger，日志输出到 `idea.log`
+- 独立模式：使用控制台输出
+
+**使用方式**:
+```kotlin
+import com.asakii.server.logging.UnifiedLogger
+
+class MyClass {
+    private val logger = UnifiedLogger.getLogger("MyClass")
+
+    fun doSomething() {
+        logger.info { "Starting operation" }
+        logger.debug { "Debug details: $data" }
+        logger.warn { "Warning message" }
+        logger.error(exception) { "Error occurred" }
+    }
+}
+```
+
+#### SdkLogger (`claude-agent-sdk`)
+
+**位置**: `claude-agent-sdk/src/main/kotlin/com/asakii/claude/agent/sdk/logging/SdkLogger.kt`
+
+**功能**: 与 UnifiedLogger 相同，但独立于 ai-agent-server 模块
+
+**使用方式**:
+```kotlin
+import com.asakii.claude.agent.sdk.logging.SdkLogger
+
+class MySdkClass {
+    private val logger = SdkLogger.getLogger("MySdkClass")
+
+    fun doSomething() {
+        logger.info { "SDK operation" }
+    }
+}
+```
+
+### 模块日志使用规范
+
+| 模块 | 使用的日志类 | 说明 |
+|------|-------------|------|
+| `ai-agent-server` | `UnifiedLogger` | 服务端核心模块 |
+| `jetbrains-plugin` | `UnifiedLogger` | 通过依赖 ai-agent-server 获取 |
+| `claude-agent-sdk` | `SdkLogger` | 独立模块，不依赖 ai-agent-server |
+| `codex-agent-sdk` | `SdkLogger` | 独立模块 |
+
+### SLF4J/Logback 配置
+
+**ai-agent-server**:
+- 保留 `logback-classic` 依赖，供第三方库（Ktor、gRPC 等）使用
+- 本项目代码使用 `UnifiedLogger`，不使用 SLF4J
+
+**jetbrains-plugin**:
+- 排除所有 SLF4J/Logback 依赖，避免与 IDEA 内置版本冲突
+- 第三方库的 SLF4J 日志由 IDEA 内置实现接管
+
+```kotlin
+// jetbrains-plugin/build.gradle.kts
+configurations.all {
+    exclude(group = "ch.qos.logback", module = "logback-classic")
+    exclude(group = "ch.qos.logback", module = "logback-core")
+    exclude(group = "org.slf4j", module = "slf4j-api")
+    exclude(group = "org.slf4j", module = "jul-to-slf4j")
+}
+```
+
+### 日志级别
+
+| 级别 | 方法 | 用途 |
+|------|------|------|
+| INFO | `logger.info { }` | 重要业务事件 |
+| DEBUG | `logger.debug { }` | 调试信息 |
+| WARN | `logger.warn { }` | 警告（可恢复的异常情况） |
+| ERROR | `logger.error(e) { }` | 错误（需要关注的异常） |
+
+### 查看日志
+
+**IDEA 插件模式**:
+- 菜单: Help → Show Log in Explorer/Finder
+- 日志文件: `idea.log`
+
+**独立运行模式**:
+- 日志直接输出到控制台 (stdout)
+
+---
+
 ## 📁 核心文件说明
 
 ### 前端核心文件

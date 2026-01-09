@@ -2,7 +2,10 @@ package com.asakii.claude.agent.sdk.builders
 
 
 import com.asakii.claude.agent.sdk.types.*
+import com.asakii.logging.*
 import kotlinx.serialization.json.*
+
+private val logger = getLogger("HookBuilder")
 
 /**
  * Hook构建器 - 提供更便捷的Hook定义方式
@@ -170,8 +173,8 @@ fun statisticsHook(): Map<HookEvent, List<HookMatcher>> {
             callCount++
             toolStats[toolCall.toolName] = toolStats.getOrDefault(toolCall.toolName, 0) + 1
             
-            println("📊 [统计] 第 $callCount 次工具调用: ${toolCall.toolName}")
-            println("📊 [统计] 工具使用统计: $toolStats")
+            logger.info("📊 [统计] 第 $callCount 次工具调用: ${toolCall.toolName}")
+            logger.debug("📊 [统计] 工具使用统计: $toolStats")
             
             allow("📊 统计: 总计 $callCount 次，${toolCall.toolName} 第 ${toolStats[toolCall.toolName]} 次")
         }

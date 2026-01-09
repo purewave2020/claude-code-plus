@@ -1,10 +1,10 @@
 package com.asakii.server.services
 
-import mu.KotlinLogging
+import com.asakii.logging.*
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
-private val logger = KotlinLogging.logger {}
+private val logger = getLogger("FileContentCache")
 
 /**
  * 文件内容缓存服务
