@@ -861,6 +861,41 @@ export const useSessionStore = defineStore('session', () => {
   // 注册模型列表变化回调
   onModelListChange(handleModelListChange)
 
+  /**
+   * 处理 Codex 模型列表变化
+   * 当自定义模型被添加/删除时，检查并更新所有 Codex Tab 的模型选择
+   * 注意：只处理 Codex 后端的 Tab，Claude Tab 有自己的模型列表
+   */
+  function handleCodexModelListChange(models: { modelId: string; displayName: string }[], defaultModelId: string) {
+    log.info('[CodexModelListChange] Codex 模型列表已更新:', models.length, '个模型, 默认:', defaultModelId)
+
+    // 遍历所有 Tab，检查模型是否仍然有效
+    tabs.value.forEach(tab => {
+      // 只处理 Codex 后端的 Tab，跳过 Claude Tab
+      if (tab.backendType.value !== 'codex') {
+        return
+      }
+
+      const currentModelId = tab.modelId.value
+      if (!currentModelId) return
+
+      // 检查当前模型是否在新列表中
+      const modelExists = models.some(m => m.modelId === currentModelId)
+      if (!modelExists) {
+        // 模型已被删除，切换到默认模型
+        const fallbackModelId = defaultModelId || (models.length > 0 ? models[0].modelId : 'gpt-5.2-codex')
+        const fallbackModel = models.find(m => m.modelId === fallbackModelId) || { modelId: fallbackModelId, displayName: fallbackModelId }
+        log.warn(`[CodexModelListChange] Tab "${tab.tabId}" 的模型 "${currentModelId}" 已不可用，切换到 "${fallbackModel.displayName}"`)
+
+        // 更新 Tab 的模型 ID
+        tab.modelId.value = fallbackModel.modelId
+      }
+    })
+  }
+
+  // 注册 Codex 模型列表变化回调
+  settingsStore.onCodexModelListChange(handleCodexModelListChange)
+
   // ========== 权限相关（通过当前 Tab） ==========
 
   /**

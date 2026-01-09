@@ -189,6 +189,35 @@ export const useSettingsStore = defineStore('settings', () => {
   const claudeModels = ref<BackendModelInfo[]>(CLAUDE_MODELS)
   const codexModels = ref<BackendModelInfo[]>(CODEX_MODELS)
 
+  // Codex 模型列表变化回调
+  const _codexModelListChangeCallbacks: Array<(models: BackendModelInfo[], defaultModelId: string) => void> = []
+
+  /**
+   * 注册 Codex 模型列表变化回调
+   */
+  function onCodexModelListChange(callback: (models: BackendModelInfo[], defaultModelId: string) => void): () => void {
+    _codexModelListChangeCallbacks.push(callback)
+    return () => {
+      const index = _codexModelListChangeCallbacks.indexOf(callback)
+      if (index >= 0) {
+        _codexModelListChangeCallbacks.splice(index, 1)
+      }
+    }
+  }
+
+  /**
+   * 触发 Codex 模型列表变化回调
+   */
+  function _notifyCodexModelListChange(models: BackendModelInfo[], defaultModelId: string) {
+    _codexModelListChangeCallbacks.forEach(callback => {
+      try {
+        callback(models, defaultModelId)
+      } catch (e) {
+        console.error('[settingsStore] Error in Codex model list change callback:', e)
+      }
+    })
+  }
+
 
   /**
    * 迁移旧设置到新格式
@@ -397,6 +426,9 @@ export const useSettingsStore = defineStore('settings', () => {
         // 更新模型列表
         claudeModels.value = claudeList
         codexModels.value = codexList
+
+        // 触发 Codex 模型列表变化回调
+        _notifyCodexModelListChange(codexList, defaultCodexModelId)
 
         // 同步 Claude 模型到全局模型列表以供 UI 使用
         const mappedClaudeModels: ClaudeModelInfo[] = claudeList.map(model => ({
@@ -931,6 +963,7 @@ export const useSettingsStore = defineStore('settings', () => {
     // 后端特定的模型列表
     claudeModels,
     codexModels,
+    onCodexModelListChange,
 
     // Computed
     codexSandboxMode,

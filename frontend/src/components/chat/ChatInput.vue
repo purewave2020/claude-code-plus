@@ -691,7 +691,7 @@ const currentThinkingConfig = computed<ThinkingConfig>(() => {
   }
   // Default config based on backend type, prefer Tab's initial config
   if (props.backendType === 'codex') {
-    const tabEffort = sessionStore.currentTab?.initialConnectOptions?.value?.reasoningEffort
+    const tabEffort = sessionStore.currentTab?.initialConnectOptions?.value?.reasoningEffort as CodexReasoningEffort | undefined
     return {
       type: 'codex',
       effort: tabEffort ?? 'xhigh',
