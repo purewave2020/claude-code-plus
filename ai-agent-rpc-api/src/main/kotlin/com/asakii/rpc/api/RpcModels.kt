@@ -551,43 +551,8 @@ data class RpcImageSource(
     val url: String? = null
 )
 
-@Serializable
-@SerialName("command_execution")
-data class RpcCommandExecutionBlock(
-    val command: String,
-    val output: String? = null,
-    val exitCode: Int? = null,
-    val status: RpcContentStatus
-) : RpcContentBlock
-
-@Serializable
-@SerialName("file_change")
-data class RpcFileChangeBlock(
-    val status: RpcContentStatus,
-    val changes: List<RpcFileChange>
-) : RpcContentBlock
-
-@Serializable
-data class RpcFileChange(
-    val path: String,
-    val kind: String
-)
-
-@Serializable
-@SerialName("mcp_tool_call")
-data class RpcMcpToolCallBlock(
-    val server: String? = null,
-    val tool: String? = null,
-    val arguments: JsonElement? = null,
-    val result: JsonElement? = null,
-    val status: RpcContentStatus
-) : RpcContentBlock
-
-@Serializable
-@SerialName("web_search")
-data class RpcWebSearchBlock(
-    val query: String
-) : RpcContentBlock
+// RpcCommandExecutionBlock, RpcFileChangeBlock, RpcMcpToolCallBlock, RpcWebSearchBlock 已删除
+// 统一使用 RpcToolUseBlock + RpcToolResultBlock，通过 toolName/toolType 区分工具类型
 
 @Serializable
 @SerialName("todo_list")

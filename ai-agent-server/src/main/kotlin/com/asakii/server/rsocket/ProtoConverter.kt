@@ -2,7 +2,7 @@ package com.asakii.server.rsocket
 
 import com.asakii.rpc.api.RpcAssistantMessage
 import com.asakii.rpc.api.RpcCapabilities
-import com.asakii.rpc.api.RpcCommandExecutionBlock
+
 import com.asakii.rpc.api.RpcCompactBoundaryMessage
 import com.asakii.rpc.api.RpcSystemInitMessage
 import com.asakii.rpc.api.RpcMcpServerInfo as RpcMcpServerInfoApi
@@ -17,8 +17,7 @@ import com.asakii.rpc.api.RpcContentStatus as RpcContentStatusApi
 import com.asakii.rpc.api.RpcDelta as RpcDeltaApi
 import com.asakii.rpc.api.RpcErrorBlock
 import com.asakii.rpc.api.RpcErrorMessage as RpcErrorMessageApi
-import com.asakii.rpc.api.RpcFileChange as RpcFileChangeApi
-import com.asakii.rpc.api.RpcFileChangeBlock
+
 import com.asakii.rpc.api.RpcHistory as RpcHistoryApi
 import com.asakii.rpc.api.RpcHistoryMetadata as RpcHistoryMetadataApi
 import com.asakii.rpc.api.RpcHistoryResult as RpcHistoryResultApi
@@ -28,7 +27,7 @@ import com.asakii.rpc.api.RpcTruncateHistoryResult as RpcTruncateHistoryResultAp
 import com.asakii.rpc.api.RpcImageBlock
 import com.asakii.rpc.api.RpcImageSource as RpcImageSourceApi
 import com.asakii.rpc.api.RpcInputJsonDelta
-import com.asakii.rpc.api.RpcMcpToolCallBlock
+
 import com.asakii.rpc.api.RpcMessage as RpcMessageApi
 import com.asakii.rpc.api.RpcMessageContent as RpcMessageContentApi
 import com.asakii.rpc.api.RpcMessageDeltaEvent
@@ -59,7 +58,7 @@ import com.asakii.rpc.api.RpcToolUseBlock
 import com.asakii.rpc.api.RpcUnknownBlock
 import com.asakii.rpc.api.RpcUsage as RpcUsageApi
 import com.asakii.rpc.api.RpcUserMessage as RpcUserMessageApi
-import com.asakii.rpc.api.RpcWebSearchBlock
+
 import com.asakii.rpc.proto.*
 import com.google.protobuf.ByteString
 import kotlinx.serialization.encodeToString
@@ -413,24 +412,7 @@ object ProtoConverter {
                     block.source.url?.let { url = it }
                 }
             }
-            is RpcCommandExecutionBlock -> commandExecution = commandExecutionBlock {
-                command = block.command
-                block.output?.let { output = it }
-                block.exitCode?.let { exitCode = it }
-                status = block.status.toProto()
-            }
-            is RpcFileChangeBlock -> fileChange = fileChangeBlock {
-                status = block.status.toProto()
-                changes.addAll(block.changes.map { fileChange { path = it.path; kind = it.kind } })
-            }
-            is RpcMcpToolCallBlock -> mcpToolCall = mcpToolCallBlock {
-                block.server?.let { server = it }
-                block.tool?.let { tool = it }
-                block.arguments?.let { argumentsJson = ByteString.copyFromUtf8(json.encodeToString(it)) }
-                block.result?.let { resultJson = ByteString.copyFromUtf8(json.encodeToString(it)) }
-                status = block.status.toProto()
-            }
-            is RpcWebSearchBlock -> webSearch = webSearchBlock { query = block.query }
+            // RpcCommandExecutionBlock, RpcFileChangeBlock, RpcMcpToolCallBlock, RpcWebSearchBlock 已删除
             is RpcTodoListBlock -> todoList = todoListBlock {
                 items.addAll(block.items.map { todoItem { text = it.text; completed = it.completed } })
             }
@@ -466,24 +448,12 @@ object ProtoConverter {
                 url = if (image.source.hasUrl()) image.source.url else null
             )
         )
-        hasCommandExecution() -> RpcCommandExecutionBlock(
-            command = commandExecution.command,
-            output = if (commandExecution.hasOutput()) commandExecution.output else null,
-            exitCode = if (commandExecution.hasExitCode()) commandExecution.exitCode else null,
-            status = commandExecution.status.toRpc()
-        )
-        hasFileChange() -> RpcFileChangeBlock(
-            status = fileChange.status.toRpc(),
-            changes = fileChange.changesList.map { RpcFileChangeApi(path = it.path, kind = it.kind) }
-        )
-        hasMcpToolCall() -> RpcMcpToolCallBlock(
-            server = if (mcpToolCall.hasServer()) mcpToolCall.server else null,
-            tool = if (mcpToolCall.hasTool()) mcpToolCall.tool else null,
-            arguments = if (mcpToolCall.hasArgumentsJson()) parseJsonElement(mcpToolCall.argumentsJson) else null,
-            result = if (mcpToolCall.hasResultJson()) parseJsonElement(mcpToolCall.resultJson) else null,
-            status = mcpToolCall.status.toRpc()
-        )
-        hasWebSearch() -> RpcWebSearchBlock(query = webSearch.query)
+        // hasCommandExecution, hasFileChange, hasMcpToolCall, hasWebSearch 对应的 RPC 类型已删除
+        // Proto 协议中如果出现这些字段，转换为 RpcUnknownBlock
+        hasCommandExecution() -> RpcUnknownBlock(type = "command_execution", data = commandExecution.command)
+        hasFileChange() -> RpcUnknownBlock(type = "file_change", data = "")
+        hasMcpToolCall() -> RpcUnknownBlock(type = "mcp_tool_call", data = "")
+        hasWebSearch() -> RpcUnknownBlock(type = "web_search", data = webSearch.query)
         hasTodoList() -> RpcTodoListBlock(
             items = todoList.itemsList.map { RpcTodoItemApi(text = it.text, completed = it.completed) }
         )

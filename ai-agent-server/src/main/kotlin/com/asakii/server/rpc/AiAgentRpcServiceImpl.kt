@@ -1539,18 +1539,8 @@ class AiAgentRpcServiceImpl(
             isError = isError,
             agentId = agentId
         )
-        is CommandExecutionContent -> RpcCommandExecutionBlock(
-            command = command,
-            output = output,
-            exitCode = exitCode,
-            status = status.toRpcStatus()
-        )
-        is FileChangeContent -> RpcFileChangeBlock(
-            status = status.toRpcStatus(),
-            changes = changes.map { RpcFileChange(path = it.path, kind = it.kind) }
-        )
-        // McpToolCallContent 已删除，MCP 工具调用统一使用 ToolUseContent + ToolResultContent
-        is WebSearchContent -> RpcWebSearchBlock(query = query)
+        // CommandExecutionContent, FileChangeContent, WebSearchContent 已删除
+        // 统一使用 ToolUseContent + ToolResultContent
         is TodoListContent -> RpcTodoListBlock(
             items = items.map { RpcTodoItem(text = it.text, completed = it.completed) }
         )
@@ -1615,10 +1605,6 @@ class AiAgentRpcServiceImpl(
         // 浠ヤ笅绫诲瀷涓嶅簲璇ュ嚭鐜板湪鐢ㄦ埛杈撳叆涓紝杩斿洖 null
         is RpcToolUseBlock,
         is RpcToolResultBlock,
-        is RpcCommandExecutionBlock,
-        is RpcFileChangeBlock,
-        is RpcMcpToolCallBlock,
-        is RpcWebSearchBlock,
         is RpcTodoListBlock,
         is RpcErrorBlock,
         is RpcUnknownBlock -> null
@@ -1695,10 +1681,7 @@ class AiAgentRpcServiceImpl(
                 is ImageContent -> "Image(mediaType=${block.mediaType}, dataLen=${block.data.length})"
                 is ToolUseContent -> "ToolUse(id=${block.id}, name=${block.name}, input=${block.input})"
                 is ToolResultContent -> "ToolResult(toolUseId=${block.toolUseId}, content=${block.content}, isError=${block.isError})"
-                is CommandExecutionContent -> "Command(cmd=${block.command}, output=${block.output}, exitCode=${block.exitCode})"
-                is FileChangeContent -> "FileChange(changes=${block.changes})"
-                // McpToolCallContent 已删除，MCP 工具调用统一使用 ToolUseContent
-                is WebSearchContent -> "WebSearch(query=${block.query})"
+                // CommandExecutionContent, FileChangeContent, WebSearchContent 已删除
                 is TodoListContent -> "TodoList(items=${block.items})"
                 is ErrorContent -> "Error(${block.message})"
             }

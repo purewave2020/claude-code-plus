@@ -157,22 +157,13 @@ class UiStreamAdapter {
                     parentToolUseId = parentToolUseId
                 )
             )
-            is CommandExecutionContent,
-            is ToolResultContent,
-            is FileChangeContent,
-            is WebSearchContent -> {
-                val toolId = when (content) {
-                    is ToolResultContent -> content.toolUseId
-                    else -> indexToToolIdMap[event.index] ?: event.index.toString()
-                }
-                listOf(
-                    UiToolComplete(
-                        toolId = toolId,
-                        result = content,
-                        parentToolUseId = parentToolUseId
-                    )
+            is ToolResultContent -> listOf(
+                UiToolComplete(
+                    toolId = content.toolUseId,
+                    result = content,
+                    parentToolUseId = parentToolUseId
                 )
-            }
+            )
             else -> emptyList()
         }
     }

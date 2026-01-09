@@ -2,7 +2,6 @@
 
 import com.asakii.ai.agent.sdk.AiAgentProvider
 import com.asakii.ai.agent.sdk.model.*
-import com.asakii.codex.agent.sdk.FileChange as CliFileChange
 import com.asakii.codex.agent.sdk.appserver.AppServerEvent
 import com.asakii.codex.agent.sdk.appserver.CommandExecutionStatus
 import com.asakii.codex.agent.sdk.appserver.McpToolCallResult
@@ -33,6 +32,8 @@ class CodexAppServerStreamAdapter(
     // 累积文本和思考内容，用于在 TurnCompleted 时发送 AssistantMessageEvent
     private val accumulatedText = StringBuilder()
     private val accumulatedThinking = StringBuilder()
+    // 累积工具调用内容
+    private val accumulatedToolUses = mutableListOf<ToolUseContent>()
     private var currentMessageId: String? = null
 
     fun convert(event: AppServerEvent): List<NormalizedStreamEvent> {
@@ -51,6 +52,7 @@ class CodexAppServerStreamAdapter(
                 // 重置累积器
                 accumulatedText.clear()
                 accumulatedThinking.clear()
+                accumulatedToolUses.clear()
                 currentMessageId = event.turn.id
 
                 val sessionId = resolveSessionId()
@@ -65,6 +67,10 @@ class CodexAppServerStreamAdapter(
             is AppServerEvent.ItemStarted -> {
                 val index = nextIndexForItem(event.item.id)
                 val toolContent = buildToolUseContent(event.item)
+                // 累积工具调用内容，用于在 TurnCompleted 时发送 AssistantMessageEvent
+                if (toolContent != null) {
+                    accumulatedToolUses.add(toolContent)
+                }
                 result += ContentStartedEvent(
                     provider = AiAgentProvider.CODEX,
                     index = index,
@@ -124,20 +130,9 @@ class CodexAppServerStreamAdapter(
             }
 
             is AppServerEvent.CommandOutputDelta -> {
-                val (index, started) = ensureIndexWithStart(event.itemId)
-                if (started) {
-                    result += ContentStartedEvent(
-                        provider = AiAgentProvider.CODEX,
-                        index = index,
-                        contentType = "command_execution",
-                        toolName = "Bash"
-                    )
-                }
-                result += ContentDeltaEvent(
-                    provider = AiAgentProvider.CODEX,
-                    index = index,
-                    delta = CommandDeltaPayload(event.delta)
-                )
+                // 忽略命令输出增量，完整输出会在 ItemCompleted 时通过 aggregatedOutput 返回
+                // 打印日志用于调试
+                println("[Codex] CommandOutputDelta ignored: itemId=${event.itemId}, delta length=${event.delta.length}")
             }
 
             is AppServerEvent.TokenUsageUpdated -> {
@@ -323,29 +318,22 @@ class CodexAppServerStreamAdapter(
             else -> null
         }
 
+    /**
+     * 将 ThreadItem 转换为 UnifiedContentBlock。
+     * 注意：工具类型（CommandExecution, FileChange, McpToolCall, WebSearch）
+     * 应优先使用 buildToolResultContent() 转换为 ToolResultContent。
+     * 此函数作为回退，处理非工具类型的 ThreadItem。
+     */
     private fun convertThreadItem(item: ThreadItem): UnifiedContentBlock =
         when (item) {
             is ThreadItem.AgentMessage -> TextContent(item.text)
             is ThreadItem.Reasoning -> ThinkingContent(buildReasoningText(item))
-            is ThreadItem.CommandExecution -> CommandExecutionContent(
-                command = item.command,
-                output = item.aggregatedOutput,
-                exitCode = item.exitCode,
-                status = item.status.toContentStatus()
-            )
-            is ThreadItem.FileChange -> FileChangeContent(
-                changes = item.changes.map { change ->
-                    CliFileChange(path = change.path, kind = change.kind.toKindString())
-                },
-                status = item.status.toContentStatus()
-            )
-            is ThreadItem.McpToolCall -> ToolUseContent(
-                id = item.id,
-                name = buildMcpToolName(item.server, item.tool),
-                input = item.arguments,
-                status = item.status.toContentStatus()
-            )
-            is ThreadItem.WebSearch -> WebSearchContent(item.query)
+            // 工具类型统一由 buildToolResultContent() 处理，返回 ToolResultContent
+            // 此处作为回退（理论上不会执行到），也返回 ToolResultContent
+            is ThreadItem.CommandExecution -> buildToolResultContent(item)!!
+            is ThreadItem.FileChange -> buildToolResultContent(item)!!
+            is ThreadItem.McpToolCall -> buildToolResultContent(item)!!
+            is ThreadItem.WebSearch -> buildToolResultContent(item)!!
             is ThreadItem.EnteredReviewMode -> TextContent(item.review)
             is ThreadItem.ExitedReviewMode -> TextContent(item.review)
             is ThreadItem.ImageView -> TextContent("[Image: ${item.path}]")
@@ -496,26 +484,6 @@ class CodexAppServerStreamAdapter(
         is PatchChangeKind.Update -> "update"
     }
 
-    private fun CommandExecutionStatus.toContentStatus(): ContentStatus = when (this) {
-        CommandExecutionStatus.InProgress -> ContentStatus.IN_PROGRESS
-        CommandExecutionStatus.Completed -> ContentStatus.COMPLETED
-        CommandExecutionStatus.Failed,
-        CommandExecutionStatus.Declined -> ContentStatus.FAILED
-    }
-
-    private fun PatchApplyStatus.toContentStatus(): ContentStatus = when (this) {
-        PatchApplyStatus.InProgress -> ContentStatus.IN_PROGRESS
-        PatchApplyStatus.Completed -> ContentStatus.COMPLETED
-        PatchApplyStatus.Failed,
-        PatchApplyStatus.Declined -> ContentStatus.FAILED
-    }
-
-    private fun McpToolCallStatus.toContentStatus(): ContentStatus = when (this) {
-        McpToolCallStatus.InProgress -> ContentStatus.IN_PROGRESS
-        McpToolCallStatus.Completed -> ContentStatus.COMPLETED
-        McpToolCallStatus.Failed -> ContentStatus.FAILED
-    }
-
     private fun McpToolCallResult?.toResultJson(): JsonElement? {
         if (this == null) return null
         if (structuredContent != null) return structuredContent
@@ -583,7 +551,7 @@ class CodexAppServerStreamAdapter(
     }
 
     /**
-     * 构建内容块列表，包含累积的思考内容和文本内容
+     * 构建内容块列表，包含累积的思考内容、文本内容和工具调用
      */
     private fun buildContentBlocks(): List<UnifiedContentBlock> {
         val blocks = mutableListOf<UnifiedContentBlock>()
@@ -595,6 +563,8 @@ class CodexAppServerStreamAdapter(
         if (accumulatedText.isNotEmpty()) {
             blocks.add(TextContent(accumulatedText.toString()))
         }
+        // 工具调用内容（用于前端匹配 tool_use 和 tool_result）
+        blocks.addAll(accumulatedToolUses)
         return blocks
     }
 }

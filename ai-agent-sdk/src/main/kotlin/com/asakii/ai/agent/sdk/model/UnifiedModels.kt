@@ -1,7 +1,6 @@
 package com.asakii.ai.agent.sdk.model
 
 import com.asakii.ai.agent.sdk.AiAgentProvider
-import com.asakii.codex.agent.sdk.FileChange
 import com.asakii.codex.agent.sdk.TodoEntry
 import kotlinx.serialization.json.JsonElement
 
@@ -75,29 +74,12 @@ data class ToolResultContent(
     override val type: String = "tool_result"
 }
 
-data class CommandExecutionContent(
-    val command: String,
-    val output: String?,
-    val exitCode: Int?,
-    val status: ContentStatus
-) : UnifiedContentBlock {
-    override val type: String = "command_execution"
-}
-
-data class FileChangeContent(
-    val changes: List<FileChange>,
-    val status: ContentStatus
-) : UnifiedContentBlock {
-    override val type: String = "file_change"
-}
-
-// McpToolCallContent 已删除，统一使用 ToolUseContent + ToolResultContent
-
-data class WebSearchContent(
-    val query: String
-) : UnifiedContentBlock {
-    override val type: String = "web_search"
-}
+// CommandExecutionContent, FileChangeContent, WebSearchContent 已删除
+// 统一使用 ToolUseContent + ToolResultContent，通过 name 字段区分工具类型：
+// - "Bash" -> 终端命令
+// - "Edit" / "Write" / "Read" -> 文件操作
+// - "mcp__server__tool" -> MCP 工具
+// - "WebSearch" -> 网页搜索
 
 data class TodoListContent(
     val items: List<TodoEntry>
