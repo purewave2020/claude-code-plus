@@ -748,24 +748,25 @@ class AiAgentRpcServiceImpl(
             mcpProviders.git.getServer()?.let { globalServers["jetbrains_git"] = it }
         }
 
+        // 注册 global MCP 服务器（共享端点，通过请求头区分会话）
         if (globalServers.isNotEmpty()) {
+            val globalHeaders = McpHttpGateway.buildSessionHeaders(GLOBAL_MCP_PROVIDER, GLOBAL_MCP_SESSION_ID)
             globalServers.forEach { (name, server) ->
-                val url = McpHttpGateway.registerServer(
-                    GLOBAL_MCP_PROVIDER,
-                    GLOBAL_MCP_SESSION_ID,
-                    name,
-                    server
-                )
-                claudeServers[name] = McpHttpServerConfig(url = url)
-                sdkLog.info("? [MCP] HTTP endpoint registered (scope=global): $name -> $url")
+                McpHttpGateway.registerServer(GLOBAL_MCP_PROVIDER, GLOBAL_MCP_SESSION_ID, name, server)
+                val url = McpHttpGateway.buildServerUrl(name)
+                claudeServers[name] = McpHttpServerConfig(url = url, headers = globalHeaders)
+                sdkLog.info("✅ [MCP] HTTP endpoint registered (scope=global): $name -> $url (headers=${globalHeaders.keys})")
             }
         }
 
+        // 注册 session MCP 服务器（共享端点，通过请求头区分会话）
         if (sessionServers.isNotEmpty()) {
+            val sessionHeaders = McpHttpGateway.buildSessionHeaders(provider, sessionId)
             sessionServers.forEach { (name, server) ->
-                val url = McpHttpGateway.registerServer(provider, sessionId, name, server)
-                claudeServers[name] = McpHttpServerConfig(url = url)
-                sdkLog.info("? [MCP] HTTP endpoint registered (scope=session): $name -> $url")
+                McpHttpGateway.registerServer(provider, sessionId, name, server)
+                val url = McpHttpGateway.buildServerUrl(name)
+                claudeServers[name] = McpHttpServerConfig(url = url, headers = sessionHeaders)
+                sdkLog.info("✅ [MCP] HTTP endpoint registered (scope=session): $name -> $url (headers=${sessionHeaders.keys})")
             }
         }
 
@@ -1230,7 +1231,7 @@ class AiAgentRpcServiceImpl(
     }
 
     /**
-     * 构建 AppServer 级别的配置覆盖（MCP 服务器 URL、features）。
+     * 构建 AppServer 级别的配置覆盖（MCP 服务器 URL、http_headers、features）。
      * 这些配置通过 -c 参数传递给 codex app-server，使 mcpServerStatus/list API 可以查询到。
      */
     private fun buildAppServerConfigOverrides(
@@ -1240,10 +1241,16 @@ class AiAgentRpcServiceImpl(
     ): Map<String, String> {
         val config = mutableMapOf<String, String>()
 
-        // MCP 服务器 URL
+        // MCP 服务器 URL 和 headers
         mcpServers.forEach { (name, spec) ->
             when (spec) {
-                is McpHttpServerConfig -> config["mcp_servers.$name.url"] = spec.url
+                is McpHttpServerConfig -> {
+                    config["mcp_servers.$name.url"] = spec.url
+                    // 添加 http_headers（用于传递 sessionId 和 provider）
+                    spec.headers.forEach { (headerName, headerValue) ->
+                        config["mcp_servers.$name.http_headers.$headerName"] = headerValue
+                    }
+                }
                 else -> {} // stdio 等类型暂不支持
             }
         }

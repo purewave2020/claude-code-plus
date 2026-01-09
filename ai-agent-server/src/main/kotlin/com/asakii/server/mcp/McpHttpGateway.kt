@@ -45,20 +45,24 @@ object McpHttpGateway {
     private val json = JsonTools.kotlinJson
     private val jsonMapper = JsonTools.mcpJsonMapper
     private val endpointsByKey = ConcurrentHashMap<EndpointKey, Endpoint>()
-    private val endpointsByPath = ConcurrentHashMap<String, Endpoint>()
     private val lifecycleLock = Any()
     private var jettyServer: Server? = null
     private var actualPort: Int = 0
 
+    private const val HEADER_SESSION_ID = "X-Session-Id"
+    private const val HEADER_PROVIDER = "X-Provider"
+
     private class GatewayServlet(
-        private val resolver: (String) -> HttpServletStreamableServerTransportProvider?
+        private val resolver: (String, String?, String?) -> HttpServletStreamableServerTransportProvider?
     ) : HttpServlet() {
         override fun service(req: HttpServletRequest, resp: HttpServletResponse) {
             val path = req.requestURI ?: ""
-            logger.debug { "[MCP] Incoming request: ${req.method} $path" }
-            val transport = resolver(path)
+            val sessionId = req.getHeader(HEADER_SESSION_ID)
+            val providerName = req.getHeader(HEADER_PROVIDER)
+            logger.debug { "[MCP] Incoming request: ${req.method} $path (sessionId=$sessionId, provider=$providerName)" }
+            val transport = resolver(path, sessionId, providerName)
             if (transport == null) {
-                logger.warn { "[MCP] No transport found for path: $path (registered: ${endpointsByPath.keys})" }
+                logger.warn { "[MCP] No transport found for path: $path, sessionId=$sessionId, provider=$providerName" }
                 resp.sendError(HttpServletResponse.SC_NOT_FOUND)
                 return
             }
@@ -79,7 +83,7 @@ object McpHttpGateway {
 
             val context = ServletContextHandler(ServletContextHandler.NO_SESSIONS)
             context.contextPath = "/"
-            context.addServlet(ServletHolder(GatewayServlet(::resolveTransport)), "/mcp/*")
+            context.addServlet(ServletHolder(GatewayServlet(::resolveTransportByHeader)), "/mcp/*")
             server.handler = context
 
             server.start()
@@ -100,7 +104,7 @@ object McpHttpGateway {
         val key = EndpointKey(provider, sessionId, serverName)
         endpointsByKey[key]?.let { return buildUrl(it.path) }
 
-        val endpointPath = buildEndpointPath(provider, sessionId, serverName)
+        val endpointPath = buildEndpointPath(serverName)
         val transport = HttpServletStreamableServerTransportProvider.builder()
             .jsonMapper(jsonMapper)
             .mcpEndpoint(endpointPath)
@@ -125,8 +129,7 @@ object McpHttpGateway {
 
         val endpoint = Endpoint(endpointPath, syncServer, transport)
         endpointsByKey[key] = endpoint
-        endpointsByPath[endpointPath] = endpoint
-        logger.info { "[MCP] Registered endpoint $endpointPath (provider=$provider, session=$sessionId)" }
+        logger.info { "[MCP] Registered endpoint $endpointPath (provider=$provider, session=$sessionId, key=$key)" }
         return buildUrl(endpointPath)
     }
 
@@ -142,14 +145,40 @@ object McpHttpGateway {
 
     private fun unregister(key: EndpointKey) {
         val endpoint = endpointsByKey.remove(key) ?: return
-        endpointsByPath.remove(endpoint.path)
+        logger.info { "[MCP] Unregistering endpoint (key=$key)" }
         runCatching { endpoint.server.closeGracefully() }
             .onFailure { logger.warn(it) { "[MCP] Failed to close endpoint ${endpoint.path}" } }
     }
 
-    private fun resolveTransport(path: String): HttpServletStreamableServerTransportProvider? {
+    /**
+     * 根据请求头中的 sessionId 和 provider 解析 transport。
+     * URL 格式: /mcp/{serverName}
+     * 请求头: X-Session-Id, X-Provider
+     */
+    private fun resolveTransportByHeader(
+        path: String,
+        sessionId: String?,
+        providerName: String?
+    ): HttpServletStreamableServerTransportProvider? {
         val normalized = path.trimEnd('/')
-        return endpointsByPath[normalized]?.transport
+        // 从 /mcp/{serverName} 提取 serverName
+        val serverName = normalized.removePrefix("/mcp/").takeIf { it.isNotBlank() } ?: return null
+        
+        // 如果没有请求头，无法路由
+        if (sessionId.isNullOrBlank() || providerName.isNullOrBlank()) {
+            logger.warn { "[MCP] Missing required headers: sessionId=$sessionId, provider=$providerName" }
+            return null
+        }
+        
+        val provider = try {
+            AiAgentProvider.valueOf(providerName.uppercase())
+        } catch (e: IllegalArgumentException) {
+            logger.warn { "[MCP] Invalid provider: $providerName" }
+            return null
+        }
+        
+        val key = EndpointKey(provider, sessionId, serverName)
+        return endpointsByKey[key]?.transport
     }
 
     private suspend fun registerTools(syncServer: McpSyncServer, server: SdkMcpServer) {
@@ -202,14 +231,35 @@ object McpHttpGateway {
         return McpSchema.CallToolResult(contents, result.isError)
     }
 
-    private fun buildEndpointPath(
-        provider: AiAgentProvider,
-        sessionId: String,
-        serverName: String
-    ): String {
-        val providerKey = provider.name.lowercase()
-        return "/mcp/$providerKey/$sessionId/$serverName"
+    /**
+     * 构建端点路径。现在只用 serverName，provider 和 sessionId 通过请求头传递。
+     */
+    private fun buildEndpointPath(serverName: String): String {
+        return "/mcp/$serverName"
     }
 
     private fun buildUrl(path: String): String = "http://127.0.0.1:$actualPort$path"
+
+    /**
+     * 获取 MCP 网关端口（启动后可用）
+     */
+    fun getPort(): Int = actualPort
+
+    /**
+     * 构建指定 serverName 的 MCP URL（不含会话信息，会话通过请求头传递）
+     */
+    fun buildServerUrl(serverName: String): String {
+        ensureStarted()
+        return buildUrl(buildEndpointPath(serverName))
+    }
+
+    /**
+     * 获取需要添加到 HTTP 请求头的会话信息
+     */
+    fun buildSessionHeaders(provider: AiAgentProvider, sessionId: String): Map<String, String> {
+        return mapOf(
+            HEADER_SESSION_ID to sessionId,
+            HEADER_PROVIDER to provider.name
+        )
+    }
 }
