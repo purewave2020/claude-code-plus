@@ -856,51 +856,12 @@ function hasScrollbar(): boolean {
 }
 
 /**
- * 可靠地滚动到底部
- * 策略: 轮询检查滚动位置，直到真正到达底部或超时
+ * 滚动到底部
  */
-async function scrollToBottomReliably(maxRetries = 10, interval = 100): Promise<void> {
-  let retries = 0
-
-  const tryScroll = async () => {
-    if (!scrollerRef.value) return false
-
-    // 执行滚动
-    scrollerRef.value.scrollToBottom()
-    await nextTick()
-
-    // 验证是否到达底部
-    const el = scrollerRef.value.$el as HTMLElement
-    if (!el) return false
-
-    const scrollTop = el.scrollTop
-    const scrollHeight = el.scrollHeight
-    const clientHeight = el.clientHeight
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight
-
-    // 允许10px的误差
-    return distanceFromBottom < 10
-  }
-
-  // 第一次尝试
-  const firstTry = await tryScroll()
-  if (firstTry) return
-
-  // 轮询重试
-  return new Promise((resolve) => {
-    const timer = setInterval(async () => {
-      retries++
-      const success = await tryScroll()
-
-      if (success || retries >= maxRetries) {
-        clearInterval(timer)
-        if (!success && retries >= maxRetries) {
-          console.warn('⚠️ 滚动到底部失败，已重试', maxRetries, '次')
-        }
-        resolve()
-      }
-    }, interval)
-  })
+async function scrollToBottomReliably(): Promise<void> {
+  if (!scrollerRef.value) return
+  scrollerRef.value.scrollToBottom()
+  await nextTick()
 }
 
 /**
