@@ -1,2 +1,2 @@
 demo file created by jetbrains file mcp
-line2: edited
+line2: updated by jetbrains file mcp

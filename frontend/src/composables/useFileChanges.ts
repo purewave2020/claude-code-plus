@@ -2,17 +2,17 @@
  * 文件改动追踪 Composable
  *
  * 追踪当前会话中 JetBrains MCP 工具（WriteFile/EditFile）的文件修改，
- * 支持回滚功能。仅追踪实时收到的工具调用，历史加载的不追踪。
+ * 支持回滚功能。
  * 
- * 优化：使用事件驱动而非 deep watch，仅在工具完成时触发，性能提升 99%+
+ * 架构：直接回调机制
+ * - 由外部在工具结果处理时调用 addFileEdit
+ * - 不依赖事件订阅，避免时序问题
  */
 
-import { ref, computed, watch, onUnmounted, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import type { DisplayItem, ToolCall } from '@/types/display'
 import { ToolCallStatus } from '@/types/display'
 import { jetbrainsRSocket } from '@/services/jetbrainsRSocket'
-import { useSessionStore } from '@/stores/sessionStore'
-import type { SessionToolsInstance } from './useSessionTools'
 
 // ============ 类型定义 ============
 
@@ -199,16 +199,13 @@ function calculateLineChanges(toolCall: ToolCall): { added: number; removed: num
 /**
  * 文件改动追踪 Composable
  * 
+ * 重构：改为直接回调机制，由外部在工具结果处理时调用 addFileEdit
+ * 
  * @param displayItems - 用于清理已删除的记录（shallow watch）
- * @param tools - 工具管理实例，用于订阅工具完成事件（可选，向后兼容）
- * @param isGeneratingRef - 是否正在生成的响应式引用（可选）
  */
 export function useFileChanges(
-  displayItems: Ref<DisplayItem[]> | ComputedRef<DisplayItem[]>,
-  tools?: SessionToolsInstance,
-  isGeneratingRef?: Ref<boolean> | ComputedRef<boolean>
+  displayItems: Ref<DisplayItem[]> | ComputedRef<DisplayItem[]>
 ) {
-  const sessionStore = useSessionStore()
   
   // 当前会话的文件修改记录（直接存储，不从 displayItems 计算）
   const fileEdits = ref<FileModification[]>([])
@@ -291,7 +288,10 @@ export function useFileChanges(
     
     // 提取元信息（historyTs、行数变化等）
     const meta = extractToolResultMeta(toolCall.result)
-    if (!meta.historyTs) return false
+    if (!meta.historyTs) {
+      console.warn('[useFileChanges] 无法提取 historyTs，跳过:', toolCall.toolName)
+      return false
+    }
     
     // 检查是否已存在（避免重复）
     if (fileEditMap.value.has(toolCall.id)) return false
@@ -454,30 +454,9 @@ export function useFileChanges(
     }
   }
   
-  // ========== 事件驱动：订阅工具完成事件 ==========
-  // 优化：仅在 JetBrains 文件工具完成时触发，而非 deep watch 整个 displayItems
-  // 性能提升：从 ~1000 次/对话 降低到 ~3 次/对话
-  
-  let unsubscribeToolCompleted: (() => void) | null = null
-  
-  if (tools) {
-    // 订阅工具完成事件
-    unsubscribeToolCompleted = tools.onToolCompleted((toolCall) => {
-      // 只处理 JetBrains 文件编辑工具
-      if (!isJetBrainsFileEditTool(toolCall.toolName)) return
-      
-      // 只在生成中添加（历史加载时不添加）
-      const isGenerating = isGeneratingRef?.value ?? sessionStore.currentIsGenerating
-      if (!isGenerating) return
-      
-      addFileEdit(toolCall)
-    })
-    
-    // 组件卸载时取消订阅
-    onUnmounted(() => {
-      unsubscribeToolCompleted?.()
-    })
-  }
+  // ========== 直接回调机制 ==========
+  // 由外部在工具结果处理时直接调用 addFileEdit，不依赖事件订阅
+  // 这样可以确保在正确的时机（流式处理期间）添加记录
   
   // ========== 清理机制：shallow watch 仅监听长度变化 ==========
   // 用于清理已删除的记录（用户编辑历史消息时）

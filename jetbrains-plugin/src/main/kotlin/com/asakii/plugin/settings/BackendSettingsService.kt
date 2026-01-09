@@ -78,7 +78,7 @@ class BackendSettingsService(private val project: Project) : PersistentStateComp
         var codexModelId: String = "o3-mini",
         var codexModelProvider: String = "openai",
         var codexSandboxMode: String = "workspace-write",
-        var codexReasoningEffort: String = "medium",
+        var codexReasoningEffort: String = "xhigh",
         var codexReasoningSummary: String = "auto"
     )
 

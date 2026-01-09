@@ -619,12 +619,16 @@ const codexModel = computed(() => {
 })
 
 const codexSandboxMode = computed(() => {
-  const stored = (settingsStore.settings as any).codexSandboxMode ?? DEFAULT_CODEX_CONFIG.sandboxMode
+  // 优先从 Tab 的初始连接配置获取（Tab 创建时的快照），避免全局设置变更影响已有会话
+  const tabSandboxMode = sessionStore.currentTab?.initialConnectOptions?.value?.sandboxMode
+  const stored = tabSandboxMode ?? (settingsStore.settings as any).codexSandboxMode ?? DEFAULT_CODEX_CONFIG.sandboxMode
   return stored === 'full-access' ? 'danger-full-access' : stored
 })
 
 const codexReasoningEffort = computed<CodexReasoningEffort>(() => {
-  const stored = (settingsStore.settings as any).codexReasoningEffort
+  // 优先从 Tab 的初始连接配置获取（Tab 创建时的快照），避免全局设置变更影响已有会话
+  const tabReasoningEffort = sessionStore.currentTab?.initialConnectOptions?.value?.reasoningEffort
+  const stored = tabReasoningEffort ?? (settingsStore.settings as any).codexReasoningEffort
   if (stored === undefined || stored === null) {
     return DEFAULT_CODEX_CONFIG.reasoningEffort
   }

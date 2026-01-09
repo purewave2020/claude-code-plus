@@ -164,7 +164,7 @@ const DEFAULT_SETTINGS: Settings = {
 
   // Codex 设置（向后兼容）
   codexModel: 'gpt-5.2-codex',
-  codexReasoningEffort: 'medium',
+  codexReasoningEffort: 'xhigh',
   codexReasoningSummary: 'auto',
   codexSandboxMode: 'workspace-write',
 

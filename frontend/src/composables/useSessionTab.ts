@@ -213,12 +213,19 @@ export function useSessionTab(initialOrder: number = 0) {
     const messagesHandler: SessionMessagesInstance = useSessionMessages(tools, stats)
     
     // 文件改动追踪（用于回滚功能）
-    // 使用事件驱动而非 deep watch，性能优化
+    // 直接回调机制：由 tools.onToolCompleted 触发
     const fileChanges: FileChangesInstance = useFileChanges(
-      computed(() => messagesHandler.displayItems),
-      tools,
-      computed(() => messagesHandler.isGenerating.value)
+      computed(() => messagesHandler.displayItems)
     )
+    
+    // 订阅工具完成事件，直接调用 fileChanges.addFileEdit
+    // 这样可以确保在正确的时机（流式处理期间）添加记录
+    tools.onToolCompleted((toolCall) => {
+      // 只在生成中添加（历史加载时不添加）
+      if (messagesHandler.isGenerating.value) {
+        fileChanges.addFileEdit(toolCall)
+      }
+    })
 
     // ========== Tab 基础信息 ==========
     const tabId = `tab-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
@@ -2235,6 +2242,7 @@ export function useSessionTab(initialOrder: number = 0) {
         permissionMode,
         skipPermissions,
         resumeFromSessionId,
+        initialConnectOptions,
 
         // MCP 服务器状态
         mcpServers,

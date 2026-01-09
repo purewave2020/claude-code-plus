@@ -829,13 +829,19 @@ export const useSessionStore = defineStore('session', () => {
 
   /**
    * 处理模型列表变化
-   * 当自定义模型被添加/删除时，检查并更新所有 Tab 的模型选择
+   * 当自定义模型被添加/删除时，检查并更新所有 Claude Tab 的模型选择
+   * 注意：只处理 Claude 后端的 Tab，Codex Tab 有自己的模型列表
    */
   function handleModelListChange(models: ModelInfo[], defaultModelId: string) {
-    log.info('[ModelListChange] 模型列表已更新:', models.length, '个模型, 默认:', defaultModelId)
+    log.info('[ModelListChange] Claude 模型列表已更新:', models.length, '个模型, 默认:', defaultModelId)
 
     // 遍历所有 Tab，检查模型是否仍然有效
     tabs.value.forEach(tab => {
+      // 只处理 Claude 后端的 Tab，跳过 Codex Tab（Codex 有自己的模型列表）
+      if (tab.backendType.value !== 'claude') {
+        return
+      }
+
       const currentModelId = tab.modelId.value
       if (!currentModelId) return
 

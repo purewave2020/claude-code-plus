@@ -22,4 +22,12 @@ dependencies {
 
     api(project(":claude-agent-sdk"))
     api(project(":codex-agent-sdk"))
+
+    // Test dependencies
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

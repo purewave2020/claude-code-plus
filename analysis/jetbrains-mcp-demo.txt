@@ -1,0 +1,32 @@
+# JetBrains File MCP 工具演示
+
+## 演示时间
+2026-01-10
+
+## 演示状态
+✅ 已完成所有三个工具的演示
+
+## 工具列表
+
+1. **ReadFile** - 读取文件内容
+   - 支持分页（offset/maxLines）
+   - 支持 JAR 文件、JDK 源码、反编译 .class
+
+2. **WriteFile** - 写入/创建文件
+   - 如果文件存在则覆盖
+   - 如果文件不存在则创建
+
+3. **EditFile** - 编辑文件
+   - 通过 oldString/newString 替换
+   - 支持 replaceAll 批量替换
+
+## 示例代码
+
+```typescript
+// 这是演示文件
+console.log("Hello from JetBrains MCP!")
+console.log("第二次编辑 - 测试 checkpoint")
+```
+
+## 注意事项
+⚠️ JetBrains MCP 文件操作不会触发 Claude Code 的 checkpoint 功能
