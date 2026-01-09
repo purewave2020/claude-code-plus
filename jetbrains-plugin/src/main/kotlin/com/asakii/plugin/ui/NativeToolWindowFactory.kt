@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.options.ShowSettingsUtil
@@ -51,7 +52,7 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
     }
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        logger.info("🚀 Creating Claude ToolWindow")
+        logger.info { "🚀 Creating Claude ToolWindow" }
         val toolWindowEx = toolWindow as? ToolWindowEx
         val contentFactory = ContentFactory.getInstance()
         val httpService = HttpServerProjectService.getInstance(project)
@@ -88,7 +89,7 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
         )
 
         if (serverUrl.isNullOrBlank()) {
-            logger.warn("⚠️ HTTP Server is not ready, showing placeholder panel")
+            logger.warn { "⚠️ HTTP Server is not ready, showing placeholder panel" }
             val placeholder = createPlaceholderComponent()
             val content = contentFactory.createContent(placeholder, "", false)
             toolWindow.contentManager.addContent(content)
@@ -136,7 +137,7 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
                 "&initialTheme=$encoded"
             } else ""
         } catch (e: Exception) {
-            logger.warn("⚠️ Failed to encode initial theme: ${e.message}")
+            logger.warn { "⚠️ Failed to encode initial theme: ${e.message}" }
             ""
         }
 
@@ -145,7 +146,7 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
         } else {
             "$serverUrl?ide=true&scrollMultiplier=2.5$themeParam"
         }
-        logger.info("🔗 Loading URL with initial theme: ${targetUrl.take(100)}...")
+        logger.info { "🔗 Loading URL with initial theme: ${targetUrl.take(100)}..." }
         browser.loadURL(targetUrl)
 
         // 将浏览器组件包装在 JBPanel 中，确保正确填充空间
@@ -168,7 +169,7 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
             AllIcons.Actions.Refresh
         ) {
             override fun actionPerformed(e: AnActionEvent) {
-                logger.info("🔄 Restarting server and refreshing frontend...")
+                logger.info { "🔄 Restarting server and refreshing frontend..." }
 
                 // 重启服务器以重新加载前端资源
                 val newUrl = httpService.restart()
@@ -186,7 +187,7 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
                             "&initialTheme=$encoded"
                         } else ""
                     } catch (ex: Exception) {
-                        logger.warn("⚠️ Failed to encode initial theme: ${ex.message}")
+                        logger.warn { "⚠️ Failed to encode initial theme: ${ex.message}" }
                         ""
                     }
 
@@ -196,11 +197,11 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
                         "$newUrl?ide=true&scrollMultiplier=2.5$newThemeParam"
                     }
 
-                    logger.info("🔗 Loading new URL: ${newTargetUrl.take(100)}...")
+                    logger.info { "🔗 Loading new URL: ${newTargetUrl.take(100)}..." }
                     browser.loadURL(newTargetUrl)
                 } else {
                     // 如果重启失败，仅刷新页面
-                    logger.warn("⚠️ Server restart failed, just reloading page")
+                    logger.warn { "⚠️ Server restart failed, just reloading page" }
                     browser.cefBrowser.reloadIgnoreCache()
                 }
             }
@@ -302,7 +303,7 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
             if (desktop.isSupported(java.awt.Desktop.Action.BROWSE)) {
                 desktop.browse(java.net.URI(url))
             } else {
-                logger.warn("Browser not supported to open: $url")
+                logger.warn { "Browser not supported to open: $url" }
             }
         } catch (e: IOException) {
             logger.warn("Failed to open browser: ${e.message}", e)
@@ -318,9 +319,9 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
         try {
             // 使用 JBCefBrowser 封装的 openDevtools 方法（跨版本兼容）
             browser.openDevtools()
-            logger.info("✅ DevTools window opened via JBCefBrowser.openDevtools()")
+            logger.info { "✅ DevTools window opened via JBCefBrowser.openDevtools()" }
         } catch (e: Exception) {
-            logger.warn("⚠️ JBCefBrowser.openDevtools() failed: ${e.message}")
+            logger.warn { "⚠️ JBCefBrowser.openDevtools() failed: ${e.message}" }
             // 提示用户在外部浏览器中打开
             val serverUrl = HttpServerProjectService.getInstance(project).serverUrl
             if (serverUrl != null) {

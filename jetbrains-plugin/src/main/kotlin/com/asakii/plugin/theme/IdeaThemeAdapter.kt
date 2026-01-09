@@ -3,6 +3,7 @@ package com.asakii.plugin.theme
 import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.UIUtil
 import javax.swing.UIManager
@@ -39,12 +40,12 @@ class IdeaThemeAdapter {
 
                 connection.subscribe(LafManagerListener.TOPIC, LafManagerListener {
                     val themeName = getCurrentThemeName()
-                    logger.info("IDEA 主题已更改: $themeName")
+                    logger.info { "IDEA 主题已更改: $themeName" }
                     // 回调参数保持兼容，但调用方应使用完整颜色值而非亮暗判断
                     onChange(true) // 仅触发刷新，不传递亮暗信息
                 })
 
-                logger.info("已注册 IDEA 主题变化监听器")
+                logger.info { "已注册 IDEA 主题变化监听器" }
             } catch (e: Exception) {
                 logger.error("注册主题监听器失败", e)
             }

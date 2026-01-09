@@ -17,6 +17,7 @@ import com.intellij.notification.Notifications
 import com.intellij.openapi.application.ApplicationManager
 
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 
 import com.intellij.openapi.editor.Editor
 
@@ -132,7 +133,7 @@ class IdeaPlatformService(private val project: Project) {
 
             if (virtualFile == null) {
 
-                logger.warn("找不到文件: $filePath")
+                logger.warn { "找不到文件: $filePath" }
 
                 showWarning("找不到文件: $filePath")
 
@@ -172,7 +173,7 @@ class IdeaPlatformService(private val project: Project) {
 
 
 
-                    logger.info("成功打开文件: ${virtualFile.name}")
+                    logger.info { "成功打开文件: ${virtualFile.name}" }
 
                 } catch (e: Exception) {
 
@@ -208,7 +209,7 @@ class IdeaPlatformService(private val project: Project) {
             editor.selectionModel.setSelection(start, end)
             editor.caretModel.moveToOffset(start)
             editor.scrollingModel.scrollTo(editor.caretModel.logicalPosition, ScrollType.CENTER)
-            logger.info("成功根据范围选择文本: $start-$end")
+            logger.info { "成功根据范围选择文本: $start-$end" }
         } catch (e: Exception) {
             logger.warn("根据范围选择文本失败", e)
         }
@@ -279,7 +280,7 @@ class IdeaPlatformService(private val project: Project) {
 
                     DiffManager.getInstance().showDiff(project, diffRequest)
 
-                    logger.info("成功显示文件差异: $fileName")
+                    logger.info { "成功显示文件差异: $fileName" }
 
                 } catch (e: Exception) {
 
@@ -481,7 +482,7 @@ class IdeaPlatformService(private val project: Project) {
 
                 }
 
-                logger.info("已保存文档: $filePath")
+                logger.info { "已保存文档: $filePath" }
 
             }
 
@@ -631,7 +632,7 @@ class IdeaPlatformService(private val project: Project) {
 
 
 
-            logger.info("成功定位到第 $line 行")
+            logger.info { "成功定位到第 $line 行" }
 
         } catch (e: Exception) {
 
@@ -673,11 +674,11 @@ class IdeaPlatformService(private val project: Project) {
 
                 editor.scrollingModel.scrollTo(editor.caretModel.logicalPosition, ScrollType.CENTER)
 
-                logger.info("成功选择文本内容")
+                logger.info { "成功选择文本内容" }
 
             } else {
 
-                logger.warn("在文档中找不到指定内容")
+                logger.warn { "在文档中找不到指定内容" }
 
             }
 

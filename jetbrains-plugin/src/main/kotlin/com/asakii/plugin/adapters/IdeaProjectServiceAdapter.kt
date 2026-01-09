@@ -7,6 +7,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 
 /**
  * IntelliJ IDEA 的 ProjectService 实现
@@ -47,7 +48,7 @@ class IdeaProjectServiceAdapter(
                 }
                 FileEditorManager.getInstance(project).openTextEditor(descriptor, true)
             } else {
-                logger.warn("File not found: $filePath")
+                logger.warn { "File not found: $filePath" }
             }
         } catch (e: Exception) {
             logger.error("Error opening file: $filePath", e)

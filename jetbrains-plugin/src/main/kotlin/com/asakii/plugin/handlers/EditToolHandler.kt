@@ -5,6 +5,7 @@ import com.asakii.plugin.types.EditToolDetail
 import com.asakii.plugin.types.MultiEditToolDetail
 import com.asakii.plugin.types.LegacyToolCall
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import com.intellij.openapi.project.Project
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -32,12 +33,12 @@ class EditToolHandler : ToolClickHandler {
         config: ToolClickConfig
     ): Boolean {
         if (project == null) {
-            logger.info("EditToolHandler: Project is null, 无法使用 IDE 集成")
+            logger.info { "EditToolHandler: Project is null, 无法使用 IDE 集成" }
             return false
         }
 
         if (config.alwaysExpand) {
-            logger.info("EditToolHandler: 配置为总是展开，跳过 IDE 集成")
+            logger.info { "EditToolHandler: 配置为总是展开，跳过 IDE 集成" }
             return false
         }
 
@@ -103,7 +104,7 @@ class EditToolHandler : ToolClickHandler {
         val platformService = IdeaPlatformService(project)
 
         if (multiEditTool.edits.isEmpty()) {
-            logger.warn("EditToolHandler: MultiEdit 没有编辑内容")
+            logger.warn { "EditToolHandler: MultiEdit 没有编辑内容" }
             return false
         }
 

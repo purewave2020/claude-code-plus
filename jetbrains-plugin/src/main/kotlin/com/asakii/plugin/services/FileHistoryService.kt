@@ -4,6 +4,7 @@ import com.intellij.history.LocalHistory
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.vfs.LocalFileSystem
 import java.io.File
@@ -28,13 +29,13 @@ object FileHistoryService {
         return try {
             val file = LocalFileSystem.getInstance()
                 .findFileByIoFile(File(filePath)) ?: run {
-                logger.info("File not found in VFS: $filePath")
+                logger.info { "File not found in VFS: $filePath" }
                 return null
             }
 
             // 检查文件是否在 LocalHistory 控制下
             if (!LocalHistory.getInstance().isUnderControl(file)) {
-                logger.info("File not under LocalHistory control: $filePath")
+                logger.info { "File not under LocalHistory control: $filePath" }
                 return null
             }
 
@@ -46,12 +47,12 @@ object FileHistoryService {
             }
 
             if (byteContent == null) {
-                logger.info("No history content found before timestamp $beforeTimestamp for: $filePath")
+                logger.info { "No history content found before timestamp $beforeTimestamp for: $filePath" }
                 return null
             }
 
             val content = byteContent.toString(Charsets.UTF_8)
-            logger.info("Found history content (${content.length} chars) before $beforeTimestamp for: $filePath")
+            logger.info { "Found history content (${content.length} chars) before $beforeTimestamp for: $filePath" }
             content
         } catch (e: Exception) {
             logger.warn("Failed to get history content for $filePath: ${e.message}", e)
@@ -67,12 +68,12 @@ object FileHistoryService {
      * @return RollbackResult 回滚结果
      */
     fun rollbackToTimestamp(filePath: String, beforeTimestamp: Long): RollbackResult {
-        logger.info("Rollback request: file=$filePath, beforeTs=$beforeTimestamp")
+        logger.info { "Rollback request: file=$filePath, beforeTs=$beforeTimestamp" }
 
         return try {
             val virtualFile = LocalFileSystem.getInstance()
                 .findFileByIoFile(File(filePath)) ?: run {
-                logger.warn("Rollback failed - file not found: $filePath")
+                logger.warn { "Rollback failed - file not found: $filePath" }
                 return RollbackResult(
                     success = false,
                     error = "File not found: $filePath"
@@ -81,7 +82,7 @@ object FileHistoryService {
 
             // 检查文件是否在 LocalHistory 控制下
             if (!LocalHistory.getInstance().isUnderControl(virtualFile)) {
-                logger.warn("Rollback failed - file not under LocalHistory control: $filePath")
+                logger.warn { "Rollback failed - file not under LocalHistory control: $filePath" }
                 return RollbackResult(
                     success = false,
                     error = "File not under LocalHistory control: $filePath"
@@ -94,7 +95,7 @@ object FileHistoryService {
             }
 
             if (byteContent == null) {
-                logger.warn("Rollback failed - no history found before timestamp $beforeTimestamp for: $filePath")
+                logger.warn { "Rollback failed - no history found before timestamp $beforeTimestamp for: $filePath" }
                 return RollbackResult(
                     success = false,
                     error = "No history found before timestamp $beforeTimestamp"
@@ -110,7 +111,7 @@ object FileHistoryService {
                     try {
                         virtualFile.setBinaryContent(historicalContent.toByteArray(virtualFile.charset))
                         writeResult = RollbackResult(success = true)
-                        logger.info("Rollback successful: $filePath (restored ${historicalContent.length} chars)")
+                        logger.info { "Rollback successful: $filePath (restored ${historicalContent.length} chars)" }
                     } catch (e: Exception) {
                         logger.error("Failed to write rollback content for $filePath", e)
                         writeResult = RollbackResult(

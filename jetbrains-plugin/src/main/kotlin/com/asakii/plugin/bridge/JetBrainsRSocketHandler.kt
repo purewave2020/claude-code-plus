@@ -80,13 +80,13 @@ class JetBrainsRSocketHandler(
      * 创建 RSocket 请求处理器
      */
     override fun createHandler(): RSocket {
-        logger.info("🔌 [JetBrains RSocket] 创建请求处理器")
+        logger.info { "🔌 [JetBrains RSocket] 创建请求处理器" }
 
         return RSocketRequestHandler {
             requestResponse { request ->
                 val route = extractRoute(request)
                 val dataBytes = request.data.readByteArray()
-                logger.info("📨 [JetBrains RSocket] ← $route")
+                logger.info { "📨 [JetBrains RSocket] ← $route" }
 
                 when (route) {
                     "jetbrains.openFile" -> handleOpenFile(dataBytes)
@@ -106,7 +106,7 @@ class JetBrainsRSocketHandler(
                     "jetbrains.getFileHistoryContent" -> handleGetFileHistoryContent(dataBytes)
                     "jetbrains.rollbackFile" -> handleRollbackFile(dataBytes)
                     else -> {
-                        logger.warn("⚠️ [JetBrains RSocket] Unknown route: $route")
+                        logger.warn { "⚠️ [JetBrains RSocket] Unknown route: $route" }
                         buildErrorResponse("Unknown route: $route")
                     }
                 }
@@ -120,7 +120,7 @@ class JetBrainsRSocketHandler(
     override fun setClientRequester(clientId: String, requester: RSocket) {
         this.clientRequester = requester
         connectedClients[clientId] = requester
-        logger.info("🔗 [JetBrains RSocket] 客户端已连接: $clientId")
+        logger.info { "🔗 [JetBrains RSocket] 客户端已连接: $clientId" }
     }
 
     /**
@@ -131,7 +131,7 @@ class JetBrainsRSocketHandler(
         if (connectedClients.isEmpty()) {
             clientRequester = null
         }
-        logger.info("🔌 [JetBrains RSocket] 客户端已断开: $clientId")
+        logger.info { "🔌 [JetBrains RSocket] 客户端已断开: $clientId" }
     }
 
     // ==================== 前端调用处理 ====================
@@ -139,7 +139,7 @@ class JetBrainsRSocketHandler(
     private fun handleOpenFile(dataBytes: ByteArray): Payload {
         return try {
             val req = ProtoOpenFileRequest.parseFrom(dataBytes)
-            logger.info("📂 [JetBrains] openFile: ${req.filePath}")
+            logger.info { "📂 [JetBrains] openFile: ${req.filePath}" }
 
             val request = com.asakii.rpc.api.JetBrainsOpenFileRequest(
                 filePath = req.filePath,
@@ -152,7 +152,7 @@ class JetBrainsRSocketHandler(
             val result = jetbrainsApi.file.openFile(request)
             buildOperationResponse(result.isSuccess, result.exceptionOrNull()?.message)
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] openFile failed: ${e.message}")
+            logger.error { "❌ [JetBrains] openFile failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -160,7 +160,7 @@ class JetBrainsRSocketHandler(
     private fun handleShowDiff(dataBytes: ByteArray): Payload {
         return try {
             val req = ProtoShowDiffRequest.parseFrom(dataBytes)
-            logger.info("📝 [JetBrains] showDiff: ${req.filePath}")
+            logger.info { "📝 [JetBrains] showDiff: ${req.filePath}" }
 
             val request = com.asakii.rpc.api.JetBrainsShowDiffRequest(
                 filePath = req.filePath,
@@ -172,7 +172,7 @@ class JetBrainsRSocketHandler(
             val result = jetbrainsApi.file.showDiff(request)
             buildOperationResponse(result.isSuccess, result.exceptionOrNull()?.message)
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] showDiff failed: ${e.message}")
+            logger.error { "❌ [JetBrains] showDiff failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -180,7 +180,7 @@ class JetBrainsRSocketHandler(
     private fun handleShowMultiEditDiff(dataBytes: ByteArray): Payload {
         return try {
             val req = ProtoShowMultiEditDiffRequest.parseFrom(dataBytes)
-            logger.info("📝 [JetBrains] showMultiEditDiff: ${req.filePath} (${req.editsCount} edits)")
+            logger.info { "📝 [JetBrains] showMultiEditDiff: ${req.filePath} (${req.editsCount} edits)" }
 
             val request = com.asakii.rpc.api.JetBrainsShowMultiEditDiffRequest(
                 filePath = req.filePath,
@@ -197,7 +197,7 @@ class JetBrainsRSocketHandler(
             val result = jetbrainsApi.file.showMultiEditDiff(request)
             buildOperationResponse(result.isSuccess, result.exceptionOrNull()?.message)
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] showMultiEditDiff failed: ${e.message}")
+            logger.error { "❌ [JetBrains] showMultiEditDiff failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -205,7 +205,7 @@ class JetBrainsRSocketHandler(
     private fun handleShowEditPreviewDiff(dataBytes: ByteArray): Payload {
         return try {
             val req = ProtoShowEditPreviewRequest.parseFrom(dataBytes)
-            logger.info("👀 [JetBrains] showEditPreviewDiff: ${req.filePath} (${req.editsCount} edits)")
+            logger.info { "👀 [JetBrains] showEditPreviewDiff: ${req.filePath} (${req.editsCount} edits)" }
 
             val request = com.asakii.rpc.api.JetBrainsShowEditPreviewRequest(
                 filePath = req.filePath,
@@ -222,7 +222,7 @@ class JetBrainsRSocketHandler(
             val result = jetbrainsApi.file.showEditPreviewDiff(request)
             buildOperationResponse(result.isSuccess, result.exceptionOrNull()?.message)
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] showEditPreviewDiff failed: ${e.message}")
+            logger.error { "❌ [JetBrains] showEditPreviewDiff failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -240,7 +240,7 @@ class JetBrainsRSocketHandler(
             val result = jetbrainsApi.file.showMarkdown(request)
             buildOperationResponse(result.isSuccess, result.exceptionOrNull()?.message)
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] showMarkdown failed: ${e.message}")
+            logger.error { "❌ [JetBrains] showMarkdown failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -248,7 +248,7 @@ class JetBrainsRSocketHandler(
     private fun handleShowEditFullDiff(dataBytes: ByteArray): Payload {
         return try {
             val req = ProtoShowEditFullDiffRequest.parseFrom(dataBytes)
-            logger.info("📝 [JetBrains] showEditFullDiff: ${req.filePath}")
+            logger.info { "📝 [JetBrains] showEditFullDiff: ${req.filePath}" }
 
             val request = com.asakii.rpc.api.JetBrainsShowEditFullDiffRequest(
                 filePath = req.filePath,
@@ -262,7 +262,7 @@ class JetBrainsRSocketHandler(
             val result = jetbrainsApi.file.showEditFullDiff(request)
             buildOperationResponse(result.isSuccess, result.exceptionOrNull()?.message)
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] showEditFullDiff failed: ${e.message}")
+            logger.error { "❌ [JetBrains] showEditFullDiff failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -270,7 +270,7 @@ class JetBrainsRSocketHandler(
     private fun handleGetSettings(): Payload {
         return try {
             val settings = AgentSettingsService.getInstance()
-            logger.info("⚙️ [JetBrains] getSettings")
+            logger.info { "⚙️ [JetBrains] getSettings" }
 
             // 转换思考级别列表为 Proto 格式
             val thinkingLevelsProto = settings.getAllThinkingLevels().map { level: com.asakii.settings.ThinkingLevelConfig ->
@@ -321,7 +321,7 @@ class JetBrainsRSocketHandler(
 
             buildPayload { data(response.toByteArray()) }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] getSettings failed: ${e.message}")
+            logger.error { "❌ [JetBrains] getSettings failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -350,7 +350,7 @@ class JetBrainsRSocketHandler(
 
             buildPayload { data(notifyBuilder.build().toByteArray()) }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] getActiveFile failed: ${e.message}")
+            logger.error { "❌ [JetBrains] getActiveFile failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -359,7 +359,7 @@ class JetBrainsRSocketHandler(
         return try {
             val theme = jetbrainsApi.theme.get()
                 ?: return buildErrorResponse("Theme not available")
-            logger.info("🎨 [JetBrains] getTheme")
+            logger.info { "🎨 [JetBrains] getTheme" }
 
             val protoTheme = IdeThemeProto.newBuilder()
                 .setBackground(theme.background)
@@ -391,7 +391,7 @@ class JetBrainsRSocketHandler(
 
             buildPayload { data(response.toByteArray()) }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] getTheme failed: ${e.message}")
+            logger.error { "❌ [JetBrains] getTheme failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -399,7 +399,7 @@ class JetBrainsRSocketHandler(
     private fun handleGetLocale(): Payload {
         return try {
             val locale = jetbrainsApi.locale.get()
-            logger.info("🌐 [JetBrains] getLocale: $locale")
+            logger.info { "🌐 [JetBrains] getLocale: $locale" }
 
             val response = JetBrainsGetLocaleResponse.newBuilder()
                 .setLocale(locale)
@@ -407,7 +407,7 @@ class JetBrainsRSocketHandler(
 
             buildPayload { data(response.toByteArray()) }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] getLocale failed: ${e.message}")
+            logger.error { "❌ [JetBrains] getLocale failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -415,12 +415,12 @@ class JetBrainsRSocketHandler(
     private fun handleSetLocale(dataBytes: ByteArray): Payload {
         return try {
             val req = ProtoSetLocaleRequest.parseFrom(dataBytes)
-            logger.info("🌐 [JetBrains] setLocale: ${req.locale}")
+            logger.info { "🌐 [JetBrains] setLocale: ${req.locale}" }
 
             val result = jetbrainsApi.locale.set(req.locale)
             buildOperationResponse(result.isSuccess, result.exceptionOrNull()?.message)
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] setLocale failed: ${e.message}")
+            logger.error { "❌ [JetBrains] setLocale failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -428,7 +428,7 @@ class JetBrainsRSocketHandler(
     private fun handleGetProjectPath(): Payload {
         return try {
             val projectPath = jetbrainsApi.project.getPath()
-            logger.info("📁 [JetBrains] getProjectPath: $projectPath")
+            logger.info { "📁 [JetBrains] getProjectPath: $projectPath" }
 
             val response = JetBrainsGetProjectPathResponse.newBuilder()
                 .setProjectPath(projectPath)
@@ -436,7 +436,7 @@ class JetBrainsRSocketHandler(
 
             buildPayload { data(response.toByteArray()) }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] getProjectPath failed: ${e.message}")
+            logger.error { "❌ [JetBrains] getProjectPath failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -444,7 +444,7 @@ class JetBrainsRSocketHandler(
     private fun handleReportSessionState(dataBytes: ByteArray): Payload {
         return try {
             val req = ProtoSessionState.parseFrom(dataBytes)
-            logger.info("📊 [JetBrains] reportSessionState: ${req.sessionsCount} sessions")
+            logger.info { "📊 [JetBrains] reportSessionState: ${req.sessionsCount} sessions" }
 
             val state = JetBrainsSessionState(
                 sessions = req.sessionsList.map { session ->
@@ -463,7 +463,7 @@ class JetBrainsRSocketHandler(
             jetbrainsApi.session.receiveState(state)
             buildOperationResponse(true, null)
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] reportSessionState failed: ${e.message}")
+            logger.error { "❌ [JetBrains] reportSessionState failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -476,7 +476,7 @@ class JetBrainsRSocketHandler(
         return try {
             // dataBytes 直接是 toolUseId 字符串
             val toolUseId = String(dataBytes, Charsets.UTF_8)
-            logger.info("📄 [JetBrains] getOriginalContent: toolUseId=$toolUseId")
+            logger.info { "📄 [JetBrains] getOriginalContent: toolUseId=$toolUseId" }
 
             val content = FileChangeLabelCache.getOriginalContent(toolUseId)
 
@@ -491,7 +491,7 @@ class JetBrainsRSocketHandler(
 
             buildPayload { data(responseBuilder.build().toByteArray()) }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] getOriginalContent failed: ${e.message}")
+            logger.error { "❌ [JetBrains] getOriginalContent failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -503,7 +503,7 @@ class JetBrainsRSocketHandler(
     private fun handleGetFileHistoryContent(dataBytes: ByteArray): Payload {
         return try {
             val req = com.asakii.rpc.proto.JetBrainsGetFileHistoryContentRequest.parseFrom(dataBytes)
-            logger.info("📄 [JetBrains] getFileHistoryContent: ${req.filePath} (before: ${req.beforeTimestamp})")
+            logger.info { "📄 [JetBrains] getFileHistoryContent: ${req.filePath} (before: ${req.beforeTimestamp})" }
 
             val content = com.asakii.plugin.services.FileHistoryService.getContentBefore(
                 req.filePath,
@@ -520,7 +520,7 @@ class JetBrainsRSocketHandler(
 
             buildPayload { data(responseBuilder.build().toByteArray()) }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] getFileHistoryContent failed: ${e.message}")
+            logger.error { "❌ [JetBrains] getFileHistoryContent failed: ${e.message}" }
             buildErrorResponse(e.message ?: "Unknown error")
         }
     }
@@ -532,7 +532,7 @@ class JetBrainsRSocketHandler(
     private fun handleRollbackFile(dataBytes: ByteArray): Payload {
         return try {
             val req = com.asakii.rpc.proto.JetBrainsRollbackFileRequest.parseFrom(dataBytes)
-            logger.info("↩️ [JetBrains] rollbackFile: ${req.filePath} (before: ${req.beforeTimestamp})")
+            logger.info { "↩️ [JetBrains] rollbackFile: ${req.filePath} (before: ${req.beforeTimestamp})" }
 
             val result = com.asakii.plugin.services.FileHistoryService.rollbackToTimestamp(
                 req.filePath,
@@ -548,7 +548,7 @@ class JetBrainsRSocketHandler(
 
             buildPayload { data(responseBuilder.build().toByteArray()) }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains] rollbackFile failed: ${e.message}")
+            logger.error { "❌ [JetBrains] rollbackFile failed: ${e.message}" }
             val response = com.asakii.rpc.proto.JetBrainsRollbackFileResponse.newBuilder()
                 .setSuccess(false)
                 .setError(e.message ?: "Unknown error")
@@ -569,7 +569,7 @@ class JetBrainsRSocketHandler(
     suspend fun pushThemeChanged(theme: JetBrainsIdeTheme) {
         val clients = connectedClients.values.toList()
         if (clients.isEmpty()) {
-            logger.warn("⚠️ [JetBrains RSocket] 无客户端连接，跳过主题推送")
+            logger.warn { "⚠️ [JetBrains RSocket] 无客户端连接，跳过主题推送" }
             return
         }
 
@@ -616,12 +616,12 @@ class JetBrainsRSocketHandler(
                     val payload = buildPayloadWithRoute("client.call", serverCallBytes)
                     requester.fireAndForget(payload)
                 } catch (e: Exception) {
-                    logger.warn("⚠️ [JetBrains RSocket] 推送主题给客户端失败: ${e.message}")
+                    logger.warn { "⚠️ [JetBrains RSocket] 推送主题给客户端失败: ${e.message}" }
                 }
             }
-            logger.info("📤 [JetBrains RSocket] → pushThemeChanged (to ${clients.size} clients)")
+            logger.info { "📤 [JetBrains RSocket] → pushThemeChanged (to ${clients.size} clients)" }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains RSocket] pushThemeChanged failed: ${e.message}")
+            logger.error { "❌ [JetBrains RSocket] pushThemeChanged failed: ${e.message}" }
         }
     }
 
@@ -632,7 +632,7 @@ class JetBrainsRSocketHandler(
     suspend fun pushSettingsChanged(settings: AgentSettingsService) {
         val clients = connectedClients.values.toList()
         if (clients.isEmpty()) {
-            logger.warn("⚠️ [JetBrains RSocket] 无客户端连接，跳过设置推送")
+            logger.warn { "⚠️ [JetBrains RSocket] 无客户端连接，跳过设置推送" }
             return
         }
 
@@ -692,12 +692,12 @@ class JetBrainsRSocketHandler(
                     val payload = buildPayloadWithRoute("client.call", serverCallBytes)
                     requester.fireAndForget(payload)
                 } catch (e: Exception) {
-                    logger.warn("⚠️ [JetBrains RSocket] 推送设置给客户端失败: ${e.message}")
+                    logger.warn { "⚠️ [JetBrains RSocket] 推送设置给客户端失败: ${e.message}" }
                 }
             }
-            logger.info("📤 [JetBrains RSocket] → pushSettingsChanged (to ${clients.size} clients)")
+            logger.info { "📤 [JetBrains RSocket] → pushSettingsChanged (to ${clients.size} clients)" }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains RSocket] pushSettingsChanged failed: ${e.message}")
+            logger.error { "❌ [JetBrains RSocket] pushSettingsChanged failed: ${e.message}" }
         }
     }
 
@@ -708,7 +708,7 @@ class JetBrainsRSocketHandler(
     suspend fun pushSessionCommand(command: JetBrainsSessionCommand) {
         val clients = connectedClients.values.toList()
         if (clients.isEmpty()) {
-            logger.warn("⚠️ [JetBrains RSocket] 无客户端连接，跳过命令推送")
+            logger.warn { "⚠️ [JetBrains RSocket] 无客户端连接，跳过命令推送" }
             return
         }
 
@@ -749,12 +749,12 @@ class JetBrainsRSocketHandler(
                     val payload = buildPayloadWithRoute("client.call", serverCallBytes)
                     requester.fireAndForget(payload)
                 } catch (e: Exception) {
-                    logger.warn("⚠️ [JetBrains RSocket] 推送命令给客户端失败: ${e.message}")
+                    logger.warn { "⚠️ [JetBrains RSocket] 推送命令给客户端失败: ${e.message}" }
                 }
             }
-            logger.info("📤 [JetBrains RSocket] → pushSessionCommand: ${command.type} (to ${clients.size} clients)")
+            logger.info { "📤 [JetBrains RSocket] → pushSessionCommand: ${command.type} (to ${clients.size} clients)" }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains RSocket] pushSessionCommand failed: ${e.message}")
+            logger.error { "❌ [JetBrains RSocket] pushSessionCommand failed: ${e.message}" }
         }
     }
 
@@ -765,7 +765,7 @@ class JetBrainsRSocketHandler(
     suspend fun pushActiveFileChanged(activeFile: ActiveFileInfo?) {
         val clients = connectedClients.values.toList()
         if (clients.isEmpty()) {
-            logger.warn("⚠️ [JetBrains RSocket] 无客户端连接，跳过活跃文件推送")
+            logger.warn { "⚠️ [JetBrains RSocket] 无客户端连接，跳过活跃文件推送" }
             return
         }
 
@@ -804,7 +804,7 @@ class JetBrainsRSocketHandler(
                     val payload = buildPayloadWithRoute("client.call", serverCallBytes)
                     requester.fireAndForget(payload)
                 } catch (e: Exception) {
-                    logger.warn("⚠️ [JetBrains RSocket] 推送给客户端失败: ${e.message}")
+                    logger.warn { "⚠️ [JetBrains RSocket] 推送给客户端失败: ${e.message}" }
                 }
             }
 
@@ -812,10 +812,10 @@ class JetBrainsRSocketHandler(
                 logger.info("📤 [JetBrains RSocket] → pushActiveFileChanged: ${activeFile.relativePath} (to ${clients.size} clients)" +
                     if (activeFile.hasSelection) " (selection: ${activeFile.startLine}:${activeFile.startColumn} - ${activeFile.endLine}:${activeFile.endColumn})" else "")
             } else {
-                logger.info("📤 [JetBrains RSocket] → pushActiveFileChanged: null (no active file, to ${clients.size} clients)")
+                logger.info { "📤 [JetBrains RSocket] → pushActiveFileChanged: null (no active file, to ${clients.size} clients)" }
             }
         } catch (e: Exception) {
-            logger.error("❌ [JetBrains RSocket] pushActiveFileChanged failed: ${e.message}")
+            logger.error { "❌ [JetBrains RSocket] pushActiveFileChanged failed: ${e.message}" }
         }
     }
 

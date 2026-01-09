@@ -1,6 +1,7 @@
 package com.asakii.plugin.config
 
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 
 /**
  * 后端类型枚举
@@ -176,8 +177,8 @@ object PluginConfig {
         isCodexAvailable = isAvailable
         codexCheckResult = message
 
-        logger.info("Codex 设置已更新: $settings")
-        logger.info("Codex 可用性: $message")
+        logger.info { "Codex 设置已更新: $settings" }
+        logger.info { "Codex 可用性: $message" }
     }
 
     // ==================== 多后端配置 ====================
@@ -194,7 +195,7 @@ object PluginConfig {
      */
     fun setDefaultBackendType(type: BackendType) {
         defaultBackendType = type
-        logger.info("默认后端已设置为: $type")
+        logger.info { "默认后端已设置为: $type" }
     }
 
     /**
@@ -231,14 +232,14 @@ object PluginConfig {
         val (claudeAvailable, claudeMessage) = checkClaudeCommand()
         isClaudeAvailable = claudeAvailable
         claudeCheckResult = claudeMessage
-        logger.info("Claude 命令检查: $claudeMessage")
+        logger.info { "Claude 命令检查: $claudeMessage" }
 
         // 检查 Codex（仅当已配置路径时）
         if (codexSettings.binaryPath.isNotEmpty()) {
             val (codexAvailable, codexMessage) = checkCodexBinary()
             isCodexAvailable = codexAvailable
             codexCheckResult = codexMessage
-            logger.info("Codex 检查: $codexMessage")
+            logger.info { "Codex 检查: $codexMessage" }
         }
 
         // 设置默认后端
@@ -248,7 +249,7 @@ object PluginConfig {
             else -> BackendType.CLAUDE // 即使不可用也默认为 Claude
         }
 
-        logger.info("环境设置完成，默认后端: $defaultBackendType")
-        logger.info("可用后端: ${getAvailableBackends()}")
+        logger.info { "环境设置完成，默认后端: $defaultBackendType" }
+        logger.info { "可用后端: ${getAvailableBackends()}" }
     }
 }

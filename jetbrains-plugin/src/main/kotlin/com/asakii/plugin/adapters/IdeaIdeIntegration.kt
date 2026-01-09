@@ -6,6 +6,7 @@ import com.asakii.plugin.types.LegacyToolCall
 import com.asakii.plugin.tools.IdeToolsImpl
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import java.util.*
 
 /**
@@ -20,14 +21,14 @@ class IdeaIdeIntegration(
     }
     
     override fun handleToolClick(toolCall: LegacyToolCall): Boolean {
-        logger.info("🔧 [IdeaIdeIntegration] 处理工具点击: ${toolCall.name}")
-        logger.info("- 工具ID: ${toolCall.id}")
-        logger.info("- 工具状态: ${toolCall.status}")
-        logger.info("- 有结果: ${toolCall.result != null}")
+        logger.info { "🔧 [IdeaIdeIntegration] 处理工具点击: ${toolCall.name}" }
+        logger.info { "- 工具ID: ${toolCall.id}" }
+        logger.info { "- 工具状态: ${toolCall.status}" }
+        logger.info { "- 有结果: ${toolCall.result != null}" }
 
         return try {
             val result = ToolClickManager.handleToolClick(toolCall, project, ToolClickConfig())
-            logger.info("✅ [IdeaIdeIntegration] ToolClickManager处理结果: $result")
+            logger.info { "✅ [IdeaIdeIntegration] ToolClickManager处理结果: $result" }
             result
         } catch (e: Exception) {
             logger.error("❌ [IdeaIdeIntegration] 处理工具点击失败", e)
@@ -118,7 +119,7 @@ class IdeaIdeIntegration(
         return try {
             // 使用系统默认语言设置
             val ideLocale = Locale.getDefault()
-            logger.info("🌐 获取IDE界面语言设置: $ideLocale (language=${ideLocale.language}, country=${ideLocale.country})")
+            logger.info { "🌐 获取IDE界面语言设置: $ideLocale (language=${ideLocale.language}, country=${ideLocale.country})" }
             ideLocale
         } catch (e: Exception) {
             logger.warn("获取IDE界面语言设置失败，使用英语作为默认", e)

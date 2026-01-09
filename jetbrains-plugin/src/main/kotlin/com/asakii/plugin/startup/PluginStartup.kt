@@ -4,6 +4,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.asakii.plugin.config.PluginConfig
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 
 /**
  * 插件启动活动（动态插件兼容版本）
@@ -21,7 +22,7 @@ class PluginStartup : ProjectActivity {
         try {
             // 仅执行必要的初始化，不修改全局系统属性
             PluginConfig.setupEnvironment()
-            logger.info("插件启动初始化完成")
+            logger.info { "插件启动初始化完成" }
         } catch (e: Exception) {
             logger.error("插件启动初始化失败", e)
         }

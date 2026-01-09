@@ -3,6 +3,7 @@ package com.asakii.plugin.mcp.tools.terminal
 import com.asakii.settings.AgentSettingsService
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowManager
@@ -40,7 +41,7 @@ data class TerminalSession(
         return try {
             widgetWrapper.hasRunningCommands()
         } catch (e: Exception) {
-            logger.warn("Failed to check running commands for session $id: ${e.message}")
+            logger.warn { "Failed to check running commands for session $id: ${e.message}" }
             null
         }
     }
@@ -146,11 +147,11 @@ object ShellResolver {
         }
 
         if (matched != null) {
-            logger.info("Found shell '$shellName' at path: ${matched.path}")
+            logger.info { "Found shell '$shellName' at path: ${matched.path}" }
             return matched.path
         }
 
-        logger.warn("Shell '$shellName' not found in detected shells: ${detectedShells.map { it.name }}")
+        logger.warn { "Shell '$shellName' not found in detected shells: ${detectedShells.map { it.name }}" }
         return null
     }
 
@@ -206,7 +207,7 @@ class TerminalSessionManager(private val project: Project) {
      */
     fun setCurrentAiSession(aiSessionId: String?) {
         currentAiSessionId = aiSessionId
-        logger.info("Set current AI session: $aiSessionId")
+        logger.info { "Set current AI session: $aiSessionId" }
     }
 
     /**
@@ -225,7 +226,7 @@ class TerminalSessionManager(private val project: Project) {
             list.remove(terminalId)
         }
 
-        logger.info("Cleaned up mappings for closed terminal: $terminalId")
+        logger.info { "Cleaned up mappings for closed terminal: $terminalId" }
     }
 
     /**
@@ -273,34 +274,34 @@ class TerminalSessionManager(private val project: Project) {
             if (existingSession != null) {
                 // 检查默认终端是否正在执行命令（null 视为空闲）
                 if (existingSession.hasRunningCommands() != true) {
-                    logger.info("Using existing default terminal for AI session $aiSessionId: $existingTerminalId")
+                    logger.info { "Using existing default terminal for AI session $aiSessionId: $existingTerminalId" }
                     return existingSession
                 }
                 // 默认终端正在执行命令，尝试使用溢出终端
-                logger.info("Default terminal $existingTerminalId is busy, looking for available overflow terminal")
+                logger.info { "Default terminal $existingTerminalId is busy, looking for available overflow terminal" }
                 val availableOverflow = findAvailableOverflowTerminal(aiSessionId)
                 if (availableOverflow != null) {
-                    logger.info("Using available overflow terminal: ${availableOverflow.id}")
+                    logger.info { "Using available overflow terminal: ${availableOverflow.id}" }
                     return availableOverflow
                 }
                 // 没有可用的溢出终端，创建新的
                 val overflowSession = createSession("Overflow Terminal", shellName)
                 if (overflowSession != null) {
                     aiSessionOverflowTerminals.getOrPut(aiSessionId) { mutableListOf() }.add(overflowSession.id)
-                    logger.info("Created overflow terminal for AI session $aiSessionId: ${overflowSession.id}")
+                    logger.info { "Created overflow terminal for AI session $aiSessionId: ${overflowSession.id}" }
                 }
                 return overflowSession
             }
             // 终端已被删除，移除映射
             aiSessionDefaultTerminals.remove(aiSessionId)
-            logger.info("Default terminal $existingTerminalId was deleted, creating new one")
+            logger.info { "Default terminal $existingTerminalId was deleted, creating new one" }
         }
 
         // 创建新的默认终端
         val newSession = createSession("Default Terminal", shellName)
         if (newSession != null) {
             aiSessionDefaultTerminals[aiSessionId] = newSession.id
-            logger.info("Created default terminal for AI session $aiSessionId: ${newSession.id}")
+            logger.info { "Created default terminal for AI session $aiSessionId: ${newSession.id}" }
         }
         return newSession
     }
@@ -362,16 +363,16 @@ class TerminalSessionManager(private val project: Project) {
 
             // 获取 shell 命令（用于 IDEA Terminal API）
             val shellCommand = ShellResolver.getShellCommand(actualShellName)
-            logger.info("=== [TerminalSessionManager] createSession ===")
-            logger.info("  requested shellName: $shellName")
-            logger.info("  actualShellName: $actualShellName")
-            logger.info("  shellCommand: $shellCommand")
+            logger.info { "=== [TerminalSessionManager] createSession ===" }
+            logger.info { "  requested shellName: $shellName" }
+            logger.info { "  actualShellName: $actualShellName" }
+            logger.info { "  shellCommand: $shellCommand" }
 
             var wrapper: TerminalWidgetWrapper? = null
 
             // 获取终端环境变量配置（如 TERM=dumb 禁用交互式命令）
             val envVariables = AgentSettingsService.getInstance().getTerminalEnvVariables()
-            logger.info("  envVariables: $envVariables")
+            logger.info { "  envVariables: $envVariables" }
 
             ApplicationManager.getApplication().invokeAndWait {
                 try {
@@ -381,7 +382,7 @@ class TerminalSessionManager(private val project: Project) {
                     wrapper = createShellWidget(project, basePath, sessionName, shellCommand, envVariables)
 
                     if (wrapper == null) {
-                        logger.warn("Failed to create TerminalWidgetWrapper")
+                        logger.warn { "Failed to create TerminalWidgetWrapper" }
                     }
                 } catch (e: ProcessCanceledException) {
                     throw e
@@ -401,11 +402,11 @@ class TerminalSessionManager(private val project: Project) {
 
                 // 注册终端关闭回调，自动清理映射
                 w.addTerminationCallback {
-                    logger.info("Terminal $sessionId was closed, cleaning up mappings")
+                    logger.info { "Terminal $sessionId was closed, cleaning up mappings" }
                     onTerminalClosed(sessionId)
                 }
 
-                logger.info("Created terminal session: $sessionId ($sessionName), shell=$actualShellName, widget type: ${w.widgetClassName}")
+                logger.info { "Created terminal session: $sessionId ($sessionName), shell=$actualShellName, widget type: ${w.widgetClassName}" }
                 session
             }
         } catch (e: ProcessCanceledException) {
@@ -679,7 +680,7 @@ class TerminalSessionManager(private val project: Project) {
                     }
                     is CommandWaitResult.Completed -> {
                         // 命令完成，继续读取
-                        logger.info("Command completed, reading output...")
+                        logger.info { "Command completed, reading output..." }
                     }
                 }
             }
@@ -797,10 +798,10 @@ class TerminalSessionManager(private val project: Project) {
                 } catch (e: ProcessCanceledException) {
                     throw e
                 } catch (e: Exception) {
-                    logger.warn("Failed to remove terminal content: ${e.message}")
+                    logger.warn { "Failed to remove terminal content: ${e.message}" }
                 }
             }
-            logger.info("Killed terminal session: $sessionId")
+            logger.info { "Killed terminal session: $sessionId" }
             true
         } catch (e: ProcessCanceledException) {
             throw e
@@ -832,13 +833,13 @@ class TerminalSessionManager(private val project: Project) {
                 } catch (e: ProcessCanceledException) {
                     throw e
                 } catch (e: Exception) {
-                    logger.warn("Failed to rename terminal tab: ${e.message}")
+                    logger.warn { "Failed to rename terminal tab: ${e.message}" }
                 }
             }
 
             // 更新内部会话记录
             sessions[sessionId] = session.copy(name = newName)
-            logger.info("Renamed terminal session $sessionId to: $newName")
+            logger.info { "Renamed terminal session $sessionId to: $newName" }
             true
         } catch (e: ProcessCanceledException) {
             throw e
@@ -888,7 +889,7 @@ class TerminalSessionManager(private val project: Project) {
     private fun getDefaultShellName(): String {
         val settings = AgentSettingsService.getInstance()
         val defaultShell = settings.getEffectiveDefaultShell()
-        logger.info("Using default shell: $defaultShell")
+        logger.info { "Using default shell: $defaultShell" }
         return defaultShell
     }
 

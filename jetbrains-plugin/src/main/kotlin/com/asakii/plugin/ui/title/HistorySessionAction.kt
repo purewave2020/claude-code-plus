@@ -28,6 +28,7 @@ import java.awt.event.MouseEvent
 import java.text.SimpleDateFormat
 import java.util.*
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import javax.swing.*
 
 /**
@@ -150,7 +151,7 @@ class HistorySessionAction(
     private var isLoading = false
 
     override fun actionPerformed(e: AnActionEvent) {
-        logger.info("🔍 [HistorySessionAction] 点击历史会话按钮")
+        logger.info { "🔍 [HistorySessionAction] 点击历史会话按钮" }
         lastEvent = e
         refreshSessionList(e)
     }
@@ -228,10 +229,10 @@ class HistorySessionAction(
             // 历史会话需要加载的数量 = pageSize - 激活会话数量
             val historyToLoad = maxOf(pageSize - activeCount, 1)
 
-            logger.info("🔍 [HistorySessionAction] 扫描项目历史会话: $projectPath, offset=$currentOffset, historyToLoad=$historyToLoad (activeCount=$activeCount)")
+            logger.info { "🔍 [HistorySessionAction] 扫描项目历史会话: $projectPath, offset=$currentOffset, historyToLoad=$historyToLoad (activeCount=$activeCount)" }
 
             val sessions = ClaudeSessionScanner.scanHistorySessions(projectPath, historyToLoad, currentOffset)
-            logger.info("🔍 [HistorySessionAction] 找到 ${sessions.size} 个历史会话")
+            logger.info { "🔍 [HistorySessionAction] 找到 ${sessions.size} 个历史会话" }
 
             // 更新分页状态
             hasMore = sessions.size >= historyToLoad
@@ -263,7 +264,7 @@ class HistorySessionAction(
 
         // 如果激活会话和历史会话都为空
         if (activeSessions.isEmpty() && filteredHistory.isEmpty()) {
-            logger.info("[HistorySessionAction] 没有历史会话")
+            logger.info { "[HistorySessionAction] 没有历史会话" }
             val emptyItems = listOf(SessionListItem.GroupHeader("暂无历史会话"))
             showPopupWithItems(e, emptyItems, 0)
             return
@@ -306,7 +307,7 @@ class HistorySessionAction(
                         // 左键单击
                         when (selected) {
                             is SessionListItem.SessionItem -> {
-                                logger.info("🔍 [HistorySessionAction] 选择会话: ${selected.session.sessionId}")
+                                logger.info { "🔍 [HistorySessionAction] 选择会话: ${selected.session.sessionId}" }
                                 currentPopup?.cancel()
                                 sessionApi.sendCommand(
                                     JetBrainsSessionCommand(
@@ -338,7 +339,7 @@ class HistorySessionAction(
 
                     // 当滚动到距离底部 50px 以内时触发加载
                     if (value + extent >= maximum - 50) {
-                        logger.info("🔍 [HistorySessionAction] 滚动触发加载更多")
+                        logger.info { "🔍 [HistorySessionAction] 滚动触发加载更多" }
                         loadMoreSessionsInPlace(listModel, list)
                     }
                 }
@@ -393,10 +394,10 @@ class HistorySessionAction(
 
             val historyToLoad = maxOf(pageSize - activeCount, 1)
 
-            logger.info("🔍 [HistorySessionAction] 滚动加载更多: offset=$currentOffset, historyToLoad=$historyToLoad")
+            logger.info { "🔍 [HistorySessionAction] 滚动加载更多: offset=$currentOffset, historyToLoad=$historyToLoad" }
 
             val sessions = ClaudeSessionScanner.scanHistorySessions(projectPath, historyToLoad, currentOffset)
-            logger.info("🔍 [HistorySessionAction] 加载到 ${sessions.size} 个历史会话")
+            logger.info { "🔍 [HistorySessionAction] 加载到 ${sessions.size} 个历史会话" }
 
             // 更新分页状态
             hasMore = sessions.size >= historyToLoad
@@ -466,7 +467,7 @@ class HistorySessionAction(
      * 2. 通知前端删除会话（如果已加载）
      */
     private fun deleteHistorySession(session: SessionMetadata) {
-        logger.info("🗑️ [HistorySessionAction] 删除历史会话: ${session.sessionId}")
+        logger.info { "🗑️ [HistorySessionAction] 删除历史会话: ${session.sessionId}" }
 
         // 关闭当前弹窗
         currentPopup?.cancel()
@@ -476,7 +477,7 @@ class HistorySessionAction(
             val deleted = ClaudeSessionScanner.deleteSession(session.projectPath, session.sessionId)
 
             if (deleted) {
-                logger.info("✅ [HistorySessionAction] 历史文件删除成功: ${session.sessionId}")
+                logger.info { "✅ [HistorySessionAction] 历史文件删除成功: ${session.sessionId}" }
 
                 // 2. 从缓存中移除
                 cachedSessions.removeIf { it.sessionId == session.sessionId }
@@ -489,7 +490,7 @@ class HistorySessionAction(
                     )
                 )
             } else {
-                logger.warn("❌ [HistorySessionAction] 历史文件删除失败: ${session.sessionId}")
+                logger.warn { "❌ [HistorySessionAction] 历史文件删除失败: ${session.sessionId}" }
             }
 
             // 4. 刷新弹窗（重新加载历史会话列表）

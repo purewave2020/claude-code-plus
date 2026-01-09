@@ -2,6 +2,7 @@ package com.asakii.server.services
 
 import com.asakii.claude.agent.sdk.types.*
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import java.io.File
 import java.util.Base64
 
@@ -92,12 +93,12 @@ object MessageContentParser {
             val file = File(path)
 
             if (!file.exists() || !file.isFile) {
-                logger.warn("Image file not found: $path")
+                logger.warn { "Image file not found: $path" }
                 return null
             }
 
             // ImageBlock 在当前 SDK 版本中不存在，返回 null
-            logger.warn("ImageBlock is not supported in current SDK version")
+            logger.warn { "ImageBlock is not supported in current SDK version" }
             return null
 
             // 以下代码已注释，因为 ImageBlock 和 ImageSource 类型不存在
@@ -111,7 +112,7 @@ object MessageContentParser {
             // 检测 MIME 类型
             val mimeType = detectMimeType(file)
 
-            logger.info("Converted image to ImageBlock: ${file.name} (${fileBytes.size} bytes)")
+            logger.info { "Converted image to ImageBlock: ${file.name} (${fileBytes.size} bytes)" }
 
             ImageBlock(
                 source = ImageSource(

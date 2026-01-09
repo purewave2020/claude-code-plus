@@ -4,6 +4,7 @@ import com.intellij.ide.ui.LafManager
 import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.EditorColorsScheme
 import com.intellij.util.ui.UIUtil
@@ -156,7 +157,7 @@ object IdeaThemeIntegration {
         val connection = ApplicationManager.getApplication().messageBus.connect()
         connection.subscribe(LafManagerListener.TOPIC, LafManagerListener {
             val newConfig = getCurrentThemeConfig()
-            logger.info("IDEA 主题已变更")
+            logger.info { "IDEA 主题已变更" }
             onChange(newConfig)
         })
         
@@ -164,7 +165,7 @@ object IdeaThemeIntegration {
         connection.subscribe(EditorColorsManager.TOPIC, object : com.intellij.openapi.editor.colors.EditorColorsListener {
             override fun globalSchemeChange(scheme: EditorColorsScheme?) {
                 val newConfig = getCurrentThemeConfig()
-                logger.info("编辑器配色方案已变更")
+                logger.info { "编辑器配色方案已变更" }
                 onChange(newConfig)
             }
         })

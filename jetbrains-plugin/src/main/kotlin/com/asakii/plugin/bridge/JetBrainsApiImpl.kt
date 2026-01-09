@@ -23,6 +23,7 @@ import java.io.File
 import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 
 /**
  * JetBrains IDE 集成 API 实现
@@ -102,17 +103,17 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                             // 选中指定行范围
                             editor.selectionModel.setSelection(startCharOffset, endCharOffset)
 
-                            logger.info("✅ [JetBrainsApi.file] Opened with selection: ${request.filePath} (lines $startOffset-$endOffset)")
+                            logger.info { "✅ [JetBrainsApi.file] Opened with selection: ${request.filePath} (lines $startOffset-$endOffset)" }
                         } else {
-                            logger.info("✅ [JetBrainsApi.file] Opened: ${request.filePath}")
+                            logger.info { "✅ [JetBrainsApi.file] Opened: ${request.filePath}" }
                         }
                     } else {
-                        logger.warn("⚠️ [JetBrainsApi.file] Not found: ${request.filePath}")
+                        logger.warn { "⚠️ [JetBrainsApi.file] Not found: ${request.filePath}" }
                     }
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error("❌ [JetBrainsApi.file] Failed to open: ${e.message}")
+                logger.error { "❌ [JetBrainsApi.file] Failed to open: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -137,11 +138,11 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                     )
 
                     DiffManager.getInstance().showDiff(ideaProject, diffRequest)
-                    logger.info("✅ [JetBrainsApi.file] Showing diff: ${request.filePath}")
+                    logger.info { "✅ [JetBrainsApi.file] Showing diff: ${request.filePath}" }
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error("❌ [JetBrainsApi.file] Failed to show diff: ${e.message}")
+                logger.error { "❌ [JetBrainsApi.file] Failed to show diff: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -173,11 +174,11 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                     )
 
                     DiffManager.getInstance().showDiff(ideaProject, diffRequest)
-                    logger.info("✅ [JetBrainsApi.file] Showing multi-edit diff: ${request.filePath}")
+                    logger.info { "✅ [JetBrainsApi.file] Showing multi-edit diff: ${request.filePath}" }
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error("❌ [JetBrainsApi.file] Failed to show multi-edit diff: ${e.message}")
+                logger.error { "❌ [JetBrainsApi.file] Failed to show multi-edit diff: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -190,7 +191,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
 
                     // 检查是否是有效文件（非目录）
                     if (file != null && file.isDirectory) {
-                        logger.warn("⚠️ [JetBrainsApi.file] Cannot show preview diff for directory: ${request.filePath}")
+                        logger.warn { "⚠️ [JetBrainsApi.file] Cannot show preview diff for directory: ${request.filePath}" }
                         return@invokeLater
                     }
 
@@ -211,7 +212,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                                 }
                             } else {
                                 // 找不到时保持不变，记录警告
-                                logger.warn("⚠️ [JetBrainsApi.file] oldString not found in file, skipping edit")
+                                logger.warn { "⚠️ [JetBrainsApi.file] oldString not found in file, skipping edit" }
                                 afterContent
                             }
                         }
@@ -234,11 +235,11 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                     )
 
                     DiffManager.getInstance().showDiff(ideaProject, diffRequest)
-                    logger.info("✅ [JetBrainsApi.file] Showing edit preview diff: ${request.filePath}")
+                    logger.info { "✅ [JetBrainsApi.file] Showing edit preview diff: ${request.filePath}" }
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error("❌ [JetBrainsApi.file] Failed to show edit preview diff: ${e.message}")
+                logger.error { "❌ [JetBrainsApi.file] Failed to show edit preview diff: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -251,7 +252,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
 
                     // 检查是否是有效文件（非目录）
                     if (file != null && file.isDirectory) {
-                        logger.warn("⚠️ [JetBrainsApi.file] Cannot show diff for directory: ${request.filePath}")
+                        logger.warn { "⚠️ [JetBrainsApi.file] Cannot show diff for directory: ${request.filePath}" }
                         return@invokeLater
                     }
 
@@ -263,7 +264,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
 
                     if (!request.originalContent.isNullOrEmpty()) {
                         // 有缓存的原始内容：展示完整文件 Diff
-                        logger.info("✅ [JetBrainsApi.file] Using cached original content for full file diff")
+                        logger.info { "✅ [JetBrainsApi.file] Using cached original content for full file diff" }
                         beforeContent = request.originalContent!!
 
                         // 计算修改后的内容：在原始内容上应用 oldString → newString 替换
@@ -284,7 +285,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                         }
                     } else {
                         // 没有缓存的原始内容：只展示编辑部分（oldString → newString）
-                        logger.info("⚠️ [JetBrainsApi.file] No cached content, showing edit-only diff")
+                        logger.info { "⚠️ [JetBrainsApi.file] No cached content, showing edit-only diff" }
                         beforeContent = request.oldString
                         afterContent = request.newString
                     }
@@ -310,11 +311,11 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                     )
 
                     DiffManager.getInstance().showDiff(ideaProject, diffRequest)
-                    logger.info("✅ [JetBrainsApi.file] Showing edit full diff: ${request.filePath}")
+                    logger.info { "✅ [JetBrainsApi.file] Showing edit full diff: ${request.filePath}" }
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error("❌ [JetBrainsApi.file] Failed to show edit full diff: ${e.message}")
+                logger.error { "❌ [JetBrainsApi.file] Failed to show edit full diff: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -330,11 +331,11 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                         request.content
                     )
                     FileEditorManager.getInstance(ideaProject).openFile(tempFile, true)
-                    logger.info("✅ [JetBrainsApi.file] Showing markdown: $fileName")
+                    logger.info { "✅ [JetBrainsApi.file] Showing markdown: $fileName" }
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error("❌ [JetBrainsApi.file] Failed to show markdown: ${e.message}")
+                logger.error { "❌ [JetBrainsApi.file] Failed to show markdown: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -399,7 +400,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                                     endColumn = endColumn,
                                     selectedContent = selectedContent
                                 )
-                                logger.info("✅ [JetBrainsApi.file] Active file: $relativePath")
+                                logger.info { "✅ [JetBrainsApi.file] Active file: $relativePath" }
                             } else {
                                 // 非文本编辑器，只返回路径
                                 result = ActiveFileInfo(
@@ -407,7 +408,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                                     relativePath = relativePath,
                                     name = fileName
                                 )
-                                logger.info("✅ [JetBrainsApi.file] Active file (no editor): $relativePath")
+                                logger.info { "✅ [JetBrainsApi.file] Active file (no editor): $relativePath" }
                             }
                         }
                     }
@@ -416,7 +417,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
             } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
                 throw e  // 必须重新抛出
             } catch (e: Exception) {
-                logger.error("❌ [JetBrainsApi.file] Failed to get active file: ${e.message}")
+                logger.error { "❌ [JetBrainsApi.file] Failed to get active file: ${e.message}" }
                 null
             }
         }
@@ -465,7 +466,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
 
             val uiFont = JBUI.Fonts.label()
             val uiFontSize = uiFont.size
-            logger.info("🔤 [Theme] fontFamily=${uiFont.family}, fontSize=$uiFontSize")
+            logger.info { "🔤 [Theme] fontFamily=${uiFont.family}, fontSize=$uiFontSize" }
 
             return JetBrainsIdeTheme(
                 background = colorToHex(UIUtil.getPanelBackground()),
@@ -511,7 +512,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
 
         override fun receiveState(state: JetBrainsSessionState) {
             currentState = state
-            logger.info("[JetBrainsApi.session] Received state: ${state.sessions.size} sessions, active=${state.activeSessionId}")
+            logger.info { "[JetBrainsApi.session] Received state: ${state.sessions.size} sessions, active=${state.activeSessionId}" }
             stateListeners.forEach { it(state) }
         }
 
@@ -524,7 +525,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
         }
 
         override fun sendCommand(command: JetBrainsSessionCommand) {
-            logger.info("[JetBrainsApi.session] Sending command: ${command.type}")
+            logger.info { "[JetBrainsApi.session] Sending command: ${command.type}" }
             commandListeners.forEach { it(command) }
         }
 
@@ -557,10 +558,10 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
         override fun set(locale: String): Result<Unit> {
             return try {
                 PropertiesComponent.getInstance().setValue(PREFERRED_LOCALE_KEY, locale)
-                logger.info("[JetBrainsApi.locale] Set to: $locale")
+                logger.info { "[JetBrainsApi.locale] Set to: $locale" }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.warn("[JetBrainsApi.locale] Failed to set: ${e.message}")
+                logger.warn { "[JetBrainsApi.locale] Failed to set: ${e.message}" }
                 Result.failure(e)
             }
         }

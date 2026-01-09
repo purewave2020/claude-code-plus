@@ -22,6 +22,7 @@ import com.asakii.settings.McpDefaults
 import com.asakii.settings.McpSettingsService
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -72,7 +73,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
         // 首先配置日志系统
         configureLogging()
 
-        logger.info("🚀 Initializing HTTP Server Project Service")
+        logger.info { "🚀 Initializing HTTP Server Project Service" }
         startServer()
     }
 
@@ -85,7 +86,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
         try {
             // 检测是否在 IDEA 插件环境中（Logback 被排除）
             if (StandaloneLogging.isIdeaPluginEnvironment()) {
-                logger.info("📝 Using IDEA's built-in logging system, logs will be written to idea.log")
+                logger.info { "📝 Using IDEA's built-in logging system, logs will be written to idea.log" }
                 // Ensure java.util.logging (JUL) is bridged to SLF4J so Codex SDK logs are visible in idea.log
                 val projectBasePath = project.basePath
                 val logDir = if (projectBasePath != null) {
@@ -102,9 +103,9 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             if (projectBasePath != null) {
                 val logDir = java.nio.file.Path.of(projectBasePath, ".log")
                 StandaloneLogging.configureWithDir(logDir)
-                logger.info("📝 Development mode: Logging configured to: $logDir")
+                logger.info { "📝 Development mode: Logging configured to: $logDir" }
             } else {
-                logger.warn("⚠️ Project base path is null, logging configuration skipped")
+                logger.warn { "⚠️ Project base path is null, logging configuration skipped" }
             }
         } catch (e: Exception) {
             logger.warn("⚠️ Failed to configure logging: ${e.message}", e)
@@ -118,7 +119,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
         try {
             // 准备前端资源目录
             val frontendDir = prepareFrontendResources()
-            logger.info("📂 Frontend directory: $frontendDir")
+            logger.info { "📂 Frontend directory: $frontendDir" }
 
             // 创建 IdeTools 和 JetBrainsApi 的实现
             val ideTools = IdeToolsImpl(project)
@@ -272,8 +273,8 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             val url = server.start(preferredPort = devPort)
             httpServer = server
             serverUrl = url
-            logger.info("🚀 HTTP Server started at: $url")
-            logger.info("✅ HTTP Server Project Service initialized successfully")
+            logger.info { "🚀 HTTP Server started at: $url" }
+            logger.info { "✅ HTTP Server Project Service initialized successfully" }
         } catch (e: Exception) {
             logger.error("❌ Failed to start HTTP server: ${e.message}", e)
         }
@@ -287,7 +288,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
         // 复用已解压的目录
         val existing = extractedFrontendDir
         if (existing != null && Files.exists(existing.resolve("index.html"))) {
-            logger.info("✅ Reusing extracted frontend directory: $existing")
+            logger.info { "✅ Reusing extracted frontend directory: $existing" }
             return existing
         }
 
@@ -304,7 +305,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             "jar" -> {
                 val connection = htmlUrl.openConnection() as JarURLConnection
                 val tempDir = Files.createTempDirectory("claude-frontend-")
-                logger.info("📦 Extracting frontend resources to: $tempDir")
+                logger.info { "📦 Extracting frontend resources to: $tempDir" }
 
                 connection.jarFile.use { jarFile ->
                     jarFile.stream().use { entries ->
@@ -322,13 +323,13 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 }
 
                 extractedFrontendDir = tempDir
-                logger.info("✅ Frontend extracted successfully")
+                logger.info { "✅ Frontend extracted successfully" }
                 tempDir
             }
             "file" -> {
                 // 开发模式：直接使用文件系统路径
                 val file = Path.of(htmlUrl.toURI()).parent
-                logger.info("✅ Using filesystem frontend directory: $file")
+                logger.info { "✅ Using filesystem frontend directory: $file" }
                 file
             }
             else -> throw IllegalStateException("Unsupported protocol: ${htmlUrl.protocol}")
@@ -346,7 +347,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
      * @return 新的服务器 URL，如果重启失败则返回 null
      */
     fun restart(): String? {
-        logger.info("🔄 Restarting HTTP Server...")
+        logger.info { "🔄 Restarting HTTP Server..." }
 
         // 1. 停止当前服务器
         httpServer?.stop()
@@ -359,12 +360,12 @@ class HttpServerProjectService(private val project: Project) : Disposable {
         // 3. 重新启动服务器
         startServer()
 
-        logger.info("✅ HTTP Server restarted at: $serverUrl")
+        logger.info { "✅ HTTP Server restarted at: $serverUrl" }
         return serverUrl
     }
 
     override fun dispose() {
-        logger.info("🛑 Disposing HTTP Server Project Service")
+        logger.info { "🛑 Disposing HTTP Server Project Service" }
         httpServer?.stop()
         httpServer = null
 
@@ -373,7 +374,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
         extractedFrontendDir = null
 
         scope.cancel()
-        logger.info("✅ HTTP Server Project Service disposed")
+        logger.info { "✅ HTTP Server Project Service disposed" }
     }
 
     /**
@@ -408,9 +409,9 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 instructions = settings.effectiveContext7Instructions,
                 enabledBackends = settings.getContext7McpProviders()
             ))
-            logger.info("✅ Loaded MCP Server config: context7 (type=http)")
+            logger.info { "✅ Loaded MCP Server config: context7 (type=http)" }
         } else {
-            logger.info("⏭️ MCP Server 'context7' is disabled")
+            logger.info { "⏭️ MCP Server 'context7' is disabled" }
         }
 
         // 加载自定义 MCP 服务器
@@ -418,7 +419,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
         val customConfigs = loadCustomMcpServers(mcpSettings)
         configs.addAll(customConfigs)
         if (customConfigs.isNotEmpty()) {
-            logger.info("✅ Loaded ${customConfigs.size} custom MCP server(s)")
+            logger.info { "✅ Loaded ${customConfigs.size} custom MCP server(s)" }
         }
 
         return configs
@@ -480,7 +481,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                     // 读取启用状态
                     val enabled = entryObj["enabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
                     if (!enabled) {
-                        logger.info("⏭️ Custom MCP Server '$serverName' is disabled")
+                        logger.info { "⏭️ Custom MCP Server '$serverName' is disabled" }
                         continue
                     }
 
@@ -515,7 +516,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         instructions = instructions,
                         enabledBackends = enabledBackends
                     ))
-                    logger.info("✅ Loaded custom MCP Server: $serverName (type=$serverType)")
+                    logger.info { "✅ Loaded custom MCP Server: $serverName (type=$serverType)" }
                 }
             } catch (e: Exception) {
                 logger.warn("⚠️ Failed to parse custom MCP config: ${e.message}", e)
@@ -562,7 +563,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 }
                 selectionListener = listener
                 ed.selectionModel.addSelectionListener(listener, this)
-                logger.info("📡 Selection listener registered for: ${ed.document}")
+                logger.info { "📡 Selection listener registered for: ${ed.document}" }
             }
         }
 
@@ -592,7 +593,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
         // 初始注册选区监听器
         registerSelectionListener()
 
-        logger.info("📡 File editor listener registered")
+        logger.info { "📡 File editor listener registered" }
     }
 
     /**

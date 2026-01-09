@@ -35,6 +35,7 @@ import java.awt.Color
 import java.io.File
 import java.util.Locale
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 
 /**
  * IDE 工具 IDEA 实现（继承默认实现，覆盖 IDEA 特有方法）
@@ -65,14 +66,14 @@ class IdeToolsImpl(
                         OpenFileDescriptor(project, file)
                     }
                     fileEditorManager.openTextEditor(descriptor, true)
-                    logger.info("✅ Opened file: $path (line=$line, column=$column)")
+                    logger.info { "✅ Opened file: $path (line=$line, column=$column)" }
                 } else {
-                    logger.warn("⚠️ File not found: $path")
+                    logger.warn { "⚠️ File not found: $path" }
                 }
             }
             Result.success(Unit)
         } catch (e: Exception) {
-            logger.error("❌ Failed to open file: ${e.message}")
+            logger.error { "❌ Failed to open file: ${e.message}" }
             Result.failure(e)
         }
     }
@@ -132,12 +133,12 @@ class IdeToolsImpl(
                 
                 DiffManager.getInstance().showDiff(project, diffRequest)
                 
-                logger.info("✅ Showing diff for: ${request.filePath}")
+                logger.info { "✅ Showing diff for: ${request.filePath}" }
             }
             
             Result.success(Unit)
         } catch (e: Exception) {
-            logger.error("❌ Failed to show diff: ${e.message}")
+            logger.error { "❌ Failed to show diff: ${e.message}" }
             Result.failure(e)
         }
     }
@@ -162,7 +163,7 @@ class IdeToolsImpl(
                         // 找到标准化匹配，使用原始 oldString 替换（保持格式）
                         content = replaceNormalized(content, operation.newString, operation.oldString)
                     } else {
-                        logger.warn("⚠️ rebuildBeforeContent: newString not found (replace_all), skipping operation")
+                        logger.warn { "⚠️ rebuildBeforeContent: newString not found (replace_all), skipping operation" }
                         // 继续处理其他操作，不抛出异常
                     }
                 }
@@ -186,13 +187,13 @@ class IdeToolsImpl(
                             append(content.substring(actualEnd))
                         }
                     } else {
-                        logger.warn("⚠️ rebuildBeforeContent: newString not found, skipping operation")
+                        logger.warn { "⚠️ rebuildBeforeContent: newString not found, skipping operation" }
                         // 继续处理其他操作，不抛出异常
                     }
                 }
             }
         }
-        logger.info("✅ Successfully rebuilt before content (${operations.size} operations)")
+        logger.info { "✅ Successfully rebuilt before content (${operations.size} operations)" }
         return content
     }
 
@@ -296,7 +297,7 @@ class IdeToolsImpl(
             }
             Result.success(result)
         } catch (e: Exception) {
-            logger.warn("Failed to search files: ${e.message}")
+            logger.warn { "Failed to search files: ${e.message}" }
             Result.failure(e)
         }
     }
@@ -324,7 +325,7 @@ class IdeToolsImpl(
             
             Result.success(result)
         } catch (e: Exception) {
-            logger.error("Failed to get file content: ${e.message}")
+            logger.error { "Failed to get file content: ${e.message}" }
             Result.failure(e)
         }
     }
@@ -337,7 +338,7 @@ class IdeToolsImpl(
             }
             Result.success(result)
         } catch (e: Exception) {
-            logger.warn("Failed to get recent files: ${e.message}")
+            logger.warn { "Failed to get recent files: ${e.message}" }
             Result.failure(e)
         }
     }
@@ -391,17 +392,17 @@ class IdeToolsImpl(
     override fun setLocale(locale: String): Result<Unit> {
         return try {
             PropertiesComponent.getInstance().setValue(PREFERRED_LOCALE_KEY, locale)
-            logger.info("Locale preference set to: $locale")
+            logger.info { "Locale preference set to: $locale" }
             Result.success(Unit)
         } catch (e: Exception) {
-            logger.warn("Failed to set locale preference: ${e.message}")
+            logger.warn { "Failed to set locale preference: ${e.message}" }
             Result.failure(e)
         }
     }
 
     override fun getAgentDefinitions(): Map<String, AgentDefinition> {
         return try {
-            logger.info("🔍 [getAgentDefinitions] 开始加载自定义代理...")
+            logger.info { "🔍 [getAgentDefinitions] 开始加载自定义代理..." }
 
             // 从 AgentSettingsService 读取用户配置
             val settingsService = AgentSettingsService.getInstance()
@@ -409,7 +410,7 @@ class IdeToolsImpl(
 
             if (customAgentsJson.isBlank() || customAgentsJson == "{}") {
                 // 没有用户配置时，使用默认的 ExploreWithJetbrains 代理
-                logger.info("ℹ️ [getAgentDefinitions] 用户未配置自定义代理，使用默认配置")
+                logger.info { "ℹ️ [getAgentDefinitions] 用户未配置自定义代理，使用默认配置" }
                 return getDefaultAgentDefinitions()
             }
 
@@ -429,13 +430,13 @@ class IdeToolsImpl(
                     // 检查是否启用（默认启用）
                     val enabled = agentObj["enabled"]?.jsonPrimitive?.booleanOrNull ?: true
                     if (!enabled) {
-                        logger.info("⏭️ Skipping disabled agent: $name")
+                        logger.info { "⏭️ Skipping disabled agent: $name" }
                         continue
                     }
 
                     // ExploreWithJetbrains agent 依赖 JetBrains MCP
                     if (name == "ExploreWithJetbrains" && !jetBrainsMcpEnabled) {
-                        logger.info("⏭️ Skipping ExploreWithJetbrains: JetBrains MCP is disabled")
+                        logger.info { "⏭️ Skipping ExploreWithJetbrains: JetBrains MCP is disabled" }
                         continue
                     }
 
@@ -453,19 +454,19 @@ class IdeToolsImpl(
                     )
                     logger.info("✅ Loaded agent: $name (tools: ${tools?.size ?: 0}, model: ${model ?: "inherit"})")
                 } catch (e: Exception) {
-                    logger.warn("⚠️ Failed to parse agent '$name': ${e.message}")
+                    logger.warn { "⚠️ Failed to parse agent '$name': ${e.message}" }
                 }
             }
 
             if (result.isNotEmpty()) {
-                logger.info("📦 Loaded ${result.size} custom agents from settings: ${result.keys.joinToString()}")
+                logger.info { "📦 Loaded ${result.size} custom agents from settings: ${result.keys.joinToString()}" }
             } else {
-                logger.warn("⚠️ [getAgentDefinitions] 未加载到任何自定义代理")
+                logger.warn { "⚠️ [getAgentDefinitions] 未加载到任何自定义代理" }
             }
 
             result
         } catch (e: Exception) {
-            logger.warn("Failed to load agent definitions: ${e.message}")
+            logger.warn { "Failed to load agent definitions: ${e.message}" }
             getDefaultAgentDefinitions()
         }
     }
@@ -480,7 +481,7 @@ class IdeToolsImpl(
         // 检查 JetBrains MCP 是否启用
         val settings = AgentSettingsService.getInstance()
         if (!settings.enableJetBrainsMcp) {
-            logger.info("⏭️ JetBrains MCP is disabled, ExploreWithJetbrains agent not available")
+            logger.info { "⏭️ JetBrains MCP is disabled, ExploreWithJetbrains agent not available" }
             return emptyMap()
         }
 
@@ -491,7 +492,7 @@ class IdeToolsImpl(
             tools = defaultAgent.tools,
             model = null // 使用默认模型
         )
-        logger.info("📦 Using default agent: ${defaultAgent.name}")
+        logger.info { "📦 Using default agent: ${defaultAgent.name}" }
         return mapOf(defaultAgent.name to agentDef)
     }
 
@@ -530,7 +531,7 @@ class IdeToolsImpl(
                                     name = fileName,
                                     fileType = fileType
                                 )
-                                logger.info("✅ Active $fileType file: $relativePath")
+                                logger.info { "✅ Active $fileType file: $relativePath" }
                             }
                             else -> {
                                 // 文本文件：获取光标位置和选区信息
@@ -550,7 +551,7 @@ class IdeToolsImpl(
         } catch (e: ProcessCanceledException) {
             throw e
         } catch (e: Exception) {
-            logger.warn("Failed to get active editor file: ${e.message}")
+            logger.warn { "Failed to get active editor file: ${e.message}" }
             null
         }
     }
@@ -593,7 +594,7 @@ class IdeToolsImpl(
                 val filePath = extractFilePathFromDiff(contentTitles, title, contents)
                 val relativePath = calculateRelativePath(filePath, projectPath)
 
-                logger.info("✅ Active diff (${request.javaClass.simpleName}): $title -> $filePath")
+                logger.info { "✅ Active diff (${request.javaClass.simpleName}): $title -> $filePath" }
 
                 ActiveFileInfo(
                     path = filePath,
@@ -611,7 +612,7 @@ class IdeToolsImpl(
 
                 if (filePath != null) {
                     val relativePath = calculateRelativePath(filePath, projectPath)
-                    logger.info("✅ Active diff (from virtual file): $filePath")
+                    logger.info { "✅ Active diff (from virtual file): $filePath" }
 
                     ActiveFileInfo(
                         path = filePath,
@@ -621,12 +622,12 @@ class IdeToolsImpl(
                         diffTitle = request?.title ?: virtualFile.name
                     )
                 } else {
-                    logger.info("⚠️ Unsupported diff request type: ${request?.javaClass?.name}")
+                    logger.info { "⚠️ Unsupported diff request type: ${request?.javaClass?.name}" }
                     null
                 }
             }
         } catch (e: Exception) {
-            logger.warn("Failed to handle diff editor: ${e.message}")
+            logger.warn { "Failed to handle diff editor: ${e.message}" }
             null
         }
     }
@@ -640,7 +641,7 @@ class IdeToolsImpl(
             val buildNumber = com.intellij.openapi.application.ApplicationInfo.getInstance().build.baselineVersion
             buildNumber
         } catch (e: Exception) {
-            logger.warn("Failed to get IDEA build number: ${e.message}")
+            logger.warn { "Failed to get IDEA build number: ${e.message}" }
             242 // 默认返回 242（2024.2）作为保守值
         }
     }
@@ -768,9 +769,9 @@ class IdeToolsImpl(
         }
 
         if (hasSelection) {
-            logger.info("✅ Active editor file: $relativePath (selection: $startLine:$startColumn - $endLine:$endColumn)")
+            logger.info { "✅ Active editor file: $relativePath (selection: $startLine:$startColumn - $endLine:$endColumn)" }
         } else {
-            logger.info("✅ Active editor file: $relativePath (line=$line, column=$column)")
+            logger.info { "✅ Active editor file: $relativePath (line=$line, column=$column)" }
         }
 
         return ActiveFileInfo(
@@ -870,7 +871,7 @@ class IdeToolsImpl(
 
             // 查找映射表中的文件名
             val mappedFileName = fontNameMapping[normalizedName]
-            logger.info("🔤 [Font] Looking for: $fontFamily (normalized: $normalizedName, mapped: $mappedFileName)")
+            logger.info { "🔤 [Font] Looking for: $fontFamily (normalized: $normalizedName, mapped: $mappedFileName)" }
 
             // 只搜索 IDEA/JBR 内置字体目录（系统字体让浏览器自己找）
             val fontDirs = mutableListOf<File>()
@@ -880,12 +881,12 @@ class IdeToolsImpl(
                 val jbrFontsDir = File(ideaHome, "jbr/lib/fonts")
                 if (jbrFontsDir.exists()) {
                     fontDirs.add(jbrFontsDir)
-                    logger.info("🔤 [Font] JBR fonts dir: ${jbrFontsDir.absolutePath}")
+                    logger.info { "🔤 [Font] JBR fonts dir: ${jbrFontsDir.absolutePath}" }
                 } else {
-                    logger.warn("🔤 [Font] JBR fonts dir not found: ${jbrFontsDir.absolutePath}")
+                    logger.warn { "🔤 [Font] JBR fonts dir not found: ${jbrFontsDir.absolutePath}" }
                 }
             } catch (e: Exception) {
-                logger.warn("Failed to get IDEA home path: ${e.message}")
+                logger.warn { "Failed to get IDEA home path: ${e.message}" }
             }
 
             // 搜索字体文件
@@ -908,7 +909,7 @@ class IdeToolsImpl(
                         else -> "font/ttf"
                     }
 
-                    logger.info("✅ Found font file: ${fontFile.absolutePath}")
+                    logger.info { "✅ Found font file: ${fontFile.absolutePath}" }
                     return FontData(
                         fontFamily = fontFamily,
                         data = fontFile.readBytes(),
@@ -918,10 +919,10 @@ class IdeToolsImpl(
                 }
             }
 
-            logger.info("⚠️ Font not found: $fontFamily")
+            logger.info { "⚠️ Font not found: $fontFamily" }
             null
         } catch (e: Exception) {
-            logger.warn("Failed to get font data: ${e.message}")
+            logger.warn { "Failed to get font data: ${e.message}" }
             null
         }
     }
@@ -988,12 +989,12 @@ class IdeToolsImpl(
      * 这是在 IDEA 环境中打开浏览器的推荐方式
      */
     override fun openUrl(url: String): Result<Unit> {
-        logger.info("[IDEA] Opening URL in browser: $url")
+        logger.info { "[IDEA] Opening URL in browser: $url" }
         return try {
             BrowserUtil.browse(url)
             Result.success(Unit)
         } catch (e: Exception) {
-            logger.warn("Failed to open URL: ${e.message}")
+            logger.warn { "Failed to open URL: ${e.message}" }
             Result.failure(e)
         }
     }
@@ -1005,7 +1006,7 @@ class IdeToolsImpl(
      * 用于 Edit/Write 工具的历史快照恢复和 Diff 显示。
      */
     override fun getFileHistoryContent(filePath: String, beforeTimestamp: Long): String? {
-        logger.info("[IDEA] Getting file history content: $filePath (before: $beforeTimestamp)")
+        logger.info { "[IDEA] Getting file history content: $filePath (before: $beforeTimestamp)" }
         return com.asakii.plugin.services.FileHistoryService.getContentBefore(filePath, beforeTimestamp)
     }
 }

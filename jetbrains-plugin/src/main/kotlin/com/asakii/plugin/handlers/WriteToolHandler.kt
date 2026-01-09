@@ -4,6 +4,7 @@ import com.asakii.plugin.services.IdeaPlatformService
 import com.asakii.plugin.types.WriteToolDetail
 import com.asakii.plugin.types.LegacyToolCall
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import com.intellij.openapi.project.Project
 
 /**
@@ -28,12 +29,12 @@ class WriteToolHandler : ToolClickHandler {
         config: ToolClickConfig
     ): Boolean {
         if (project == null) {
-            logger.info("WriteToolHandler: Project is null, 无法使用 IDE 集成")
+            logger.info { "WriteToolHandler: Project is null, 无法使用 IDE 集成" }
             return false
         }
 
         if (config.alwaysExpand) {
-            logger.info("WriteToolHandler: 配置为总是展开，跳过 IDE 集成")
+            logger.info { "WriteToolHandler: 配置为总是展开，跳过 IDE 集成" }
             return false
         }
 

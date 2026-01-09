@@ -2,6 +2,7 @@ package com.asakii.plugin.handlers
 
 import com.asakii.plugin.types.LegacyToolCall
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import com.intellij.openapi.project.Project
 import java.util.concurrent.ConcurrentHashMap
 
@@ -36,21 +37,21 @@ object ToolClickManager {
         try {
             // 注册 Read 工具处理器
             registerHandler("Read", ReadToolHandler())
-            logger.info("ToolClickManager: 已注册 Read 工具处理器")
+            logger.info { "ToolClickManager: 已注册 Read 工具处理器" }
             
             // 注册 Edit 工具处理器
             registerHandler("Edit", EditToolHandler())
             registerHandler("MultiEdit", EditToolHandler())
-            logger.info("ToolClickManager: 已注册 Edit/MultiEdit 工具处理器")
+            logger.info { "ToolClickManager: 已注册 Edit/MultiEdit 工具处理器" }
 
             // 注册 Write 工具处理器
             registerHandler("Write", WriteToolHandler())
-            logger.info("ToolClickManager: 已注册 Write 工具处理器")
+            logger.info { "ToolClickManager: 已注册 Write 工具处理器" }
 
             // 未来可以添加更多处理器
             // registerHandler("Bash", BashToolHandler())
             
-            logger.info("ToolClickManager: 默认处理器初始化完成，共注册 ${handlers.size} 个处理器")
+            logger.info { "ToolClickManager: 默认处理器初始化完成，共注册 ${handlers.size} 个处理器" }
         } catch (e: Exception) {
             logger.error("ToolClickManager: 初始化默认处理器失败", e)
         }
@@ -65,7 +66,7 @@ object ToolClickManager {
     fun registerHandler(toolName: String, handler: ToolClickHandler) {
         val normalizedName = toolName.lowercase()
         handlers[normalizedName] = handler
-        logger.info("ToolClickManager: 已注册处理器 - $toolName -> ${handler::class.simpleName}")
+        logger.info { "ToolClickManager: 已注册处理器 - $toolName -> ${handler::class.simpleName}" }
     }
     
     /**
@@ -75,7 +76,7 @@ object ToolClickManager {
         val normalizedName = toolName.lowercase()
         val removed = handlers.remove(normalizedName)
         if (removed != null) {
-            logger.info("ToolClickManager: 已取消注册处理器 - $toolName")
+            logger.info { "ToolClickManager: 已取消注册处理器 - $toolName" }
             return true
         }
         return false
@@ -99,22 +100,22 @@ object ToolClickManager {
             val handler = handlers[normalizedName]
 
             if (handler == null) {
-                logger.debug("ToolClickManager: 没有找到 ${toolCall.name} 的处理器")
+                logger.debug { "ToolClickManager: 没有找到 ${toolCall.name} 的处理器" }
                 return false
             }
             
             if (!handler.canHandle(toolCall)) {
-                logger.debug("ToolClickManager: 处理器 ${handler::class.simpleName} 无法处理工具调用 ${toolCall.name}")
+                logger.debug { "ToolClickManager: 处理器 ${handler::class.simpleName} 无法处理工具调用 ${toolCall.name}" }
                 return false
             }
             
-            logger.info("ToolClickManager: 使用 ${handler::class.simpleName} 处理 ${toolCall.name} 工具点击")
+            logger.info { "ToolClickManager: 使用 ${handler::class.simpleName} 处理 ${toolCall.name} 工具点击" }
             val handled = handler.handleToolClick(toolCall, project, config)
             
             if (handled) {
-                logger.info("ToolClickManager: ${toolCall.name} 工具点击已成功处理")
+                logger.info { "ToolClickManager: ${toolCall.name} 工具点击已成功处理" }
             } else {
-                logger.info("ToolClickManager: ${toolCall.name} 工具点击处理失败，将使用默认行为")
+                logger.info { "ToolClickManager: ${toolCall.name} 工具点击处理失败，将使用默认行为" }
             }
             
             handled
@@ -163,7 +164,7 @@ object ToolClickManager {
      */
     internal fun clearHandlers() {
         handlers.clear()
-        logger.warn("ToolClickManager: 所有处理器已清除")
+        logger.warn { "ToolClickManager: 所有处理器已清除" }
     }
     
     /**
@@ -172,7 +173,7 @@ object ToolClickManager {
     internal fun reinitialize() {
         clearHandlers()
         initializeDefaultHandlers()
-        logger.info("ToolClickManager: 已重新初始化")
+        logger.info { "ToolClickManager: 已重新初始化" }
     }
 }
 

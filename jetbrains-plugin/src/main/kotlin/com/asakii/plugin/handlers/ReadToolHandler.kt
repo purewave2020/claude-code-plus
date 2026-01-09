@@ -5,6 +5,7 @@ import com.asakii.plugin.types.ReadToolDetail
 import com.asakii.plugin.types.LegacyToolCall
 import com.asakii.plugin.types.ToolResult
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import com.intellij.openapi.project.Project
 
 /**
@@ -29,12 +30,12 @@ class ReadToolHandler : ToolClickHandler {
         config: ToolClickConfig
     ): Boolean {
         if (project == null) {
-            logger.info("ReadToolHandler: Project is null, 无法使用 IDE 集成")
+            logger.info { "ReadToolHandler: Project is null, 无法使用 IDE 集成" }
             return false
         }
 
         if (config.alwaysExpand) {
-            logger.info("ReadToolHandler: 配置为总是展开，跳过 IDE 集成")
+            logger.info { "ReadToolHandler: 配置为总是展开，跳过 IDE 集成" }
             return false
         }
 

@@ -4,6 +4,7 @@ import com.asakii.claude.agent.sdk.types.*
 import com.asakii.plugin.types.ToolCallItem
 import kotlinx.serialization.json.*
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 
 /**
  * Stream Event 处理器
@@ -49,7 +50,7 @@ object StreamEventProcessor {
         val event = streamEvent.event as? JsonObject ?: return createNoOpResult()
         val eventType = event["type"]?.jsonPrimitive?.content
         
-        logger.info("处理 StreamEvent: type=$eventType")
+        logger.info { "处理 StreamEvent: type=$eventType" }
         
         return when (eventType) {
             "message_start" -> processMessageStart(event, context)
@@ -59,7 +60,7 @@ object StreamEventProcessor {
             "message_delta" -> processMessageDelta(event, context)
             "message_stop" -> processMessageStop(event, context)
             else -> {
-                logger.warn("未知的 StreamEvent 类型: $eventType")
+                logger.warn { "未知的 StreamEvent 类型: $eventType" }
                 createNoOpResult()
             }
         }
@@ -75,7 +76,7 @@ object StreamEventProcessor {
         val messageObj = event["message"]?.jsonObject
         val eventMessageId = messageObj?.get("id")?.jsonPrimitive?.content
         
-        logger.info("processMessageStart: id=$eventMessageId")
+        logger.info { "processMessageStart: id=$eventMessageId" }
         
         // 查找最后一个 assistant 消息
         val lastMessage = context.messages.lastOrNull()
@@ -85,7 +86,7 @@ object StreamEventProcessor {
             // 更新消息 ID（如果后端返回了 ID）
             if (eventMessageId != null) {
                 // 由于 AssistantMessage 是不可变的，这里简化处理
-                logger.info("复用现有空消息")
+                logger.info { "复用现有空消息" }
             }
             
             return StreamEventProcessResult(
@@ -102,7 +103,7 @@ object StreamEventProcessor {
         )
         context.messages.add(newMessage)
         
-        logger.info("创建新的 assistant 消息")
+        logger.info { "创建新的 assistant 消息" }
         
         // 转换为 AssistantMessage 用于返回
         val assistantMessage = AssistantMessage(
@@ -130,7 +131,7 @@ object StreamEventProcessor {
         val contentBlock = event["content_block"]?.jsonObject ?: return createNoOpResult()
         val blockType = contentBlock["type"]?.jsonPrimitive?.content
         
-        logger.info("processContentBlockStart: index=$index, type=$blockType")
+        logger.info { "processContentBlockStart: index=$index, type=$blockType" }
         
         val lastMessage = context.messages.lastOrNull() as? MutableAssistantMessage
             ?: return createNoOpResult()
@@ -247,7 +248,7 @@ object StreamEventProcessor {
         event: JsonObject,
         context: StreamEventContext
     ): StreamEventProcessResult {
-        logger.info("processContentBlockStop")
+        logger.info { "processContentBlockStop" }
         
         return StreamEventProcessResult(
             shouldUpdateMessages = true,
@@ -294,7 +295,7 @@ object StreamEventProcessor {
         event: JsonObject,
         context: StreamEventContext
     ): StreamEventProcessResult {
-        logger.info("processMessageStop: 消息完成")
+        logger.info { "processMessageStop: 消息完成" }
         
         return StreamEventProcessResult(
             shouldUpdateMessages = true,

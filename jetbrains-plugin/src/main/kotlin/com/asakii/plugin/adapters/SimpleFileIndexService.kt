@@ -12,6 +12,7 @@ import com.intellij.openapi.roots.ProjectRootManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import java.io.File
 
 /**
@@ -93,7 +94,7 @@ class SimpleFileIndexService(
                 }
             }
         } catch (e: Exception) {
-            logger.warn("Search failed: ${e.message}")
+            logger.warn { "Search failed: ${e.message}" }
             emptyList()
         }
     }
@@ -113,14 +114,14 @@ class SimpleFileIndexService(
     
     override suspend fun getRecentFiles(maxResults: Int): List<IndexedFileInfo> = withContext(Dispatchers.IO) {
         try {
-            logger.debug("getRecentFiles 被调用，maxResults=$maxResults")
+            logger.debug { "getRecentFiles 被调用，maxResults=$maxResults" }
 
             ReadAction.compute<List<IndexedFileInfo>, Exception> {
                 val results = mutableListOf<IndexedFileInfo>()
 
                 // 获取项目的所有源文件根目录
                 val contentRoots = ProjectRootManager.getInstance(project).contentRoots
-                logger.debug("找到 ${contentRoots.size} 个内容根目录")
+                logger.debug { "找到 ${contentRoots.size} 个内容根目录" }
 
                 for (root in contentRoots) {
                     VfsUtilCore.iterateChildrenRecursively(root, null) { virtualFile ->
@@ -153,7 +154,7 @@ class SimpleFileIndexService(
                     }
                 }.thenBy { it.name.lowercase() })
                 
-                logger.info("找到 ${sortedResults.size} 个文件")
+                logger.info { "找到 ${sortedResults.size} 个文件" }
                 sortedResults.take(maxResults)
             }
         } catch (e: Exception) {

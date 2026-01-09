@@ -7,6 +7,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 
 /**
  * 新建会话按钮 - 显示在 ToolWindow 标题栏右侧
@@ -22,7 +23,7 @@ class NewSessionAction(
     private val logger = Logger.getInstance(NewSessionAction::class.java.name)
 
     override fun actionPerformed(e: AnActionEvent) {
-        logger.info("🆕 [NewSessionAction] 点击新建会话按钮")
+        logger.info { "🆕 [NewSessionAction] 点击新建会话按钮" }
 
         // 检查当前会话是否正在生成中
         val currentState = sessionApi.getState()
@@ -32,13 +33,13 @@ class NewSessionAction(
 
         if (isGenerating) {
             // 当前会话正在生成中，创建新 Tab
-            logger.info("🆕 [NewSessionAction] 当前会话正在生成，发送 CREATE 命令")
+            logger.info { "🆕 [NewSessionAction] 当前会话正在生成，发送 CREATE 命令" }
             sessionApi.sendCommand(JetBrainsSessionCommand(
                 type = JetBrainsSessionCommandType.CREATE
             ))
         } else {
             // 当前会话空闲，重置/清空当前会话
-            logger.info("🆕 [NewSessionAction] 当前会话空闲，发送 RESET 命令")
+            logger.info { "🆕 [NewSessionAction] 当前会话空闲，发送 RESET 命令" }
             sessionApi.sendCommand(JetBrainsSessionCommand(
                 type = JetBrainsSessionCommandType.RESET
             ))

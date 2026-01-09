@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.*
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.popup.JBPopupFactory
@@ -191,13 +192,13 @@ class SessionTabsAction(
     }
 
     init {
-        logger.info("🏷️ [SessionTabsAction] Registering session state listener")
+        logger.info { "🏷️ [SessionTabsAction] Registering session state listener" }
         removeListener = sessionApi.addStateListener { state ->
-            logger.info("🏷️ [SessionTabsAction] Received state update: ${state.sessions.size} sessions, active=${state.activeSessionId}")
+            logger.info { "🏷️ [SessionTabsAction] Received state update: ${state.sessions.size} sessions, active=${state.activeSessionId}" }
             SwingUtilities.invokeLater { render(state) }
         }
         val latestState = sessionApi.getState()
-        logger.info("🏷️ [SessionTabsAction] Initial state: ${latestState?.sessions?.size ?: 0} sessions")
+        logger.info { "🏷️ [SessionTabsAction] Initial state: ${latestState?.sessions?.size ?: 0} sessions" }
         render(latestState)
     }
 
@@ -620,7 +621,7 @@ class SessionTabsAction(
     private fun handleClose(sessionId: String) {
         if (sessions.size <= 1) {
             // 最后一个会话，不删除 Tab，而是重置/清空当前会话
-            logger.info("🔄 [SessionTabsAction] 最后一个会话，发送 RESET 命令清空")
+            logger.info { "🔄 [SessionTabsAction] 最后一个会话，发送 RESET 命令清空" }
             sessionApi.sendCommand(
                 JetBrainsSessionCommand(
                     type = JetBrainsSessionCommandType.RESET
@@ -706,7 +707,7 @@ class SessionTabsAction(
     private fun copySessionId(session: JetBrainsSessionSummary, component: JComponent) {
         val sessionId = session.sessionId ?: return
         CopyPasteManager.getInstance().setContents(StringSelection(sessionId))
-        logger.info("Copied session ID: $sessionId")
+        logger.info { "Copied session ID: $sessionId" }
 
         JBPopupFactory.getInstance()
             .createHtmlTextBalloonBuilder(
