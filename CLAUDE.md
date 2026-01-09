@@ -146,28 +146,34 @@ getMode(): 'ide' | 'browser' {
 
 ### 设计目标
 
-本项目使用**统一日志抽象层**，实现以下目标：
-1. **环境自适应**: 在 IDEA 插件模式下输出到 `idea.log`，独立运行时输出到控制台
-2. **模块独立**: 各模块不依赖第三方日志库（如 kotlin-logging）
-3. **零配置**: 通过反射自动检测运行环境，无需手动配置
+本项目使用**统一日志框架**，实现以下目标：
+1. **统一 API**: 所有模块使用一致的 lambda 风格日志调用 `logger.info { "message" }`
+2. **环境自适应**: IDEA 插件模式输出到 `idea.log`，独立运行时输出到控制台
+3. **延迟计算**: Lambda 形式只有在日志级别启用时才执行字符串拼接，提升性能
 
 ### 核心组件
 
-#### UnifiedLogger (`ai-agent-server`)
+#### 1. unified-logging 模块 (SLF4J 扩展)
 
-**位置**: `ai-agent-server/src/main/kotlin/com/asakii/server/logging/UnifiedLogger.kt`
+**位置**: `unified-logging/src/main/kotlin/com/asakii/logging/Logging.kt`
 
 **功能**:
-- 反射检测 `com.intellij.openapi.diagnostic.Logger` 是否可用
-- IDEA 模式：使用 IDEA Logger，日志输出到 `idea.log`
-- 独立模式：使用控制台输出
+- 基于 SLF4J 的日志门面
+- 提供 Kotlin lambda 扩展函数
+- 同时输出到 SLF4J 和控制台（可配置）
 
 **使用方式**:
 ```kotlin
-import com.asakii.server.logging.UnifiedLogger
+import com.asakii.logging.getLogger
+import com.asakii.logging.info
+import com.asakii.logging.debug
+import com.asakii.logging.warn
+import com.asakii.logging.error
 
 class MyClass {
-    private val logger = UnifiedLogger.getLogger("MyClass")
+    companion object {
+        private val logger = getLogger<MyClass>()
+    }
 
     fun doSomething() {
         logger.info { "Starting operation" }
@@ -178,43 +184,53 @@ class MyClass {
 }
 ```
 
-#### SdkLogger (`claude-agent-sdk`)
+#### 2. IdeaLoggerExtensions (IDEA Logger 扩展)
 
-**位置**: `claude-agent-sdk/src/main/kotlin/com/asakii/claude/agent/sdk/logging/SdkLogger.kt`
+**位置**: `jetbrains-plugin/src/main/kotlin/com/asakii/plugin/logging/IdeaLoggerExtensions.kt`
 
-**功能**: 与 UnifiedLogger 相同，但独立于 ai-agent-server 模块
+**功能**:
+- 为 IDEA 原生 `com.intellij.openapi.diagnostic.Logger` 提供 lambda 扩展
+- 与 unified-logging 保持一致的 API 风格
+- 仅在 jetbrains-plugin 模块内使用
 
 **使用方式**:
 ```kotlin
-import com.asakii.claude.agent.sdk.logging.SdkLogger
+import com.intellij.openapi.diagnostic.Logger
+import com.asakii.plugin.logging.info
+import com.asakii.plugin.logging.debug
+import com.asakii.plugin.logging.warn
+import com.asakii.plugin.logging.error
 
-class MySdkClass {
-    private val logger = SdkLogger.getLogger("MySdkClass")
+class MyPluginClass {
+    private val logger = Logger.getInstance(MyPluginClass::class.java)
 
     fun doSomething() {
-        logger.info { "SDK operation" }
+        logger.info { "Plugin operation" }
+        logger.debug { "Debug: $variable" }
+        logger.error(exception) { "Error occurred" }
     }
 }
 ```
 
 ### 模块日志使用规范
 
-| 模块 | 使用的日志类 | 说明 |
-|------|-------------|------|
-| `ai-agent-server` | `UnifiedLogger` | 服务端核心模块 |
-| `jetbrains-plugin` | `UnifiedLogger` | 通过依赖 ai-agent-server 获取 |
-| `claude-agent-sdk` | `SdkLogger` | 独立模块，不依赖 ai-agent-server |
-| `codex-agent-sdk` | `SdkLogger` | 独立模块 |
+| 模块 | Logger 类型 | 扩展函数来源 | 说明 |
+|------|------------|-------------|------|
+| `unified-logging` | `org.slf4j.Logger` | `com.asakii.logging.*` | 日志框架核心模块 |
+| `ai-agent-server` | `org.slf4j.Logger` | `com.asakii.logging.*` | 依赖 unified-logging |
+| `claude-agent-sdk` | `org.slf4j.Logger` | `com.asakii.logging.*` | 依赖 unified-logging |
+| `codex-agent-sdk` | `org.slf4j.Logger` | `com.asakii.logging.*` | 依赖 unified-logging |
+| `jetbrains-plugin` | `com.intellij.openapi.diagnostic.Logger` | `com.asakii.plugin.logging.*` | 使用 IDEA 原生 Logger |
 
 ### SLF4J/Logback 配置
 
-**ai-agent-server**:
-- 保留 `logback-classic` 依赖，供第三方库（Ktor、gRPC 等）使用
-- 本项目代码使用 `UnifiedLogger`，不使用 SLF4J
+**unified-logging / ai-agent-server / SDK 模块**:
+- 使用 `logback-classic` 作为 SLF4J 实现
+- 配置文件: `logback.xml`
 
 **jetbrains-plugin**:
 - 排除所有 SLF4J/Logback 依赖，避免与 IDEA 内置版本冲突
-- 第三方库的 SLF4J 日志由 IDEA 内置实现接管
+- 使用 IDEA 原生 Logger + IdeaLoggerExtensions
 
 ```kotlin
 // jetbrains-plugin/build.gradle.kts
