@@ -6,6 +6,7 @@
  */
 
 import { reactive, computed } from 'vue'
+import mitt, { type Emitter } from 'mitt'
 import type { ToolUseBlock, ToolResultBlock } from '@/types/message'
 import { ToolCallStatus } from '@/types/display'
 import type { ToolCall, ToolResult } from '@/types/display'
@@ -13,6 +14,18 @@ import { createToolCall as createToolCallDisplay } from '@/utils/displayItemConv
 import { loggers } from '@/utils/logger'
 
 const log = loggers.session
+
+/**
+ * 工具事件类型定义
+ */
+type ToolEvents = {
+  /** 工具调用完成（成功） */
+  toolCompleted: ToolCall
+  /** 工具调用失败 */
+  toolFailed: ToolCall
+  /** 工具调用开始 */
+  toolStarted: ToolCall
+}
 
 /**
  * 工具调用状态（向后兼容旧接口）
@@ -57,6 +70,13 @@ export function useSessionTools() {
    * value: 累积的 JSON 字符串
    */
   const toolInputJsonAccumulator = reactive(new Map<string, string>())
+
+  // ========== 事件发射器 ==========
+  /**
+   * 工具事件发射器
+   * 用于通知外部订阅者工具调用的生命周期事件
+   */
+  const emitter: Emitter<ToolEvents> = mitt<ToolEvents>()
 
   // ========== 计算属性 ==========
 
@@ -146,6 +166,13 @@ export function useSessionTools() {
       state.status = isError ? 'failed' : 'success'
       state.result = result
       state.endTime = Date.now()
+    }
+
+    // 发射工具完成/失败事件
+    if (isError) {
+      emitter.emit('toolFailed', toolCall)
+    } else {
+      emitter.emit('toolCompleted', toolCall)
     }
 
     log.debug(`[useSessionTools] 更新工具结果: ${toolUseId}, 状态: ${toolCall.status}`)
@@ -321,7 +348,33 @@ export function useSessionTools() {
 
     // 管理方法
     cleanupCompletedToolCalls,
-    reset
+    reset,
+
+    // 事件订阅方法
+    /**
+     * 订阅工具完成事件
+     * @returns 取消订阅函数
+     */
+    onToolCompleted: (handler: (toolCall: ToolCall) => void) => {
+      emitter.on('toolCompleted', handler)
+      return () => emitter.off('toolCompleted', handler)
+    },
+    /**
+     * 订阅工具失败事件
+     * @returns 取消订阅函数
+     */
+    onToolFailed: (handler: (toolCall: ToolCall) => void) => {
+      emitter.on('toolFailed', handler)
+      return () => emitter.off('toolFailed', handler)
+    },
+    /**
+     * 订阅工具开始事件
+     * @returns 取消订阅函数
+     */
+    onToolStarted: (handler: (toolCall: ToolCall) => void) => {
+      emitter.on('toolStarted', handler)
+      return () => emitter.off('toolStarted', handler)
+    }
   }
 }
 

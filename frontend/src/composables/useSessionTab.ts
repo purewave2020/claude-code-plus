@@ -40,6 +40,7 @@ import {useSessionTools, type SessionToolsInstance} from './useSessionTools'
 import {useSessionStats, type SessionStatsInstance} from './useSessionStats'
 import {useSessionPermissions, type SessionPermissionsInstance} from './useSessionPermissions'
 import {useSessionMessages, type SessionMessagesInstance} from './useSessionMessages'
+import {useFileChanges, type FileChangesInstance} from './useFileChanges'
 import type {ActiveFileInfo} from '@/services/jetbrainsRSocket'
 import {loggers} from '@/utils/logger'
 import type {PendingPermissionRequest, PendingUserQuestion, PermissionResponse} from '@/types/permission'
@@ -210,6 +211,14 @@ export function useSessionTab(initialOrder: number = 0) {
     const stats: SessionStatsInstance = useSessionStats()
     const permissions: SessionPermissionsInstance = useSessionPermissions()
     const messagesHandler: SessionMessagesInstance = useSessionMessages(tools, stats)
+    
+    // 文件改动追踪（用于回滚功能）
+    // 使用事件驱动而非 deep watch，性能优化
+    const fileChanges: FileChangesInstance = useFileChanges(
+      computed(() => messagesHandler.displayItems),
+      tools,
+      computed(() => messagesHandler.isGenerating.value)
+    )
 
     // ========== Tab 基础信息 ==========
     const tabId = `tab-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
@@ -2253,6 +2262,7 @@ export function useSessionTab(initialOrder: number = 0) {
         tools,
         stats,
         permissions,
+        fileChanges,
 
         // 消息相关（直接暴露 messagesHandler 的状态）
         messages: messagesHandler.messages,

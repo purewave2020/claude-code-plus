@@ -169,7 +169,6 @@ import { useSessionStore } from '@/stores/sessionStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useI18n } from '@/composables/useI18n'
 import { useEnvironment } from '@/composables/useEnvironment'
-import { useFileChanges } from '@/composables/useFileChanges'
 import { setupIdeSessionBridge, onIdeHostCommand } from '@/bridges/ideSessionBridge'
 import { aiAgentService } from '@/services/aiAgentService'
 import MessageList from './MessageList.vue'
@@ -208,9 +207,8 @@ const settingsStore = useSettingsStore()
 provide('projectPath', computed(() => props.projectPath))
 provide('aiAgentService', aiAgentService)
 
-// 文件改动追踪（用于回滚功能）
-const displayItemsRef = computed(() => sessionStore.currentDisplayItems)
-const fileChanges = useFileChanges(displayItemsRef)
+// 文件改动追踪（从当前 Tab 获取，使用事件驱动优化）
+const fileChanges = computed(() => sessionStore.currentFileChanges)
 provide('fileChanges', fileChanges)
 const { t } = useI18n()
 const { isInIde, detectEnvironment } = useEnvironment()

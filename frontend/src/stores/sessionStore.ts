@@ -251,6 +251,12 @@ export const useSessionStore = defineStore('session', () => {
     return currentTab.value?.displayItems ?? []
   })
 
+  /**
+   * 当前 Tab 的文件改动追踪实例
+   * 用于回滚功能，使用事件驱动优化
+   */
+  const currentFileChanges = computed(() => currentTab.value?.fileChanges ?? null)
+
   // 监听 displayItems 变化，递增版本号触发 computed 更新
   watch(
     () => currentTab.value?.displayItems.length,
@@ -1015,6 +1021,7 @@ export const useSessionStore = defineStore('session', () => {
     currentHasMoreHistory,
     currentHistoryState,
     currentDisplayItems,
+    currentFileChanges,
     currentMessages,
     currentSessionSettings,
     currentLastError,
