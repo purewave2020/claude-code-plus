@@ -25,7 +25,6 @@ import com.asakii.rpc.api.RpcThinkingBlock
 import com.asakii.rpc.api.RpcToolResultBlock
 import com.asakii.rpc.api.RpcToolUseBlock
 import com.asakii.rpc.api.RpcUserMessage
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
@@ -37,13 +36,6 @@ import java.nio.file.Path
 import java.util.Base64
 
 object CodexHistoryMapper {
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        encodeDefaults = true
-        prettyPrint = false
-        classDiscriminator = "type"
-    }
 
     fun buildMetadata(thread: ThreadInfo, fallbackProjectPath: String): RpcHistoryMetadata {
         val totalLines = countMessages(thread)
@@ -452,8 +444,11 @@ object CodexHistoryMapper {
     private fun McpToolCallResult?.toResultJson(): JsonElement? {
         if (this == null) return null
         if (structuredContent != null) return structuredContent
-        // 直接返回 content 数组，避免嵌套 { content: { content: [...] } }
-        return buildJsonArray { content.forEach { add(it) } }
+        // 直接返回 content，避免嵌套 { content: { content: [...] } }
+        if (content.isNotEmpty()) {
+            return if (content.size == 1) content.first() else buildJsonArray { content.forEach { add(it) } }
+        }
+        return null
     }
 
     private fun extractDiffOldNew(diff: String): Pair<String, String> {

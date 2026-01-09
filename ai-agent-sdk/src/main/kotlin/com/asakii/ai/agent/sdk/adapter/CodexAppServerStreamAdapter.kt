@@ -12,7 +12,6 @@ import com.asakii.codex.agent.sdk.appserver.PatchChangeKind
 import com.asakii.codex.agent.sdk.appserver.ThreadItem
 import com.asakii.codex.agent.sdk.appserver.ThreadTokenUsage
 import com.asakii.codex.agent.sdk.appserver.TurnStatus
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
@@ -25,7 +24,6 @@ class CodexAppServerStreamAdapter(
     private val sessionIdProvider: () -> String?,
     private val idGenerator: () -> String = { UUID.randomUUID().toString() }
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
     private val itemIdToIndex = mutableMapOf<String, Int>()
     private var indexCounter = 0
     private var turnStartTimeMs: Long? = null
@@ -521,7 +519,12 @@ class CodexAppServerStreamAdapter(
     private fun McpToolCallResult?.toResultJson(): JsonElement? {
         if (this == null) return null
         if (structuredContent != null) return structuredContent
-        return json.encodeToJsonElement(McpToolCallResult.serializer(), this)
+        // 直接返回 content 列表，而不是序列化整个对象
+        // 这样前端收到的格式与 Claude Code 一致
+        if (content.isNotEmpty()) {
+            return if (content.size == 1) content.first() else buildJsonArray { content.forEach { add(it) } }
+        }
+        return null
     }
 
     private fun ThreadTokenUsage.toUnifiedUsage(): UnifiedUsage =
