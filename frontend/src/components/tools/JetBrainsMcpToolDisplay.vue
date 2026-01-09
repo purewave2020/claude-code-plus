@@ -108,20 +108,20 @@ const expanded = ref(false)
 // 回滚中状态
 const isRollingBack = ref(false)
 
-const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall as any, props.toolCall.result as any))
+const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall as any, props.toolCall?.result as any))
 
 // 构造 toolCallData 用于拦截器
 const toolCallData = computed<ToolCallData>(() => ({
-  toolType: props.toolCall.toolName,
-  toolUseId: props.toolCall.id,
-  input: (props.toolCall.input || {}) as Record<string, unknown>,
-  result: props.toolCall.result as ToolCallData['result']
+  toolType: props.toolCall?.toolName,
+  toolUseId: props.toolCall?.id,
+  input: (props.toolCall?.input || {}) as Record<string, unknown>,
+  result: props.toolCall?.result as ToolCallData['result']
 }))
 
 // 是否显示回滚按钮
 const showRollbackBtn = computed(() => {
   // 只对 WriteFile/EditFile 工具显示
-  if (!isJetBrainsFileEditTool(props.toolCall.toolName)) return false
+  if (!props.toolCall || !isJetBrainsFileEditTool(props.toolCall.toolName)) return false
   // 检查是否在当前会话中且可以回滚
   return fileChangesInstance?.canRollback(props.toolCall.id) ?? false
 })
@@ -142,7 +142,7 @@ async function handleRollback() {
   }
 }
 
-const params = computed(() => props.toolCall.input || {})
+const params = computed(() => props.toolCall?.input || {})
 
 /**
  * 格式化参数值
@@ -192,7 +192,7 @@ function unwrapMcpBlocks(blocks: any[]): any[] {
 }
 
 const resultBlocks = computed<any[]>(() => {
-  const r = props.toolCall.result
+  const r = props.toolCall?.result
   if (!r) return []
   const content = (r as any).content
   if (typeof content === 'string') {
@@ -210,11 +210,9 @@ const resultBlocks = computed<any[]>(() => {
   return []
 })
 
-const hasResult = computed(() => {
-  return resultBlocks.value.length > 0
-})
+const hasResult = computed(() => (resultBlocks.value?.length ?? 0) > 0)
 
-const hasDetails = computed(() => Object.keys(params.value).length > 0 || hasResult.value)
+const hasDetails = computed(() => Object.keys(params.value || {}).length > 0 || hasResult.value)
 
 function blockType(block: any): string {
   return typeof block?.type === 'string' ? block.type : 'unknown'

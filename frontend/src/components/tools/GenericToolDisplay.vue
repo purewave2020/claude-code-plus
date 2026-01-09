@@ -72,9 +72,9 @@ interface Props {
 const props = defineProps<Props>()
 const expanded = ref(false)
 
-const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall as any, props.toolCall.result as any))
+const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall as any, props.toolCall?.result as any))
 
-const params = computed(() => props.toolCall.input || {})
+const params = computed(() => props.toolCall?.input || {})
 const paramsFormatted = computed(() => {
   try {
     return JSON.stringify(params.value, null, 2)
@@ -116,7 +116,7 @@ function unwrapMcpBlocks(blocks: any[]): any[] {
 }
 
 const resultBlocks = computed<any[]>(() => {
-  const r = props.toolCall.result
+  const r = props.toolCall?.result
   if (!r) return []
   const content = (r as any).content
   if (typeof content === 'string') {
@@ -134,11 +134,9 @@ const resultBlocks = computed<any[]>(() => {
   return []
 })
 
-const hasResult = computed(() => {
-  return resultBlocks.value.length > 0
-})
+const hasResult = computed(() => (resultBlocks.value?.length ?? 0) > 0)
 
-const hasDetails = computed(() => Object.keys(params.value).length > 0 || hasResult.value)
+const hasDetails = computed(() => Object.keys(params.value || {}).length > 0 || hasResult.value)
 
 function blockType(block: any): string {
   return typeof block?.type === 'string' ? block.type : 'unknown'
