@@ -56,10 +56,23 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
     // ========== 文件操作 API 实现 ==========
 
     inner class FileApiImpl : JetBrainsFileApi {
+        /**
+         * 将文件路径解析为绝对路径字符串
+         * 如果是相对路径，则基于项目根目录拼接
+         */
+        private fun resolveToAbsolutePath(filePath: String): String {
+            return if (File(filePath).isAbsolute) {
+                filePath
+            } else {
+                // 相对路径：基于项目根目录解析
+                ideaProject.basePath?.let { "$it/$filePath" } ?: filePath
+            }
+        }
+
         override fun openFile(request: JetBrainsOpenFileRequest): Result<Unit> {
             return try {
                 ApplicationManager.getApplication().invokeLater {
-                    val file = LocalFileSystem.getInstance().findFileByIoFile(File(request.filePath))
+                    val file = LocalFileSystem.getInstance().findFileByPath(resolveToAbsolutePath(request.filePath))
                     if (file != null) {
                         val fileEditorManager = FileEditorManager.getInstance(ideaProject)
                         val line = request.line
