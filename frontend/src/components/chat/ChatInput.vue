@@ -684,16 +684,17 @@ function cycleCodexSandboxMode() {
 // Thinking config panel visibility
 const showThinkingConfig = ref(false)
 
-// Current thinking config (from props or default)
+// Current thinking config (from props or Tab's initial config or default)
 const currentThinkingConfig = computed<ThinkingConfig>(() => {
   if (props.thinkingConfig) {
     return props.thinkingConfig
   }
-  // Default config based on backend type
+  // Default config based on backend type, prefer Tab's initial config
   if (props.backendType === 'codex') {
+    const tabEffort = sessionStore.currentTab?.initialConnectOptions?.value?.reasoningEffort
     return {
       type: 'codex',
-      effort: 'medium',
+      effort: tabEffort ?? 'xhigh',
       summary: 'auto'
     }
   } else {
