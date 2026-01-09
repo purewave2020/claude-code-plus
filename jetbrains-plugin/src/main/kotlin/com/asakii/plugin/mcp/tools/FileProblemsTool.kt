@@ -122,66 +122,69 @@ class FileProblemsTool(private val project: Project) {
 
             logger.debug { "📊 Found ${analysisResult.syntaxErrors.size} syntax errors, ${analysisResult.highlightVisitorProblems.size} highlight visitor problems and ${analysisResult.inspectionProblems.size} inspection problems for $filePath" }
 
-            // 1. 处理语法错误（始终包含）
-            for (descriptor in analysisResult.syntaxErrors) {
-                if (problems.size >= maxProblems) break
-                syntaxErrorCount++
-                addProblemFromDescriptor(descriptor, ProblemSeverity.SYNTAX_ERROR, problems)
-            }
-
-            // 2. 处理 HighlightVisitor 检测到的问题（编译器错误等）
-            for (highlightInfo in analysisResult.highlightVisitorProblems) {
-                if (problems.size >= maxProblems) break
-
-                val severity = classifyHighlightInfo(highlightInfo.severity)
-
-                when (severity) {
-                    ProblemSeverity.SYNTAX_ERROR -> {
-                        // 语法错误已在上面处理
-                        continue
-                    }
-                    ProblemSeverity.ERROR -> {
-                        errorCount++
-                    }
-                    ProblemSeverity.WARNING -> {
-                        if (!includeWarnings) continue
-                        warningCount++
-                    }
-                    ProblemSeverity.SUGGESTION -> {
-                        if (!includeWeakWarnings) continue
-                        suggestionCount++
-                    }
+            // 处理 ProblemDescriptor 需要在 ReadAction 中，因为访问 PSI 元素
+            com.intellij.openapi.application.runReadAction {
+                // 1. 处理语法错误（始终包含）
+                for (descriptor in analysisResult.syntaxErrors) {
+                    if (problems.size >= maxProblems) break
+                    syntaxErrorCount++
+                    addProblemFromDescriptor(descriptor, ProblemSeverity.SYNTAX_ERROR, problems)
                 }
 
-                addProblemFromHighlightInfo(highlightInfo, severity, problems, analysisResult.psiFile)
-            }
+                // 2. 处理 HighlightVisitor 检测到的问题（编译器错误等）
+                for (highlightInfo in analysisResult.highlightVisitorProblems) {
+                    if (problems.size >= maxProblems) break
 
-            // 3. 处理代码检查问题
-            for ((descriptor, inspectionLevel) in analysisResult.inspectionProblems) {
-                if (problems.size >= maxProblems) break
+                    val severity = classifyHighlightInfo(highlightInfo.severity)
 
-                val severity = classifyProblem(descriptor.highlightType, inspectionLevel)
+                    when (severity) {
+                        ProblemSeverity.SYNTAX_ERROR -> {
+                            // 语法错误已在上面处理
+                            continue
+                        }
+                        ProblemSeverity.ERROR -> {
+                            errorCount++
+                        }
+                        ProblemSeverity.WARNING -> {
+                            if (!includeWarnings) continue
+                            warningCount++
+                        }
+                        ProblemSeverity.SUGGESTION -> {
+                            if (!includeWeakWarnings) continue
+                            suggestionCount++
+                        }
+                    }
 
-                // 根据过滤条件决定是否包含
-                when (severity) {
-                    ProblemSeverity.SYNTAX_ERROR -> {
-                        // 语法错误已在上面处理
-                        continue
-                    }
-                    ProblemSeverity.ERROR -> {
-                        errorCount++
-                    }
-                    ProblemSeverity.WARNING -> {
-                        if (!includeWarnings) continue
-                        warningCount++
-                    }
-                    ProblemSeverity.SUGGESTION -> {
-                        if (!includeWeakWarnings) continue
-                        suggestionCount++
-                    }
+                    addProblemFromHighlightInfo(highlightInfo, severity, problems, analysisResult.psiFile)
                 }
 
-                addProblemFromDescriptor(descriptor, severity, problems)
+                // 3. 处理代码检查问题
+                for ((descriptor, inspectionLevel) in analysisResult.inspectionProblems) {
+                    if (problems.size >= maxProblems) break
+
+                    val severity = classifyProblem(descriptor.highlightType, inspectionLevel)
+
+                    // 根据过滤条件决定是否包含
+                    when (severity) {
+                        ProblemSeverity.SYNTAX_ERROR -> {
+                            // 语法错误已在上面处理
+                            continue
+                        }
+                        ProblemSeverity.ERROR -> {
+                            errorCount++
+                        }
+                        ProblemSeverity.WARNING -> {
+                            if (!includeWarnings) continue
+                            warningCount++
+                        }
+                        ProblemSeverity.SUGGESTION -> {
+                            if (!includeWeakWarnings) continue
+                            suggestionCount++
+                        }
+                    }
+
+                    addProblemFromDescriptor(descriptor, severity, problems)
+                }
             }
         } catch (e: Exception) {
             logger.error(e) { "❌ Analysis error for $filePath" }

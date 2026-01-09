@@ -1789,7 +1789,8 @@ export function useSessionTab(initialOrder: number = 0) {
      * 统一使用 RSocket 协议，切换后端只需要：
      * 1. 断开现有 RSocket 连接
      * 2. 更新 backendType
-     * 3. 下次 connect 时会自动传递新的 provider 参数
+     * 3. 重置 modelId 为新后端的默认模型
+     * 4. 下次 connect 时会自动传递新的 provider 参数
      */
     async function setBackendType(type: BackendType): Promise<void> {
         if (backendType.value === type) {
@@ -1813,6 +1814,15 @@ export function useSessionTab(initialOrder: number = 0) {
 
         // 设置新的后端类型（下次 connect 时会自动使用新的 provider）
         backendType.value = type
+
+        // 重置 modelId 为新后端的默认模型，避免 Claude 模型出现在 Codex 列表中
+        const settingsStore = useSettingsStore()
+        const newDefaultModel = type === 'claude'
+            ? settingsStore.settings.claudeModel
+            : settingsStore.settings.codexModel
+        log.info(`[Tab ${tabId}] 重置模型为新后端默认: ${modelId.value} -> ${newDefaultModel}`)
+        modelId.value = newDefaultModel
+
         log.info(`[Tab ${tabId}] 后端类型已切换: ${type}`)
     }
 
