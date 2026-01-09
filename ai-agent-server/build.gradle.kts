@@ -60,6 +60,10 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.4.14")
     implementation("org.slf4j:jul-to-slf4j:2.0.13")
 
+    // Test dependencies
+    testImplementation(kotlin("test"))
+    testImplementation(project(":codex-agent-sdk"))
+
 }
 
 application {
@@ -82,7 +86,5 @@ kotlin {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     dependsOn(":ai-agent-proto:generateProto")
 }
-
-
 
 

@@ -747,25 +747,25 @@ class AiAgentRpcServiceImpl(
             mcpProviders.git.getServer()?.let { globalServers["jetbrains_git"] = it }
         }
 
-        // 注册 global MCP 服务器（共享端点，通过请求头区分会话）
+        // 注册 global MCP 服务器（共享端点，通过 header 传递会话信息）
         if (globalServers.isNotEmpty()) {
-            val globalHeaders = McpHttpGateway.buildSessionHeaders(GLOBAL_MCP_PROVIDER, GLOBAL_MCP_SESSION_ID)
             globalServers.forEach { (name, server) ->
                 McpHttpGateway.registerServer(GLOBAL_MCP_PROVIDER, GLOBAL_MCP_SESSION_ID, name, server)
                 val url = McpHttpGateway.buildServerUrl(name)
-                claudeServers[name] = McpHttpServerConfig(url = url, headers = globalHeaders)
-                sdkLog.info("✅ [MCP] HTTP endpoint registered (scope=global): $name -> $url (headers=${globalHeaders.keys})")
+                val headers = buildInternalMcpHeaders(GLOBAL_MCP_PROVIDER, GLOBAL_MCP_SESSION_ID)
+                claudeServers[name] = McpHttpServerConfig(url = url, headers = headers)
+                sdkLog.info("✅ [MCP] HTTP endpoint registered (scope=global): $name -> $url")
             }
         }
 
-        // 注册 session MCP 服务器（共享端点，通过请求头区分会话）
+        // 注册 session MCP 服务器（共享端点，通过 header 传递会话信息）
         if (sessionServers.isNotEmpty()) {
-            val sessionHeaders = McpHttpGateway.buildSessionHeaders(provider, sessionId)
             sessionServers.forEach { (name, server) ->
                 McpHttpGateway.registerServer(provider, sessionId, name, server)
                 val url = McpHttpGateway.buildServerUrl(name)
-                claudeServers[name] = McpHttpServerConfig(url = url, headers = sessionHeaders)
-                sdkLog.info("✅ [MCP] HTTP endpoint registered (scope=session): $name -> $url (headers=${sessionHeaders.keys})")
+                val headers = buildInternalMcpHeaders(provider, sessionId)
+                claudeServers[name] = McpHttpServerConfig(url = url, headers = headers)
+                sdkLog.info("✅ [MCP] HTTP endpoint registered (scope=session): $name -> $url")
             }
         }
 
@@ -1034,6 +1034,16 @@ class AiAgentRpcServiceImpl(
             }
     }
 
+    private fun buildInternalMcpHeaders(
+        provider: AiAgentProvider,
+        sessionId: String
+    ): Map<String, String> {
+        return mapOf(
+            McpHttpGateway.HEADER_SESSION_ID to sessionId,
+            McpHttpGateway.HEADER_PROVIDER to provider.name
+        )
+    }
+
     /**
      * Extract HTTP MCP server URLs for thread-level config.
      * Note: Codex only supports HTTP MCP servers via thread config (not stdio).
@@ -1077,10 +1087,8 @@ class AiAgentRpcServiceImpl(
             when (server) {
                 is McpHttpServerConfig -> {
                     overrides["mcp_servers.$name.url"] = JsonPrimitive(server.url)
-                    if (server.headers.isNotEmpty()) {
-                        overrides["mcp_servers.$name.http_headers"] = buildJsonObject {
-                            server.headers.forEach { (key, value) -> put(key, value) }
-                        }
+                    server.headers.forEach { (headerName, headerValue) ->
+                        overrides["mcp_servers.$name.http_headers.$headerName"] = JsonPrimitive(headerValue)
                     }
                 }
                 is McpStdioServerConfig -> {
@@ -1153,9 +1161,8 @@ class AiAgentRpcServiceImpl(
             }
         }
 
-        // 构建 AppServer 级别配置（MCP、features）- 用于 mcpServerStatus/list 查询
+        // Build app-server config overrides (features only).
         val appServerConfigOverrides = buildAppServerConfigOverrides(
-            mcpSetup.claudeServers,
             fullConfigOverrides,
             codexDefaults.webSearchEnabled
         )
@@ -1163,14 +1170,15 @@ class AiAgentRpcServiceImpl(
             sdkLog.info("[buildCodexOverrides] appServerConfigOverrides keys: ${appServerConfigOverrides.keys.sorted().joinToString()}")
         }
 
-        // 构建 Thread 级别配置（仅非 MCP/features）
+        // Build thread config overrides (exclude features; keep MCP in thread config).
         val threadConfigOverrides = fullConfigOverrides.filterKeys { key ->
-            !key.startsWith("mcp_servers.") && !key.startsWith("features.")
+            !key.startsWith("features.")
         }
         if (threadConfigOverrides.isNotEmpty()) {
             sdkLog.info("[buildCodexOverrides] threadConfigOverrides keys: ${threadConfigOverrides.keys.sorted().joinToString()}")
         }
 
+        val mcpHttpUrls = extractMcpHttpUrls(mcpSetup.claudeServers)
         val clientOptions = CodexClientOptions(
             codexPathOverride = codexDefaults.binaryPath
                 ?.takeIf { it.isNotBlank() }
@@ -1219,7 +1227,7 @@ class AiAgentRpcServiceImpl(
             webSearchEnabled = null,  // 移到 AppServer 级别
             approvalPolicy = approvalPolicy,
             developerInstructions = mcpSetup.mcpSystemPromptAppendix.takeIf { it.isNotBlank() },
-            mcpServers = emptyMap(),  // 移到 AppServer 级别
+            mcpServers = mcpHttpUrls,
             threadConfigOverrides = threadConfigOverrides
         )
 
@@ -1230,38 +1238,22 @@ class AiAgentRpcServiceImpl(
     }
 
     /**
-     * 构建 AppServer 级别的配置覆盖（MCP 服务器 URL、http_headers、features）。
-     * 这些配置通过 -c 参数传递给 codex app-server，使 mcpServerStatus/list API 可以查询到。
+     * Build app-server config overrides (features only).
      */
     private fun buildAppServerConfigOverrides(
-        mcpServers: Map<String, McpServerSpec>,
         configOverrides: Map<String, JsonElement>,
         webSearchEnabled: Boolean?
     ): Map<String, String> {
         val config = mutableMapOf<String, String>()
-
-        // MCP 服务器 URL 和 headers
-        mcpServers.forEach { (name, spec) ->
-            when (spec) {
-                is McpHttpServerConfig -> {
-                    config["mcp_servers.$name.url"] = spec.url
-                    // 添加 http_headers（用于传递 sessionId 和 provider）
-                    spec.headers.forEach { (headerName, headerValue) ->
-                        config["mcp_servers.$name.http_headers.$headerName"] = headerValue
-                    }
-                }
-                else -> {} // stdio 等类型暂不支持
-            }
-        }
 
         // Web search 配置
         webSearchEnabled?.let { enabled ->
             config["features.web_search_request"] = enabled.toString()
         }
 
-        // configOverrides 中的 MCP/features 配置
+        // configOverrides 中的 features 配置
         configOverrides.forEach { (key, value) ->
-            if (key.startsWith("mcp_servers.") || key.startsWith("features.")) {
+            if (key.startsWith("features.")) {
                 config[key] = when (value) {
                     is JsonPrimitive -> value.content
                     else -> value.toString()
@@ -1943,9 +1935,3 @@ private fun ProtoPermissionUpdate.toMcpPermissionUpdate(): McpPermissionUpdate {
         }
     )
 }
-
-
-
-
-
-

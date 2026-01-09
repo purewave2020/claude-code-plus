@@ -49,16 +49,16 @@ object McpHttpGateway {
     private var jettyServer: Server? = null
     private var actualPort: Int = 0
 
-    private const val HEADER_SESSION_ID = "X-Session-Id"
-    private const val HEADER_PROVIDER = "X-Provider"
+    const val HEADER_SESSION_ID = "X-Session-Id"
+    const val HEADER_PROVIDER = "X-Provider"
 
     private class GatewayServlet(
         private val resolver: (String, String?, String?) -> HttpServletStreamableServerTransportProvider?
     ) : HttpServlet() {
         override fun service(req: HttpServletRequest, resp: HttpServletResponse) {
             val path = req.requestURI ?: ""
-            val sessionId = req.getHeader(HEADER_SESSION_ID)
-            val providerName = req.getHeader(HEADER_PROVIDER)
+            val sessionId = req.getHeader(HEADER_SESSION_ID)?.takeIf { it.isNotBlank() }
+            val providerName = req.getHeader(HEADER_PROVIDER)?.takeIf { it.isNotBlank() }
             logger.debug { "[MCP] Incoming request: ${req.method} $path (sessionId=$sessionId, provider=$providerName)" }
             val transport = resolver(path, sessionId, providerName)
             if (transport == null) {
@@ -83,7 +83,7 @@ object McpHttpGateway {
 
             val context = ServletContextHandler(ServletContextHandler.NO_SESSIONS)
             context.contextPath = "/"
-            context.addServlet(ServletHolder(GatewayServlet(::resolveTransportByHeader)), "/mcp/*")
+            context.addServlet(ServletHolder(GatewayServlet(::resolveTransportByRequest)), "/mcp/*")
             server.handler = context
 
             server.start()
@@ -151,11 +151,10 @@ object McpHttpGateway {
     }
 
     /**
-     * 根据请求头中的 sessionId 和 provider 解析 transport。
+     * 根据请求中的 X-Session-Id 和 X-Provider 解析 transport。
      * URL 格式: /mcp/{serverName}
-     * 请求头: X-Session-Id, X-Provider
      */
-    private fun resolveTransportByHeader(
+    private fun resolveTransportByRequest(
         path: String,
         sessionId: String?,
         providerName: String?
@@ -164,9 +163,9 @@ object McpHttpGateway {
         // 从 /mcp/{serverName} 提取 serverName
         val serverName = normalized.removePrefix("/mcp/").takeIf { it.isNotBlank() } ?: return null
         
-        // 如果没有请求头，无法路由
+        // 如果没有会话信息，无法路由
         if (sessionId.isNullOrBlank() || providerName.isNullOrBlank()) {
-            logger.warn { "[MCP] Missing required headers: sessionId=$sessionId, provider=$providerName" }
+            logger.warn { "[MCP] Missing required session info: sessionId=$sessionId, provider=$providerName" }
             return null
         }
         
@@ -232,7 +231,7 @@ object McpHttpGateway {
     }
 
     /**
-     * 构建端点路径。现在只用 serverName，provider 和 sessionId 通过请求头传递。
+     * 构建端点路径。现在只用 serverName，会话信息通过 header 传递。
      */
     private fun buildEndpointPath(serverName: String): String {
         return "/mcp/$serverName"
@@ -246,20 +245,11 @@ object McpHttpGateway {
     fun getPort(): Int = actualPort
 
     /**
-     * 构建指定 serverName 的 MCP URL（不含会话信息，会话通过请求头传递）
+     * 构建指定 serverName 的 MCP URL。
      */
     fun buildServerUrl(serverName: String): String {
         ensureStarted()
-        return buildUrl(buildEndpointPath(serverName))
-    }
-
-    /**
-     * 获取需要添加到 HTTP 请求头的会话信息
-     */
-    fun buildSessionHeaders(provider: AiAgentProvider, sessionId: String): Map<String, String> {
-        return mapOf(
-            HEADER_SESSION_ID to sessionId,
-            HEADER_PROVIDER to provider.name
-        )
+        val baseUrl = buildUrl(buildEndpointPath(serverName))
+        return baseUrl
     }
 }

@@ -691,8 +691,8 @@ internal class CodexAgentClientImpl(
     }
 
     /**
-     * 构建 AppServer 级别配置（MCP 服务器、features 等）。
-     * 这些配置通过 -c 参数传递给 codex app-server，使 mcpServerStatus/list API 可以查询到。
+     * 构建 AppServer 级别配置（features 等）。
+     * MCP 配置改为线程级别传递，避免 app-server 级别配置不生效的问题。
      *
      * @param threadOptions 线程选项
      * @return AppServer 配置覆盖，格式为 key -> value
@@ -700,19 +700,14 @@ internal class CodexAgentClientImpl(
     private fun buildAppServerConfig(threadOptions: ThreadOptions): Map<String, String> {
         val config = mutableMapOf<String, String>()
 
-        // MCP 服务器配置
-        threadOptions.mcpServers.forEach { (serverName, url) ->
-            config["mcp_servers.$serverName.url"] = url
-        }
-
         // Web search 配置
         threadOptions.webSearchEnabled?.let { enabled ->
             config["features.web_search_request"] = enabled.toString()
         }
 
-        // threadConfigOverrides 中的 MCP/features 相关配置
+        // threadConfigOverrides 中的 features 相关配置
         threadOptions.threadConfigOverrides.forEach { (key, value) ->
-            if (key.startsWith("mcp_servers.") || key.startsWith("features.")) {
+            if (key.startsWith("features.")) {
                 config[key] = when (value) {
                     is JsonPrimitive -> value.content
                     else -> value.toString()
@@ -724,16 +719,24 @@ internal class CodexAgentClientImpl(
     }
 
     /**
-     * 构建 Thread 级别配置（仅非 MCP/features 相关）。
-     * MCP/features 配置已提升到 AppServer 级别。
+     * 构建 Thread 级别配置（包含 MCP 配置，排除 features）。
      *
      * @param threadOptions 线程选项
      * @return Thread 配置，如果为空则返回 null
      */
     private fun buildThreadOnlyConfig(threadOptions: ThreadOptions): Map<String, JsonElement>? {
-        val config = threadOptions.threadConfigOverrides.filterKeys { key ->
-            !key.startsWith("mcp_servers.") && !key.startsWith("features.")
+        val config = mutableMapOf<String, JsonElement>()
+
+        threadOptions.mcpServers.forEach { (serverName, url) ->
+            config["mcp_servers.$serverName.url"] = JsonPrimitive(url)
         }
+
+        threadOptions.threadConfigOverrides.forEach { (key, value) ->
+            if (!key.startsWith("features.")) {
+                config[key] = value
+            }
+        }
+
         return config.takeIf { it.isNotEmpty() }
     }
 
