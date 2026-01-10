@@ -116,11 +116,13 @@
               <button
                 v-if="isIdeMode"
                 class="mod-action-btn rollback-btn"
-                :disabled="isRollingBackAll"
+                :class="{ loading: isToolRollingBack(mod.toolUseId) }"
+                :disabled="isRollingBackAll || isToolRollingBack(mod.toolUseId)"
                 :title="t('tools.rollbackModification')"
                 @click="handleRollbackModification(file.filePath, mod.historyTs)"
               >
-                ↩
+                <span v-if="isToolRollingBack(mod.toolUseId)" class="spinner-small" />
+                <span v-else>↩</span>
               </button>
             </div>
           </div>
@@ -188,6 +190,11 @@ const totalEditCount = computed(() => fileChangesInstance.value?.totalEditCount.
 // 检查文件是否正在回滚
 function isRollingBack(filePath: string): boolean {
   return fileChangesInstance.value?.isRollingBack(filePath) ?? false
+}
+
+// 检查单个工具调用是否正在回滚
+function isToolRollingBack(toolUseId: string): boolean {
+  return fileChangesInstance.value?.isToolRollingBack(toolUseId) ?? false
 }
 
 // 获取文件的活跃修改（未回滚、未接受的）
@@ -751,6 +758,16 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   width: 10px;
   height: 10px;
   border: 1.5px solid transparent;
+  border-top-color: var(--theme-warning);
+  border-right-color: var(--theme-warning);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.spinner-small {
+  width: 8px;
+  height: 8px;
+  border: 1px solid transparent;
   border-top-color: var(--theme-warning);
   border-right-color: var(--theme-warning);
   border-radius: 50%;
