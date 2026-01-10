@@ -1213,24 +1213,18 @@ class BuiltInMcpServerDialog(
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
         }
 
-        // 启用复选框
-        val enablePanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+        // 启用复选框 + Backends 选择器（合并到一行）
+        val enableAndBackendsPanel = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
             add(enableCheckbox)
+            add(Box.createHorizontalStrut(16))
+            add(JBLabel("Backends:"))
+            backendSelection.panel.components.forEach { add(it) }
         }
-        topPanel.add(enablePanel)
-        topPanel.add(Box.createVerticalStrut(8))
-
-        // Backends 选择器
-        val backendLabel = JBLabel("Enabled Backends:").apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-        }
-        topPanel.add(backendLabel)
-        topPanel.add(Box.createVerticalStrut(4))
-        topPanel.add(backendSelection.panel.apply { alignmentX = JPanel.LEFT_ALIGNMENT })
-        topPanel.add(Box.createVerticalStrut(4))
+        topPanel.add(enableAndBackendsPanel)
+        topPanel.add(Box.createVerticalStrut(2))
         topPanel.add(backendSelection.hint.apply { alignmentX = JPanel.LEFT_ALIGNMENT })
-        topPanel.add(Box.createVerticalStrut(8))
+        topPanel.add(Box.createVerticalStrut(6))
 
         // 根据启用状态更新 Backends 选择器
         fun updateBackendSelectionState(enabled: Boolean) {
@@ -1251,162 +1245,126 @@ class BuiltInMcpServerDialog(
             topPanel.add(Box.createVerticalStrut(8))
         }
 
-        // 禁用工具配置（标签选择界面）- Claude Code built-in tools
+        // 禁用工具配置（标签选择界面）- Claude Code built-in tools（紧凑布局）
         if (defaultDisabledTools.isNotEmpty() || entry.hasDisableToolsToggle) {
-            val disabledToolsLabel = JBLabel("Disables Claude Code built-in tools when enabled:").apply {
+            // 标题行：标签 + 输入框 + 按钮 + Reset
+            val disabledToolsHeaderPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
-                foreground = JBColor(0x1976D2, 0x6BA3D6)
+                add(JBLabel("Disables Claude Code tools:").apply {
+                    foreground = JBColor(0x1976D2, 0x6BA3D6)
+                })
+                add(disabledToolInput.apply {
+                    toolTipText = "Type tool name, then click + or press Enter"
+                })
+                add(JButton("+").apply {
+                    preferredSize = Dimension(36, disabledToolInput.preferredSize.height)
+                    toolTipText = "Add tool to disable"
+                    addActionListener {
+                        val toolName = disabledToolInput.text.trim()
+                        if (toolName.isNotEmpty() && !disabledToolsList.contains(toolName)) {
+                            addDisabledToolTag(toolName)
+                            disabledToolInput.text = ""
+                        }
+                    }
+                })
+                add(JButton("Reset").apply {
+                    toolTipText = "Reset to default: ${defaultDisabledTools.joinToString(", ").ifEmpty { "(none)" }}"
+                    addActionListener {
+                        disabledToolsList.clear()
+                        disabledToolsPanel?.removeAll()
+                        defaultDisabledTools.forEach { addDisabledToolTag(it) }
+                        disabledToolsPanel?.revalidate()
+                        disabledToolsPanel?.repaint()
+                    }
+                })
             }
-            topPanel.add(disabledToolsLabel)
-            topPanel.add(Box.createVerticalStrut(4))
+            topPanel.add(disabledToolsHeaderPanel)
+            topPanel.add(Box.createVerticalStrut(2))
 
-            // 标签容器
-            val toolsContainer = JPanel(BorderLayout()).apply {
+            // 标签流式布局面板（减小高度）
+            disabledToolsPanel = JPanel(WrapLayout(FlowLayout.LEFT, 4, 2)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
             }
-
-            // 标签流式布局面板
-            disabledToolsPanel = JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-            }
-
-            // 初始化已有的标签
             disabledToolsList.forEach { addDisabledToolTag(it) }
 
-            // 添加工具的输入行
-            val addButton = JButton("+").apply {
-                preferredSize = Dimension(40, disabledToolInput.preferredSize.height)
-                toolTipText = "Add tool to disable"
+            val toolsScrollPane = JBScrollPane(disabledToolsPanel).apply {
+                preferredSize = Dimension(550, 38)
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                border = BorderFactory.createLineBorder(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground())
+                horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
             }
+            topPanel.add(toolsScrollPane)
+            topPanel.add(Box.createVerticalStrut(6))
 
-            val addToolAction = {
+            // Enter 键支持
+            disabledToolInput.addActionListener {
                 val toolName = disabledToolInput.text.trim()
                 if (toolName.isNotEmpty() && !disabledToolsList.contains(toolName)) {
                     addDisabledToolTag(toolName)
                     disabledToolInput.text = ""
                 }
             }
+        }
 
-            addButton.addActionListener { addToolAction() }
-            disabledToolInput.addActionListener { addToolAction() }
-
-            val inputRow = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+        // Codex disabled features 配置（紧凑布局）
+        if (defaultCodexDisabledFeatures.isNotEmpty() || entry.hasDisableToolsToggle) {
+            // 标题行：标签 + 输入框 + 按钮 + Reset
+            val codexHeaderPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
-                add(disabledToolInput)
-                add(addButton)
-                add(JBLabel("<html><font color='gray' size='-1'>Type tool name, then click + or press Enter</font></html>"))
+                add(JBLabel("Disables Codex features:").apply {
+                    foreground = JBColor(0x388E3C, 0x81C784)
+                })
+                add(codexDisabledFeaturesInput.apply {
+                    toolTipText = "Type feature name, then click + or press Enter"
+                })
+                add(JButton("+").apply {
+                    preferredSize = Dimension(36, codexDisabledFeaturesInput.preferredSize.height)
+                    toolTipText = "Add Codex feature to disable"
+                    addActionListener {
+                        val featureName = codexDisabledFeaturesInput.text.trim()
+                        if (featureName.isNotEmpty() && !codexDisabledFeaturesList.contains(featureName)) {
+                            addCodexDisabledFeatureTag(featureName)
+                            codexDisabledFeaturesInput.text = ""
+                        }
+                    }
+                })
+                add(JButton("Reset").apply {
+                    toolTipText = "Reset to default: ${defaultCodexDisabledFeatures.joinToString(", ").ifEmpty { "(none)" }}"
+                    addActionListener {
+                        codexDisabledFeaturesList.clear()
+                        codexDisabledFeaturesPanel?.removeAll()
+                        defaultCodexDisabledFeatures.forEach { addCodexDisabledFeatureTag(it) }
+                        codexDisabledFeaturesPanel?.revalidate()
+                        codexDisabledFeaturesPanel?.repaint()
+                    }
+                })
             }
+            topPanel.add(codexHeaderPanel)
+            topPanel.add(Box.createVerticalStrut(2))
 
-            toolsContainer.add(disabledToolsPanel!!, BorderLayout.CENTER)
-            toolsContainer.add(inputRow, BorderLayout.SOUTH)
+            // 标签流式布局面板（减小高度）
+            codexDisabledFeaturesPanel = JPanel(WrapLayout(FlowLayout.LEFT, 4, 2)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+            }
+            codexDisabledFeaturesList.forEach { addCodexDisabledFeatureTag(it) }
 
-            val toolsScrollPane = JBScrollPane(toolsContainer).apply {
-                preferredSize = Dimension(500, 70)
+            val codexScrollPane = JBScrollPane(codexDisabledFeaturesPanel).apply {
+                preferredSize = Dimension(550, 38)
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 border = BorderFactory.createLineBorder(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground())
                 horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
             }
-            topPanel.add(toolsScrollPane)
-            topPanel.add(Box.createVerticalStrut(4))
+            topPanel.add(codexScrollPane)
+            topPanel.add(Box.createVerticalStrut(6))
 
-            // Reset 按钮
-            val resetToolsButton = JButton("Reset").apply {
-                toolTipText = "Reset to default: ${defaultDisabledTools.joinToString(", ")}"
-                addActionListener {
-                    disabledToolsList.clear()
-                    disabledToolsPanel?.removeAll()
-                    defaultDisabledTools.forEach { addDisabledToolTag(it) }
-                    disabledToolsPanel?.revalidate()
-                    disabledToolsPanel?.repaint()
-                }
-            }
-            val toolsButtonPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(resetToolsButton)
-                add(Box.createHorizontalStrut(8))
-                add(JBLabel("<html><font color='#666666' size='2'>Leave empty to not disable any built-in tools</font></html>"))
-            }
-            topPanel.add(toolsButtonPanel)
-            topPanel.add(Box.createVerticalStrut(8))
-        }
-
-        // Codex disabled features 配置（标签选择界面）
-        if (defaultCodexDisabledFeatures.isNotEmpty() || entry.hasDisableToolsToggle) {
-            val codexLabel = JBLabel("Disables Codex features when enabled:").apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                foreground = JBColor(0x388E3C, 0x81C784)  // 绿色主题，区别于 Claude Code 的蓝色
-            }
-            topPanel.add(codexLabel)
-            topPanel.add(Box.createVerticalStrut(4))
-
-            // 标签容器
-            val codexContainer = JPanel(BorderLayout()).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-            }
-
-            // 标签流式布局面板
-            codexDisabledFeaturesPanel = JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-            }
-
-            // 初始化已有的标签
-            codexDisabledFeaturesList.forEach { addCodexDisabledFeatureTag(it) }
-
-            // 添加 feature 的输入行
-            val addCodexButton = JButton("+").apply {
-                preferredSize = Dimension(40, codexDisabledFeaturesInput.preferredSize.height)
-                toolTipText = "Add Codex feature to disable"
-            }
-
-            val addCodexAction = {
+            // Enter 键支持
+            codexDisabledFeaturesInput.addActionListener {
                 val featureName = codexDisabledFeaturesInput.text.trim()
                 if (featureName.isNotEmpty() && !codexDisabledFeaturesList.contains(featureName)) {
                     addCodexDisabledFeatureTag(featureName)
                     codexDisabledFeaturesInput.text = ""
                 }
             }
-
-            addCodexButton.addActionListener { addCodexAction() }
-            codexDisabledFeaturesInput.addActionListener { addCodexAction() }
-
-            val codexInputRow = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(codexDisabledFeaturesInput)
-                add(addCodexButton)
-                add(JBLabel("<html><font color='gray' size='-1'>Type feature name, then click + or press Enter</font></html>"))
-            }
-
-            codexContainer.add(codexDisabledFeaturesPanel!!, BorderLayout.CENTER)
-            codexContainer.add(codexInputRow, BorderLayout.SOUTH)
-
-            val codexScrollPane = JBScrollPane(codexContainer).apply {
-                preferredSize = Dimension(500, 70)
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                border = BorderFactory.createLineBorder(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground())
-                horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-            }
-            topPanel.add(codexScrollPane)
-            topPanel.add(Box.createVerticalStrut(4))
-
-            // Reset 按钮
-            val resetCodexButton = JButton("Reset").apply {
-                toolTipText = "Reset to default: ${defaultCodexDisabledFeatures.joinToString(", ").ifEmpty { "(none)" }}"
-                addActionListener {
-                    codexDisabledFeaturesList.clear()
-                    codexDisabledFeaturesPanel?.removeAll()
-                    defaultCodexDisabledFeatures.forEach { addCodexDisabledFeatureTag(it) }
-                    codexDisabledFeaturesPanel?.revalidate()
-                    codexDisabledFeaturesPanel?.repaint()
-                }
-            }
-            val codexButtonPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(resetCodexButton)
-                add(Box.createHorizontalStrut(8))
-                add(JBLabel("<html><font color='#666666' size='2'>Leave empty to not disable any Codex features</font></html>"))
-            }
-            topPanel.add(codexButtonPanel)
-            topPanel.add(Box.createVerticalStrut(8))
         }
 
         // JetBrains File MCP 的外部文件配置
@@ -1528,32 +1486,8 @@ class BuiltInMcpServerDialog(
             fileAllowExternalCheckbox.addActionListener { updateExternalRulesState() }
         }
 
-        // JetBrains Terminal MCP 的 Shell 配置
+        // JetBrains Terminal MCP 的 Shell 配置（紧凑布局：合并到一行）
         if (entry.name == "JetBrains Terminal MCP") {
-            val shellConfigLabel = JBLabel("Shell Configuration:").apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-            }
-            topPanel.add(shellConfigLabel)
-            topPanel.add(Box.createVerticalStrut(4))
-
-            // 默认 Shell 下拉框
-            val defaultShellPanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Default Shell:"))
-                add(defaultShellCombo)
-            }
-            topPanel.add(defaultShellPanel)
-            topPanel.add(Box.createVerticalStrut(4))
-
-            // 可用 Shell 复选框
-            val availableShellsLabel = JBLabel("Available Shells:").apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                foreground = JBColor(0x666666, 0x999999)
-                font = font.deriveFont(11f)
-            }
-            topPanel.add(availableShellsLabel)
-            topPanel.add(Box.createVerticalStrut(2))
-
             // 解析已配置的可用 shells
             val configuredShells = entry.terminalAvailableShells.trim()
                 .split(",")
@@ -1562,119 +1496,91 @@ class BuiltInMcpServerDialog(
                 .toSet()
             val useAllShells = configuredShells.isEmpty()
 
-            val shellsPanel = JPanel(FlowLayout(FlowLayout.LEFT, 8, 2)).apply {
+            // Shell 配置合并到一行：Default Shell + Available Shells
+            val shellConfigPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
-            }
-            for (shellType in allShellTypes) {
-                val isChecked = useAllShells || configuredShells.contains(shellType)
-                val checkbox = JBCheckBox(shellType, isChecked).apply {
-                    // 当 checkbox 状态改变时，更新 Default Shell 下拉框
-                    addActionListener { updateDefaultShellCombo() }
+                add(JBLabel("Default Shell:"))
+                add(defaultShellCombo)
+                add(Box.createHorizontalStrut(12))
+                add(JBLabel("Shells:").apply {
+                    foreground = JBColor(0x666666, 0x999999)
+                })
+                for (shellType in allShellTypes) {
+                    val isChecked = useAllShells || configuredShells.contains(shellType)
+                    val checkbox = JBCheckBox(shellType, isChecked).apply {
+                        addActionListener { updateDefaultShellCombo() }
+                    }
+                    availableShellCheckboxes[shellType] = checkbox
+                    add(checkbox)
                 }
-                availableShellCheckboxes[shellType] = checkbox
-                shellsPanel.add(checkbox)
             }
-            topPanel.add(shellsPanel)
+            topPanel.add(shellConfigPanel)
 
-            // 初始化 Default Shell 下拉框（基于已勾选的 Available Shells）
+            // 初始化 Default Shell 下拉框
             updateDefaultShellCombo()
-            // 恢复之前保存的默认 shell 选择，或使用系统推荐的默认值
             val savedDefaultShell = entry.terminalDefaultShell
             val effectiveDefaultShell = if (savedDefaultShell.isNotBlank()) {
                 savedDefaultShell
             } else {
-                // 使用 getEffectiveDefaultShell() 获取系统推荐的默认 shell
-                // Windows 下会优先使用 git-bash（如果已安装）
                 AgentSettingsService.getInstance().getEffectiveDefaultShell()
             }
             if ((defaultShellCombo.model as? DefaultComboBoxModel<*>)?.getIndexOf(effectiveDefaultShell) != -1) {
                 defaultShellCombo.selectedItem = effectiveDefaultShell
             }
-            topPanel.add(Box.createVerticalStrut(8))
+            topPanel.add(Box.createVerticalStrut(6))
         }
 
-        // JetBrains Terminal MCP 的截断配置
+        // JetBrains Terminal MCP 的截断配置 + 超时配置（紧凑布局）
         if (entry.name == "JetBrains Terminal MCP") {
-            val truncateLabel = JBLabel("Output Truncation:").apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-            }
-            topPanel.add(truncateLabel)
-            topPanel.add(Box.createVerticalStrut(4))
-
-            val truncatePanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+            // 第一行：Max lines + Max chars + Read timeout
+            val truncateAndTimeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 add(JBLabel("Max lines:"))
                 add(maxOutputLinesField)
-                add(Box.createHorizontalStrut(16))
+                add(Box.createHorizontalStrut(8))
                 add(JBLabel("Max chars:"))
                 add(maxOutputCharsField)
-            }
-            topPanel.add(truncatePanel)
-            topPanel.add(Box.createVerticalStrut(8))
-
-            // 超时配置
-            val timeoutLabel = JBLabel("Read Timeout:").apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-            }
-            topPanel.add(timeoutLabel)
-            topPanel.add(Box.createVerticalStrut(4))
-
-            val timeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Default timeout:"))
-                add(readTimeoutField)
-                add(JBLabel("seconds"))
                 add(Box.createHorizontalStrut(8))
-                add(JBLabel("<html><font color='gray' size='-1'>(when using wait=true)</font></html>"))
+                add(JBLabel("Read timeout:"))
+                add(readTimeoutField)
+                add(JBLabel("sec"))
             }
-            topPanel.add(timeoutPanel)
-            topPanel.add(Box.createVerticalStrut(8))
+            topPanel.add(truncateAndTimeoutPanel)
+            topPanel.add(Box.createVerticalStrut(4))
         }
 
-        // 通用工具调用超时配置
-        val toolTimeoutLabel = JBLabel("Tool Call Timeout:").apply {
+        // 第二行：Tool Call Timeout
+        val toolTimeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
-        }
-        topPanel.add(toolTimeoutLabel)
-        topPanel.add(Box.createVerticalStrut(4))
-
-        val toolTimeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            add(JBLabel("Timeout:"))
+            add(JBLabel("Tool Call Timeout:"))
             add(toolTimeoutField)
             add(JBLabel("seconds"))
-            add(Box.createHorizontalStrut(8))
-            add(JBLabel("<html><font color='gray' size='-1'>(minimum 1 second)</font></html>"))
+            add(JBLabel("<html><font color='gray' size='-1'>(min 1s)</font></html>"))
         }
         topPanel.add(toolTimeoutPanel)
-        topPanel.add(Box.createVerticalStrut(8))
+        topPanel.add(Box.createVerticalStrut(6))
 
-        // 系统提示词标签
-        val customPromptLabel = JBLabel("Appended System Prompt:").apply {
+        // 系统提示词标签（与 Reset 按钮同行，更紧凑）
+        val promptHeaderPanel = JPanel(BorderLayout()).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
+            add(JBLabel("Appended System Prompt:"), BorderLayout.WEST)
+            add(JButton("Reset to Default").apply {
+                addActionListener { instructionsArea.text = entry.defaultInstructions }
+            }, BorderLayout.EAST)
         }
-        topPanel.add(customPromptLabel)
+        topPanel.add(promptHeaderPanel)
         topPanel.add(Box.createVerticalStrut(4))
 
-        // 中间可伸缩的提示词区域
+        // 中间可伸缩的提示词区域（增加最小高度，充分利用节省的空间）
         val customScrollPane = JBScrollPane(instructionsArea).apply {
-            minimumSize = Dimension(500, 160)
-            preferredSize = Dimension(500, 240)
+            minimumSize = Dimension(550, 200)
+            preferredSize = Dimension(550, 300)
         }
 
-        // 底部 Reset 按钮
-        val resetButton = JButton("Reset to Default").apply {
-            addActionListener { instructionsArea.text = entry.defaultInstructions }
-        }
-        val buttonPanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
-            add(resetButton)
-        }
-
-        // 使用 BorderLayout 布局：顶部固定，中间伸缩，底部固定
+        // 使用 BorderLayout 布局：顶部固定，中间伸缩
         panel.add(topPanel, BorderLayout.NORTH)
         panel.add(customScrollPane, BorderLayout.CENTER)
-        panel.add(buttonPanel, BorderLayout.SOUTH)
-        panel.preferredSize = Dimension(580, 650)
+        panel.preferredSize = Dimension(600, 580)
         return panel
     }
 
