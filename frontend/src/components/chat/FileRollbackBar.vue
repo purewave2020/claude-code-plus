@@ -365,8 +365,8 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   flex-direction: column;
   gap: 6px;
   padding: 8px 10px;
-  background: color-mix(in srgb, var(--theme-warning) 8%, var(--theme-panel-background));
-  border: 1px solid color-mix(in srgb, var(--theme-warning) 25%, transparent);
+  background: color-mix(in srgb, var(--theme-accent) 6%, var(--theme-panel-background));
+  border: 1px solid color-mix(in srgb, var(--theme-accent) 20%, var(--theme-border));
   border-radius: 6px;
   margin-bottom: 6px;
 }
@@ -383,7 +383,7 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: var(--theme-warning);
+  color: var(--theme-accent);
   cursor: pointer;
   user-select: none;
 }
