@@ -68,6 +68,7 @@ const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall, props.
 // 构造拦截器所需的工具调用数据
 const toolCallData = computed(() => ({
   toolType: 'Write',
+  toolUseId: props.toolCall.id || props.toolCall.result?.tool_use_id,
   input: props.toolCall.input as Record<string, unknown>,
   result: props.toolCall.result
 }))

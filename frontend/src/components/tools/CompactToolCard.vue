@@ -5,6 +5,7 @@
       `status-${displayInfo?.status || 'pending'}`,
       { clickable: isClickable, expanded: isExpanded }
     ]"
+    :data-tool-use-id="toolCall?.toolUseId"
   >
     <!-- 单行布局 - 只在标题区域绑定点击事件 -->
     <div class="card-content" @click="handleClick">

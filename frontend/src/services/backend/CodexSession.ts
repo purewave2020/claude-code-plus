@@ -625,6 +625,14 @@ export class CodexSession extends BaseBackendSession {
         if (toolInfo) {
           // 记录这是一个工具调用，供 item/completed 使用
           this.activeToolCalls.add(item.id)
+          
+          // 对于 mcpToolCall，使用 item.arguments 作为参数
+          // 对于其他工具，使用整个 params
+          const mcpItem = item as { arguments?: Record<string, unknown> }
+          const toolParameters = item.type === 'mcpToolCall' && mcpItem.arguments
+            ? mcpItem.arguments
+            : params as Record<string, unknown>
+          
           this.emitEvent({
             type: 'tool_started',
             sessionId,
@@ -632,7 +640,7 @@ export class CodexSession extends BaseBackendSession {
             itemId: item.id,
             toolType: toolInfo.type,
             toolName: toolInfo.name,
-            parameters: params as Record<string, unknown>,
+            parameters: toolParameters,
           })
         }
         break
@@ -727,10 +735,21 @@ export class CodexSession extends BaseBackendSession {
    * 如果不是工具类型，返回 null
    */
   private mapCodexItemToTool(item: CodexItem): { type: string; name: string } | null {
+    // 对于 mcpToolCall，从 item 中提取实际的 MCP 工具名称
+    if (item.type === 'mcpToolCall') {
+      const mcpItem = item as { server?: string; tool?: string }
+      if (mcpItem.server && mcpItem.tool) {
+        // 组合成 Claude MCP 工具名称格式: mcp__server__tool
+        const fullToolName = `mcp__${mcpItem.server}__${mcpItem.tool}`
+        return { type: 'mcp', name: fullToolName }
+      }
+      // 回退到通用名称
+      return { type: 'GENERIC', name: 'MCP' }
+    }
+
     const toolMap: Record<string, { type: string; name: string }> = {
       commandExecution: { type: 'bash', name: 'Bash' },
       fileChange: { type: 'edit', name: 'Edit' },
-      mcpToolCall: { type: 'GENERIC', name: 'MCP' },
     }
     return toolMap[item.type] ?? null
   }

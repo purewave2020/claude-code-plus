@@ -1,5 +1,5 @@
 <template>
-  <div v-if="hasChanges && isIdeMode" class="file-rollback-bar">
+  <div v-if="hasChanges" class="file-rollback-bar">
     <!-- 头部：可点击展开/收起 -->
     <div class="rollback-header">
       <div class="header-left" @click="toggleExpanded">
@@ -8,7 +8,7 @@
         <span class="file-count">({{ t('tools.fileEditStats', { files: changedFileCount, edits: totalEditCount }) }})</span>
         <span class="expand-icon" :class="{ expanded }">▾</span>
       </div>
-      <div class="header-actions">
+      <div v-if="isIdeMode" class="header-actions">
         <button
           class="accept-all-btn"
           :title="t('tools.acceptAll')"
@@ -56,7 +56,7 @@
               <span v-if="getFileStatsData(file).totalRemoved > 0" class="stats-removed">-{{ getFileStatsData(file).totalRemoved }}</span>
             </span>
           </div>
-          <div class="file-actions">
+          <div v-if="isIdeMode" class="file-actions">
             <button
               class="accept-file-btn"
               :title="t('tools.acceptFile')"
@@ -103,6 +103,7 @@
                 👁
               </button>
               <button
+                v-if="isIdeMode"
                 class="mod-action-btn accept-btn"
                 :title="t('tools.acceptModification')"
                 @click="handleAcceptModification(file.filePath, mod.historyTs)"
@@ -110,6 +111,7 @@
                 ✓
               </button>
               <button
+                v-if="isIdeMode"
                 class="mod-action-btn rollback-btn"
                 :title="t('tools.rollbackModification')"
                 @click="handleRollbackModification(file.filePath, mod.historyTs)"
@@ -130,7 +132,11 @@
         class="file-tag"
       >
         <span class="file-name" :title="file.filePath">{{ file.fileName }}</span>
+        <span class="file-tag-stats">
+          {{ getFileStatsData(file).editCount }} edit{{ getFileStatsData(file).editCount > 1 ? 's' : '' }}<template v-if="getFileStatsData(file).totalAdded > 0">,<span class="stats-added">+{{ getFileStatsData(file).totalAdded }}</span></template><template v-if="getFileStatsData(file).totalRemoved > 0">,<span class="stats-removed">-{{ getFileStatsData(file).totalRemoved }}</span></template>
+        </span>
         <button
+          v-if="isIdeMode"
           class="rollback-tag-btn"
           :class="{ loading: isRollingBack(file.filePath) }"
           :disabled="isRollingBack(file.filePath)"
@@ -243,8 +249,23 @@ async function handleViewDiff(mod: FileModification) {
     } catch (error) {
       console.error('Failed to show diff:', error)
     }
+  } else {
+    // 浏览器模式：滚动到对应工具条并展开
+    scrollToToolCardAndExpand(mod.toolUseId)
   }
-  // 浏览器模式：TODO 弹窗显示 DiffViewer
+}
+
+// 滚动到工具条并展开
+function scrollToToolCardAndExpand(toolUseId: string) {
+  const el = document.querySelector(`[data-tool-use-id="${toolUseId}"]`)
+  if (el) {
+    // 滚动到元素位置
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // 延迟后触发点击展开（等待滚动完成）
+    setTimeout(() => {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    }, 300)
+  }
 }
 
 // 处理接受所有改动
@@ -440,6 +461,20 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--theme-foreground);
+}
+
+.file-tag-stats {
+  font-size: 11px;
+  color: var(--theme-secondary-foreground);
+  white-space: nowrap;
+}
+
+.file-tag-stats .stats-added {
+  color: var(--theme-success, #22c55e);
+}
+
+.file-tag-stats .stats-removed {
+  color: var(--theme-error, #ef4444);
 }
 
 .rollback-tag-btn {
