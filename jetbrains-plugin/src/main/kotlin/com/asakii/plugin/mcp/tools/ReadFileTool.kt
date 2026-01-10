@@ -6,9 +6,8 @@ import com.asakii.plugin.mcp.getString
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.JarFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.VirtualFileManager
+import com.asakii.plugin.util.VirtualFileResolver
 import com.intellij.psi.PsiManager
 import kotlinx.serialization.json.JsonObject
 import com.asakii.logging.*
@@ -62,68 +61,10 @@ class ReadFileTool(private val project: Project) {
 
     /**
      * 解析文件路径为 VirtualFile
-     *
-     * 支持多种路径格式：
-     * - 相对路径（相对于项目根目录）: frontend/src/App.vue
-     * - 绝对路径: C:/path/to/file.java
-     * - jar://...!/... (IDEA 标准格式)
-     * - C:/path.jar!/... (简化格式)
-     * - jrt://module/... (JDK 9+ 模块)
+     * 委托给通用的 VirtualFileResolver
      */
     private fun resolveVirtualFile(path: String): VirtualFile? {
-        // 0. 如果是相对路径，先尝试在项目根目录下查找
-        if (isRelativePath(path)) {
-            val projectBasePath = project.basePath
-            if (projectBasePath != null) {
-                val absolutePath = "$projectBasePath/$path".replace("\\", "/")
-                VirtualFileManager.getInstance().findFileByUrl("file://$absolutePath")?.let {
-                    logger.info { "Resolved relative path '$path' to '${it.path}'" }
-                    return it
-                }
-            }
-        }
-
-        // 1. 尝试直接作为 URL 解析
-        VirtualFileManager.getInstance().findFileByUrl(path)?.let { return it }
-
-        // 2. 处理包含 !/ 的 JAR 路径
-        if (path.contains("!/")) {
-            // 转换为标准 jar:// URL 格式
-            val jarUrl = if (path.startsWith("jar://")) {
-                path
-            } else {
-                // C:/path/to.jar!/inner/path -> jar://C:/path/to.jar!/inner/path
-                "jar://${path.replace("\\", "/")}"
-            }
-
-            VirtualFileManager.getInstance().findFileByUrl(jarUrl)?.let { return it }
-
-            // 尝试使用 JarFileSystem
-            val parts = path.split("!/", limit = 2)
-            if (parts.size == 2) {
-                val jarPath = parts[0].removePrefix("jar://").replace("\\", "/")
-                val innerPath = parts[1]
-
-                val jarFile = VirtualFileManager.getInstance().findFileByUrl("file://$jarPath")
-                    ?: VirtualFileManager.getInstance().findFileByUrl(jarPath)
-
-                if (jarFile != null) {
-                    val jarRoot = JarFileSystem.getInstance().getJarRootForLocalFile(jarFile)
-                    jarRoot?.findFileByRelativePath(innerPath)?.let { return it }
-                }
-            }
-        }
-
-        // 3. 尝试 jrt:// (Java Runtime) 格式
-        if (path.startsWith("jrt://") || path.contains("/lib/src.zip!/")) {
-            VirtualFileManager.getInstance().findFileByUrl(path)?.let { return it }
-        }
-
-        // 4. 尝试作为普通文件路径
-        val normalizedPath = path.replace("\\", "/")
-        VirtualFileManager.getInstance().findFileByUrl("file://$normalizedPath")?.let { return it }
-
-        return null
+        return VirtualFileResolver.resolve(path, project)
     }
 
     /**
@@ -246,25 +187,6 @@ class ReadFileTool(private val project: Project) {
             file.path.contains("/jrt:/") -> "JDK module"
             else -> file.fileType.name
         }
-    }
-
-    /**
-     * 判断路径是否为相对路径
-     *
-     * 相对路径特征：
-     * - 不以 / 开头（Unix 绝对路径）
-     * - 不以 盘符: 开头（Windows 绝对路径，如 C:、D:）
-     * - 不以 协议:// 开头（如 file://、jar://、jrt://）
-     */
-    private fun isRelativePath(path: String): Boolean {
-        val normalizedPath = path.trim()
-        // 以 / 开头 -> Unix 绝对路径
-        if (normalizedPath.startsWith("/")) return false
-        // 以 盘符: 开头 -> Windows 绝对路径 (C:, D:, etc.)
-        if (normalizedPath.length >= 2 && normalizedPath[1] == ':') return false
-        // 包含 :// -> 协议 URL
-        if (normalizedPath.contains("://")) return false
-        return true
     }
 
     /**

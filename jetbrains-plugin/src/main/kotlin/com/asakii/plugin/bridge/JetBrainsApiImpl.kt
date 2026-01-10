@@ -14,6 +14,7 @@ import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.asakii.plugin.util.VirtualFileResolver
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
@@ -72,7 +73,9 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
         override fun openFile(request: JetBrainsOpenFileRequest): Result<Unit> {
             return try {
                 ApplicationManager.getApplication().invokeLater {
-                    val file = LocalFileSystem.getInstance().findFileByPath(resolveToAbsolutePath(request.filePath))
+                    // 使用 VirtualFileResolver 支持 JAR/ZIP 等多种路径格式
+                    val file = VirtualFileResolver.resolve(request.filePath, ideaProject)
+                        ?: LocalFileSystem.getInstance().findFileByPath(resolveToAbsolutePath(request.filePath))
                     if (file != null) {
                         val fileEditorManager = FileEditorManager.getInstance(ideaProject)
                         val line = request.line
