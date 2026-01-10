@@ -412,7 +412,13 @@ export function useFileChanges(
               
             case RollbackStatus.SUCCESS:
               console.log(`[useFileChanges] Rollback success: ${event.toolUseId}`)
-              edit.rolledBack = true
+              // 回滚成功后，标记该修改及同一文件的所有后续修改为已回滚
+              // 因为回滚到某个版本后，该版本之后的所有修改都已失效
+              for (const e of fileEdits.value) {
+                if (e.filePath === edit.filePath && !e.rolledBack && !e.accepted && e.timestamp >= edit.timestamp) {
+                  e.rolledBack = true
+                }
+              }
               rollingBackToolIds.value.delete(event.toolUseId)
               // 检查该文件是否还有正在回滚的修改
               const fileStillRolling = fileEdits.value.some(
@@ -533,21 +539,36 @@ export function useFileChanges(
   
   /**
    * 回滚所有文件（批量回滚）
+   *
+   * 对于每个文件，只回滚到最初版本：
+   * - 如果文件是新建的（historyTs: 0），回滚后会删除文件
+   * - 如果文件原本存在，回滚到最早的 historyTs
    */
   function rollbackAll(): Promise<{ success: boolean; failedCount: number }> {
     // 收集所有未回滚的修改
     const pendingEdits = fileEdits.value.filter(e => !e.rolledBack && !e.accepted)
-    
+
     if (pendingEdits.length === 0) {
       return Promise.resolve({ success: true, failedCount: 0 })
     }
-    
-    const items: BatchRollbackItem[] = pendingEdits.map(edit => ({
+
+    // 按文件分组，找出每个文件的最早修改（即最初版本）
+    const earliestByFile = new Map<string, FileModification>()
+    for (const edit of pendingEdits) {
+      const existing = earliestByFile.get(edit.filePath)
+      // 选择 timestamp 最小的（最早的修改）
+      if (!existing || edit.timestamp < existing.timestamp) {
+        earliestByFile.set(edit.filePath, edit)
+      }
+    }
+
+    // 只发送每个文件的最早修改记录
+    const items: BatchRollbackItem[] = Array.from(earliestByFile.values()).map(edit => ({
       filePath: edit.filePath,
       beforeTimestamp: edit.historyTs,
       toolUseId: edit.toolUseId
     }))
-    
+
     return executeRollback(items, true)
   }
   
