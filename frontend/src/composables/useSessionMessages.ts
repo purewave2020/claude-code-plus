@@ -527,6 +527,14 @@ export function useSessionMessages(
     const contentBlock = mapRpcContentBlock(event.content_block)
     const blockIndex = event.index
 
+    // 🔍 调试日志：记录收到的 content_block_start 事件
+    log.info(`[content_block_start] 收到事件:`, {
+      index: blockIndex,
+      rawContentBlock: event.content_block,
+      mappedType: contentBlock?.type,
+      mappedId: (contentBlock as any)?.id
+    })
+
     if (contentBlock) {
       // 添加到 message.content
       while (message.content.length < blockIndex) {

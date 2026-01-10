@@ -203,6 +203,10 @@ const resultBlocks = computed<any[]>(() => {
   if (Array.isArray(content)) {
     return unwrapMcpBlocks(content)
   }
+  // 处理 Codex 返回的 { text: "..." } 格式
+  if (content && typeof content === 'object' && typeof content.text === 'string') {
+    return [{ type: 'text', text: content.text }]
+  }
   if (content?.type === 'json') {
     if (isJsonMcpBlock(content)) {
       return content.value.content
