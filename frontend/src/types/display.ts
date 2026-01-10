@@ -78,21 +78,31 @@ export interface BaseDisplayItem {
 // ============ 消息类型 ============
 
 /**
+ * 有序内容块 - 用于图文混排显示
+ * 已经过清洗（移除系统标签等），可以直接渲染
+ */
+export type OrderedContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
+
+/**
  * 用户消息
  *
  * 设计说明：
- * - contexts: 上下文引用（@文件路径、图片等），从 content 开头解析出来
- * - content: 用户直接输入的内容（第一个普通文本块之后的内容，保持顺序）
- *   - 主要是文本，偶尔有图片（用户直接上传的）
+ * - contexts: 上下文引用（@文件路径、图片等），显示在消息头部
+ * - orderedContent: 有序内容块（图文混排），已清洗可直接渲染
+ * - content: 原始内容块（兼容旧代码）
  */
 export interface UserMessage extends BaseDisplayItem {
   displayType: 'userMessage'
   /** JSONL 历史文件中的 UUID，用于编辑重发时定位截断位置 */
   uuid?: string
-  /** 上下文引用（@文件路径、图片等），从 content 开头解析出来 */
+  /** 上下文引用（@文件路径、图片等），显示在消息头部 */
   contexts?: ContextReference[]
-  /** 用户直接输入的内容（第一个普通文本块之后的内容，保持顺序） */
-  content: ContentBlock[]
+  /** 有序内容块（图文混排，已清洗），按原始顺序渲染 */
+  orderedContent: OrderedContentBlock[]
+  /** @deprecated 原始内容块，保留用于兼容 */
+  content?: ContentBlock[]
   /** 请求统计信息（请求完成后填充） */
   requestStats?: RequestStats
   /** 是否正在流式响应 */

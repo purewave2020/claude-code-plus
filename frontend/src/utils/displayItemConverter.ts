@@ -303,12 +303,13 @@ export function convertMessageToDisplayItems(
       }
 
       // 如果有内容或上下文，创建用户消息
-      if (parsed.userContent.length > 0 || contexts.length > 0 || parsed.currentOpenFile || parsed.openFile) {
+      if (parsed.orderedContent.length > 0 || contexts.length > 0 || parsed.currentOpenFile || parsed.openFile) {
         const userMessage: UserMessage = {
           displayType: 'userMessage',
           id: message.id,
           uuid: (message as UnifiedMessage).uuid,
           contexts: contexts.length > 0 ? contexts : undefined,
+          orderedContent: parsed.orderedContent,
           content: parsed.userContent as any,
           timestamp: message.timestamp,
           isReplay: true,
@@ -336,12 +337,13 @@ export function convertMessageToDisplayItems(
         })
       }
     }
-    if (parsed.userContent.length > 0 || contexts.length > 0 || parsed.currentOpenFile || parsed.openFile) {
+    if (parsed.orderedContent.length > 0 || contexts.length > 0 || parsed.currentOpenFile || parsed.openFile) {
       const userMessage: UserMessage = {
         displayType: 'userMessage',
         id: message.id,
         uuid: (message as UnifiedMessage).uuid,
         contexts: contexts.length > 0 ? contexts : undefined,
+        orderedContent: parsed.orderedContent,
         content: parsed.userContent as any,
         timestamp: message.timestamp,
         currentOpenFile: parsed.currentOpenFile,

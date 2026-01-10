@@ -106,27 +106,26 @@
             class="message-body"
             :class="{ collapsed: isCollapsed && isOverflowing }"
           >
-            <!-- 文本内容 -->
-            <div
-              v-if="messageText"
-              class="message-text"
-              :class="{ 'use-markdown': props.message.isReplay }"
-            >
-              <MarkdownRenderer v-if="props.message.isReplay" :content="messageText" />
-              <span v-else v-html="renderedText" @click="handleMessageClick"></span>
-            </div>
-
-            <!-- 内嵌图片 -->
-            <div v-if="imageBlocks.length > 0" class="inline-images">
+            <!-- 按原始顺序渲染内容块（文本和图片混排） -->
+            <template v-for="(block, index) in orderedContentBlocks" :key="`block-${index}`">
+              <!-- 文本块 -->
+              <div
+                v-if="block.type === 'text'"
+                class="message-text"
+                :class="{ 'use-markdown': props.message.isReplay }"
+              >
+                <MarkdownRenderer v-if="props.message.isReplay" :content="block.text" />
+                <span v-else v-html="linkifyText(block.text).html" @click="handleMessageClick"></span>
+              </div>
+              <!-- 图片块 -->
               <img
-                v-for="(image, index) in imageBlocks"
-                :key="`img-${index}`"
-                :src="getImageSrc(image)"
+                v-else-if="block.type === 'image'"
+                :src="getImageSrc(block)"
                 :alt="`Image ${index + 1}`"
-                class="inline-thumb"
-                @click.stop="openImagePreview(image)"
+                class="inline-image-block"
+                @click.stop="openOrderedImagePreview(block)"
               />
-            </div>
+            </template>
           </div>
         </div>
 
@@ -153,10 +152,9 @@ import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import { useI18n } from '@/composables/useI18n'
 import type { ImageBlock, ContentBlock } from '@/types/message'
-import type { ContextReference } from '@/types/display'
+import type { ContextReference, OrderedContentBlock } from '@/types/display'
 import type { ParsedCurrentOpenFile, ParsedOpenFileReminder, ParsedSelectLinesReminder } from '@/utils/xmlTagParser'
-import { hasCurrentOpenFileTag, parseCurrentOpenFileTag, removeCurrentOpenFileTag, isSystemReminderTag, removeSystemReminderTags } from '@/utils/xmlTagParser'
-import { isFileReference } from '@/utils/userMessageBuilder'
+import { hasCurrentOpenFileTag, parseCurrentOpenFileTag } from '@/utils/xmlTagParser'
 import { linkifyText, getLinkFromEvent, handleLinkClick } from '@/utils/linkify'
 import ImagePreviewModal from '@/components/common/ImagePreviewModal.vue'
 import ChatInput from './ChatInput.vue'
@@ -171,6 +169,9 @@ interface Props {
     id?: string
     /** JSONL 历史文件中的 UUID，用于编辑重发时定位截断位置 */
     uuid?: string
+    /** 有序内容块（图文混排，已清洗） */
+    orderedContent?: OrderedContentBlock[]
+    /** @deprecated 原始内容块，保留用于兼容 */
     content?: ContentBlock[]
     contexts?: ContextReference[]  // DisplayItem 中的 contexts 已经包含图片
     style?: 'hint' | 'error'  // 消息样式：hint=md渲染，error=错误颜色
@@ -373,45 +374,19 @@ function openContextImagePreview(ctx: ContextReference) {
 }
 
 
-// 提取用户输入的文本内容（排除文件引用、system-reminder 标签）
+// 有序内容块（直接使用已清洗的数据）
+const orderedContentBlocks = computed<OrderedContentBlock[]>(() => {
+  return props.message.orderedContent || []
+})
+
+// 提取用户输入的文本内容 - 用于复制和折叠检测
 const messageText = computed(() => {
-  const content = props.message.content
-  if (!content || !Array.isArray(content)) {
-    return ''
-  }
-
-  // 从用户输入内容块中提取文本（排除文件引用和系统提醒标签）
-  const result = content
-    .filter(block => {
-      if (block.type === 'text' && 'text' in block) {
-        const text = (block as any).text?.trim() || ''
-        // 排除文件引用格式的文本
-        if (isFileReference(text)) return false
-        // 排除纯 system-reminder 标签（新格式）
-        if (isSystemReminderTag(text)) return false
-        // 排除 diff 内容标签
-        if (text.startsWith('<diff-old-content>') || text.startsWith('<diff-new-content>')) return false
-        return true
-      }
-      return false
-    })
-    .map(block => {
-      if (block.type === 'text' && 'text' in block) {
-        let text = (block as any).text
-        // 移除 current-open-file 标签（旧格式，它会在文件标记区域单独显示）
-        if (hasCurrentOpenFileTag(text)) {
-          text = removeCurrentOpenFileTag(text)
-        }
-        // 移除混合在文本中的 system-reminder 标签（重载会话时可能出现）
-        text = removeSystemReminderTags(text)
-        return text
-      }
-      return ''
-    })
+  return orderedContentBlocks.value
+    .filter(block => block.type === 'text')
+    .map(block => block.text)
     .join('\n')
-
-  // 清理多余的空行
-  return result.replace(/\n{3,}/g, '\n\n').trim()
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 })
 
 // 从消息文本中解析 currentOpenFile（用于非 replay 消息）
@@ -587,14 +562,12 @@ function handleMessageClick(event: MouseEvent) {
   }
 }
 
-// 提取用户输入的图片内容（内嵌图片，在 content 中的图片）
+// 提取用户输入的图片内容（内嵌图片，在 content 中的图片）- 保留用于兼容
 const imageBlocks = computed(() => {
   const content = props.message.content
   if (!content || !Array.isArray(content)) {
     return []
   }
-
-  // 返回 content 中的图片块
   return content.filter(block => block.type === 'image') as ImageBlock[]
 })
 
@@ -643,13 +616,15 @@ function toggleCollapse() {
   isCollapsed.value = !isCollapsed.value
 }
 
-// 获取图片源地址
-function getImageSrc(image: ImageBlock): string {
-  if (image.source.type === 'url' && image.source.url) {
-    return image.source.url
+// 获取图片源地址（支持 ImageBlock 和 OrderedContentBlock 的 image 类型）
+function getImageSrc(image: ImageBlock | OrderedContentBlock): string {
+  if (image.type !== 'image') return ''
+  const source = image.source
+  if (source.type === 'url' && 'url' in source && source.url) {
+    return source.url
   }
-  if (image.source.type === 'base64' && image.source.data) {
-    return `data:${image.source.media_type};base64,${image.source.data}`
+  if (source.type === 'base64' && source.data) {
+    return `data:${source.media_type};base64,${source.data}`
   }
   return ''
 }
@@ -676,6 +651,17 @@ function openImagePreview(image: ImageBlock) {
   if (src) {
     previewImageSrc.value = src
     previewImageAlt.value = getImageName(image, 0)
+    previewVisible.value = true
+  }
+}
+
+// 打开有序内容块中的图片预览
+function openOrderedImagePreview(block: OrderedContentBlock) {
+  if (block.type !== 'image') return
+  const src = getImageSrc(block)
+  if (src) {
+    previewImageSrc.value = src
+    previewImageAlt.value = 'Image'
     previewVisible.value = true
   }
 }
@@ -1027,6 +1013,22 @@ function closeImagePreview() {
 }
 
 .inline-thumb:hover {
+  transform: scale(1.02);
+}
+
+/* 图文混排中的图片块 */
+.inline-image-block {
+  display: block;
+  max-width: 200px;
+  max-height: 200px;
+  object-fit: contain;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform 0.2s;
+  margin: 6px 0;
+}
+
+.inline-image-block:hover {
   transform: scale(1.02);
 }
 

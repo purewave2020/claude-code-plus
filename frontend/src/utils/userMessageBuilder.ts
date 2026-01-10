@@ -1,10 +1,11 @@
 import type { ContentBlock, TextBlock, ImageBlock } from '@/types/message'
-import type { ContextReference } from '@/types/display'
+import type { ContextReference, OrderedContentBlock } from '@/types/display'
 import type { ActiveFileInfo } from '@/services/jetbrainsRSocket'
 import {
   hasCurrentOpenFileTag,
   parseCurrentOpenFileTag,
   removeCurrentOpenFileTag,
+  removeSystemReminderTags,
   parseSystemReminder,
   isSystemReminderTag,
   type ParsedCurrentOpenFile,
@@ -18,10 +19,54 @@ import {
 export interface ParsedUserMessage {
   contexts: ContextReference[]      // 上下文引用（文件引用）
   contextImages: ImageBlock[]       // Context 图片
-  userContent: ContentBlock[]       // 用户输入内容（文本 + 图片）
+  userContent: ContentBlock[]       // 用户输入内容（文本 + 图片）- 原始数据
+  orderedContent: OrderedContentBlock[]  // 有序内容块（已清洗，可直接渲染）
   currentOpenFile?: ParsedCurrentOpenFile  // 当前打开的文件标记（兼容旧格式）
   openFile?: ParsedOpenFileReminder        // 打开的文件（新格式）
   selectedLines?: ParsedSelectLinesReminder // 选中的行（新格式）
+}
+
+/**
+ * 清洗文本内容（移除系统标签）
+ */
+function cleanTextContent(text: string): string {
+  // 移除 current-open-file 标签（旧格式）
+  if (hasCurrentOpenFileTag(text)) {
+    text = removeCurrentOpenFileTag(text)
+  }
+  // 移除 system-reminder 标签
+  text = removeSystemReminderTags(text)
+  return text.trim()
+}
+
+/**
+ * 从 userContent 构建有序内容块（已清洗）
+ */
+function buildOrderedContent(userContent: ContentBlock[]): OrderedContentBlock[] {
+  const result: OrderedContentBlock[] = []
+
+  for (const block of userContent) {
+    if (block.type === 'text' && 'text' in block) {
+      const cleaned = cleanTextContent((block as TextBlock).text)
+      if (cleaned) {
+        result.push({ type: 'text', text: cleaned })
+      }
+    } else if (block.type === 'image') {
+      const imgBlock = block as ImageBlock
+      if (imgBlock.source?.type === 'base64' && imgBlock.source.data) {
+        result.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: imgBlock.source.media_type,
+            data: imgBlock.source.data
+          }
+        })
+      }
+    }
+  }
+
+  return result
 }
 
 /**
@@ -170,6 +215,7 @@ function parseUserMessageNewFormat(content: ContentBlock[]): ParsedUserMessage |
     contexts,
     contextImages,
     userContent,
+    orderedContent: buildOrderedContent(userContent),
     openFile,
     selectedLines
   }
@@ -252,6 +298,7 @@ function parseUserMessageOldFormat(content: ContentBlock[]): ParsedUserMessage {
     contexts,
     contextImages,
     userContent,
+    orderedContent: buildOrderedContent(userContent),
     currentOpenFile
   }
 }
