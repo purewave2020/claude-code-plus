@@ -14,7 +14,7 @@ import type { DisplayItem, ToolCall } from '@/types/display'
 import { ToolCallStatus } from '@/types/display'
 import { jetbrainsRSocket, RollbackStatus, type BatchRollbackItem, type BatchRollbackEvent } from '@/services/jetbrainsRSocket'
 import { useToastStore } from '@/stores/toastStore'
-import { useI18n } from '@/composables/useI18n'
+import { i18n } from '@/i18n'
 
 // ============ 类型定义 ============
 
@@ -229,7 +229,7 @@ export function useFileChanges(
   displayItems: Ref<DisplayItem[]> | ComputedRef<DisplayItem[]>
 ) {
   const toastStore = useToastStore()
-  const { t } = useI18n()
+  const t = i18n.global.t
   
   // 当前会话的文件修改记录（直接存储，不从 displayItems 计算）
   const fileEdits = ref<FileModification[]>([])
