@@ -685,6 +685,10 @@ export class CodexSession extends BaseBackendSession {
           }
 
           // 统一的 tool_result 格式
+          // 将 Codex 的 content 格式转换为 Claude 数组格式
+          const rawContent = toolItem.result?.content ?? toolItem.output
+          const normalizedContent = this.normalizeToolResultContent(rawContent)
+          
           this.emitEvent({
             type: 'tool_completed',
             sessionId,
@@ -694,7 +698,7 @@ export class CodexSession extends BaseBackendSession {
             result: {
               type: 'tool_result',
               tool_use_id: item.id,
-              content: toolItem.result?.content ?? toolItem.output,
+              content: normalizedContent,
               is_error: toolItem.status === 'Failed' || !!toolItem.error,
             },
           })
@@ -728,6 +732,30 @@ export class CodexSession extends BaseBackendSession {
       default:
         console.log('[CodexSession] Unhandled notification:', method)
     }
+  }
+
+  /**
+   * 将 Codex 的 tool_result content 格式转换为 Claude 数组格式
+   * Codex 返回: { text: "...", type: "text" } 或 string
+   * Claude 期望: [{ text: "...", type: "text" }] 或 string
+   */
+  private normalizeToolResultContent(content: unknown): unknown {
+    if (content === null || content === undefined) {
+      return content
+    }
+    // 字符串保持不变
+    if (typeof content === 'string') {
+      return content
+    }
+    // 已经是数组，保持不变
+    if (Array.isArray(content)) {
+      return content
+    }
+    // 单个对象，转换为数组
+    if (typeof content === 'object') {
+      return [content]
+    }
+    return content
   }
 
   /**

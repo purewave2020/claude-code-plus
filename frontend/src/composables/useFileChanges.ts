@@ -98,11 +98,15 @@ export function extractToolResultMeta(result: any): ToolResultMeta {
   
   if (!result?.content) return meta
   
+  // 处理多种 content 格式：
+  // 1. 字符串: "text content"
+  // 2. 数组 (Claude): [{ type: "text", text: "..." }, ...]
+  // 3. 单个对象 (Codex): { type: "text", text: "..." }
   const content = typeof result.content === 'string' 
     ? result.content 
     : Array.isArray(result.content) 
       ? result.content.map((c: any) => typeof c === 'string' ? c : c.text || '').join('')
-      : ''
+      : (result.content?.text || '')
   
   // 匹配 [jb:historyTs=xxx] 格式
   const historyMatch = content.match(/\[jb:historyTs=(\d+)\]/)
