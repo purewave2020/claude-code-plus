@@ -2227,7 +2227,8 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 11px;
   color: var(--theme-secondary-foreground, #6a737d);
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--theme-text-field-background, rgba(0, 0, 0, 0.08));
+  border: 1px solid var(--theme-border, rgba(0, 0, 0, 0.12));
   transition: background 0.15s ease;
   user-select: none;
 }
@@ -2251,8 +2252,8 @@ onUnmounted(() => {
   bottom: calc(100% + 4px);
   left: 0;
   min-width: 140px;
-  background: var(--theme-dropdown-background, #ffffff);
-  border: 1px solid var(--theme-border-color, #e1e4e8);
+  background: var(--theme-panel-background, #ffffff);
+  border: 1px solid var(--theme-border, #e1e4e8);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
@@ -2280,7 +2281,7 @@ onUnmounted(() => {
 
 .backend-option .check-icon {
   margin-left: auto;
-  color: var(--theme-accent-color, #0366d6);
+  color: var(--theme-accent, #0366d6);
   font-size: 12px;
 }
 
