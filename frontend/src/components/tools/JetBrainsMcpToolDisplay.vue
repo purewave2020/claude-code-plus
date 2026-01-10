@@ -91,8 +91,10 @@ import { extractToolDisplayInfo } from '@/utils/toolDisplayInfo'
 import { useI18n } from '@/composables/useI18n'
 import { isJetBrainsFileEditTool } from '@/composables/useFileChanges'
 import { useSessionStore } from '@/stores/sessionStore'
+import { useToastStore } from '@/stores/toastStore'
 
 const { t } = useI18n()
+const toastStore = useToastStore()
 
 interface Props {
   toolCall: GenericToolCall
@@ -107,8 +109,15 @@ const fileChangesInstance = computed(() => sessionStore.currentFileChanges)
 // 默认折叠，与其他工具保持一致
 const expanded = ref(false)
 
-// 回滚中状态
-const isRollingBack = ref(false)
+// 本地回滚中状态（单个工具自己触发的回滚）
+const localRollingBack = ref(false)
+
+// 计算属性：判断是否正在回滚（本地触发或批量回滚）
+const isRollingBack = computed(() => {
+  if (localRollingBack.value) return true
+  // 检查是否在批量回滚中
+  return fileChangesInstance.value?.isToolRollingBack(props.toolCall?.id) ?? false
+})
 
 const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall as any, props.toolCall?.result as any))
 
@@ -132,15 +141,15 @@ const showRollbackBtn = computed(() => {
 async function handleRollback() {
   if (!fileChangesInstance.value || isRollingBack.value) return
   
-  isRollingBack.value = true
+  localRollingBack.value = true
   try {
     const result = await fileChangesInstance.value.rollbackByToolUseId(props.toolCall.id)
     if (!result.success) {
       console.error('Rollback failed:', result.error)
-      alert(t('tools.rollbackFailed') + ': ' + result.error)
+      toastStore.error(t('tools.rollbackFailed') + ': ' + result.error)
     }
   } finally {
-    isRollingBack.value = false
+    localRollingBack.value = false
   }
 }
 

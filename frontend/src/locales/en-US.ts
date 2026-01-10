@@ -217,6 +217,7 @@ export default {
     rollbackPartialFailed: '{count} file(s) failed to rollback',
     rollbackModificationConfirm: 'Are you sure you want to rollback this modification? This and all subsequent modifications will be reverted.',
     rollbackFailed: 'Rollback failed',
+    rollbackFileFailed: 'Failed to rollback {file}: {error}',
     rolledBack: 'Rolled back',
     rollback: 'Rollback',
     fileEditStats: '{files} files, {edits} edits',

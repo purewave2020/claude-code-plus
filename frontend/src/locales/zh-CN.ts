@@ -217,6 +217,7 @@ export default {
     rollbackPartialFailed: '{count} 个文件回滚失败',
     rollbackModificationConfirm: '确定要回滚此修改吗？该修改及之后的修改都将被还原。',
     rollbackFailed: '回滚失败',
+    rollbackFileFailed: '文件 {file} 回滚失败: {error}',
     rolledBack: '已回滚',
     rollback: '回滚',
     fileEditStats: '{files} 个文件, {edits} 次编辑',

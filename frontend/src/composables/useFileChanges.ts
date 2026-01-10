@@ -13,6 +13,8 @@ import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import type { DisplayItem, ToolCall } from '@/types/display'
 import { ToolCallStatus } from '@/types/display'
 import { jetbrainsRSocket, RollbackStatus, type BatchRollbackItem, type BatchRollbackEvent } from '@/services/jetbrainsRSocket'
+import { useToastStore } from '@/stores/toastStore'
+import { useI18n } from '@/composables/useI18n'
 
 // ============ 类型定义 ============
 
@@ -226,6 +228,8 @@ function calculateLineChanges(toolCall: ToolCall): { added: number; removed: num
 export function useFileChanges(
   displayItems: Ref<DisplayItem[]> | ComputedRef<DisplayItem[]>
 ) {
+  const toastStore = useToastStore()
+  const { t } = useI18n()
   
   // 当前会话的文件修改记录（直接存储，不从 displayItems 计算）
   const fileEdits = ref<FileModification[]>([])
@@ -481,10 +485,13 @@ export function useFileChanges(
               break
               
             case RollbackStatus.FAILED:
-              // 回滚失败
+              // 回滚失败，立即弹 toast 通知用户
               console.error(`[useFileChanges] Rollback failed: ${event.toolUseId}`, event.error)
               failedCount++
               rollingBackToolIds.value.delete(event.toolUseId)
+              // 立即通知用户该文件回滚失败
+              const fileName = edit.filePath.split(/[/\\]/).pop() || edit.filePath
+              toastStore.error(t('tools.rollbackFileFailed', { file: fileName, error: event.error || 'Unknown error' }))
               // 检查该文件是否还有正在回滚的修改
               const fileStillRolling2 = fileEdits.value.some(
                 e => e.filePath === edit.filePath && rollingBackToolIds.value.has(e.toolUseId)

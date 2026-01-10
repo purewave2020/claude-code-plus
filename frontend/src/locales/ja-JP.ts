@@ -199,6 +199,7 @@ export default {
     rollbackPartialFailed: '{count}件のファイルのロールバックに失敗しました',
     rollbackModificationConfirm: 'この変更をロールバックしますか？この変更とその後の変更がすべて元に戻されます。',
     rollbackFailed: 'ロールバックに失敗しました',
+    rollbackFileFailed: '{file} のロールバックに失敗しました: {error}',
     rolledBack: 'ロールバック済み',
     rollback: 'ロールバック',
     fileEditStats: '{files}ファイル、{edits}回の編集',
