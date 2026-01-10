@@ -634,7 +634,7 @@ class JetBrainsRSocketService {
           codexDefaultReasoningSummary: settingsData.codexDefaultReasoningSummary || undefined,
           codexDefaultSandboxMode: settingsData.codexDefaultSandboxMode || undefined,
           defaultThinkingLevel: settingsData.defaultThinkingLevel || 'ULTRA',
-          defaultThinkingTokens: settingsData.defaultThinkingTokens ?? 8096,
+          defaultThinkingTokens: settingsData.defaultThinkingTokens,
           defaultThinkingLevelId: settingsData.defaultThinkingLevelId || 'ultra',
           thinkingLevels: settingsData.thinkingLevels || [
             { id: 'off', name: 'Off', tokens: 0, isCustom: false },

@@ -177,7 +177,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var codexPath: String = "",
         var codexWebSearchEnabled: Boolean = false,
         var codexDefaultModelId: String = "gpt-5.2-codex",
-        var codexDefaultReasoningEffort: String = "medium",
+        var codexDefaultReasoningEffort: String = "xhigh",
         var codexDefaultReasoningSummary: String = "auto",
         var codexDefaultSandboxMode: String = "workspace-write",
         var codexCustomModels: String = "[]",

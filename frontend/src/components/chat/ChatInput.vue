@@ -511,7 +511,7 @@ import BackendIcon from '@/components/icons/BackendIcon.vue'
 import { isCodexThinking, getCodexEffortLevels } from '@/types/thinking'
 // Codex types
 import type { CodexSandboxMode, CodexReasoningEffort } from '@/types/codex'
-import { DEFAULT_CODEX_CONFIG, REASONING_EFFORT_OPTIONS, SANDBOX_MODE_OPTIONS } from '@/types/codex'
+import { REASONING_EFFORT_OPTIONS, SANDBOX_MODE_OPTIONS } from '@/types/codex'
 
 interface PendingTask {
   id: string
@@ -641,24 +641,20 @@ const {
 
 // ========== Codex 配置（从 settingsStore 读取，因为 sessionStore 可能没有完整实现） ==========
 const codexModel = computed(() => {
-  return sessionStore.currentTab?.modelId?.value ?? settingsStore.settings.codexModel ?? DEFAULT_CODEX_CONFIG.model
+  return sessionStore.currentTab?.modelId?.value ?? settingsStore.settings.codexModel
 })
 
 const codexSandboxMode = computed(() => {
   // 优先从 Tab 的初始连接配置获取（Tab 创建时的快照），避免全局设置变更影响已有会话
   const tabSandboxMode = sessionStore.currentTab?.initialConnectOptions?.value?.sandboxMode
-  const stored = tabSandboxMode ?? (settingsStore.settings as any).codexSandboxMode ?? DEFAULT_CODEX_CONFIG.sandboxMode
+  const stored = tabSandboxMode ?? (settingsStore.settings as any).codexSandboxMode
   return stored === 'full-access' ? 'danger-full-access' : stored
 })
 
 const codexReasoningEffort = computed<CodexReasoningEffort>(() => {
   // 优先从 Tab 的初始连接配置获取（Tab 创建时的快照），避免全局设置变更影响已有会话
   const tabReasoningEffort = sessionStore.currentTab?.initialConnectOptions?.value?.reasoningEffort
-  const stored = tabReasoningEffort ?? (settingsStore.settings as any).codexReasoningEffort
-  if (stored === undefined || stored === null) {
-    return DEFAULT_CODEX_CONFIG.reasoningEffort
-  }
-  return stored
+  return tabReasoningEffort ?? (settingsStore.settings as any).codexReasoningEffort
 })
 
 // Codex 事件处理函数
@@ -770,9 +766,9 @@ const codexThinkingEnabled = computed(() => {
 })
 
 const codexEffortLabel = computed(() => {
-  if (!isCodexThinking(currentThinkingConfig.value)) return DEFAULT_CODEX_CONFIG.reasoningEffort
+  if (!isCodexThinking(currentThinkingConfig.value)) return codexReasoningEffort.value
   const effort = currentThinkingConfig.value.effort
-  if (effort === null) return DEFAULT_CODEX_CONFIG.reasoningEffort
+  if (effort === null) return codexReasoningEffort.value
 
   const levels = getCodexEffortLevels()
   const level = levels.find(l => l.id === effort)

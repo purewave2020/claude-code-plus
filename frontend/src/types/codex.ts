@@ -28,14 +28,6 @@ export interface CodexSessionConfig {
   additionalWritableDirs: string[]
 }
 
-export const DEFAULT_CODEX_CONFIG: CodexSessionConfig = {
-  model: 'gpt-5.2-codex',
-  approvalMode: 'on-request',
-  sandboxMode: 'workspace-write',
-  reasoningEffort: 'medium',
-  additionalWritableDirs: [],
-}
-
 export const APPROVAL_MODE_OPTIONS: Array<{
   value: CodexApprovalMode
   label: string

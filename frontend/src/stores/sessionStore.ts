@@ -66,7 +66,7 @@ function getConnectOptionsForBackend(backendType: BackendType, settingsStore: Re
   if (backendType === 'claude') {
     return {
       model: globalSettings.claudeModel || 'claude-opus-4-5-20251101',
-      thinkingLevel: globalSettings.claudeThinkingTokens ?? 8096,
+      thinkingLevel: globalSettings.claudeThinkingTokens,
       permissionMode: globalSettings.permissionMode as RpcPermissionMode,
       skipPermissions: globalSettings.skipPermissions,
     }
@@ -75,7 +75,7 @@ function getConnectOptionsForBackend(backendType: BackendType, settingsStore: Re
     return {
       model: globalSettings.codexModel || 'gpt-5.2-codex',
       thinkingLevel: undefined, // Codex 使用 effort level，不是 token budget
-      reasoningEffort: globalSettings.codexReasoningEffort || 'medium',
+      reasoningEffort: globalSettings.codexReasoningEffort,
       permissionMode: globalSettings.permissionMode as RpcPermissionMode,
       skipPermissions: globalSettings.skipPermissions,
       sandboxMode: globalSettings.codexSandboxMode || 'workspace-write',

@@ -75,7 +75,7 @@ class BackendSettingsService(private val project: Project) : PersistentStateComp
 
         // Codex 配置
         var codexEnabled: Boolean = false,
-        var codexModelId: String = "o3-mini",
+        var codexModelId: String = "gpt-5.2-codex",
         var codexModelProvider: String = "openai",
         var codexSandboxMode: String = "workspace-write",
         var codexReasoningEffort: String = "xhigh",

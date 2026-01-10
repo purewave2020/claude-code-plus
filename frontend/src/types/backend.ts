@@ -131,11 +131,11 @@ export interface ClaudeBackendConfig extends BaseBackendConfig {
   /** API key (optional, may use environment) */
   apiKey?: string | null
 
-  /** Whether thinking is enabled */
-  thinkingEnabled: boolean
+  /** Whether thinking is enabled (null = 从后端获取) */
+  thinkingEnabled: boolean | null
 
-  /** Thinking token budget (0 = disabled) */
-  thinkingTokenBudget: number
+  /** Thinking token budget (0 = disabled, null = 从后端获取) */
+  thinkingTokenBudget: number | null
 
   /** Maximum output tokens */
   maxTokens?: number | null
@@ -143,8 +143,8 @@ export interface ClaudeBackendConfig extends BaseBackendConfig {
   /** Temperature for generation */
   temperature?: number | null
 
-  /** Include partial messages in stream */
-  includePartialMessages: boolean
+  /** Include partial messages in stream (null = 从后端获取) */
+  includePartialMessages: boolean | null
 }
 
 /**
@@ -378,9 +378,9 @@ export const DEFAULT_CLAUDE_CONFIG: ClaudeBackendConfig = {
   permissionMode: 'default',
   skipPermissions: false,
   maxTurns: 10,
-  thinkingEnabled: true,
-  thinkingTokenBudget: 8096,
-  includePartialMessages: true,
+  thinkingEnabled: null,        // 从后端获取
+  thinkingTokenBudget: null,    // 从后端获取
+  includePartialMessages: null, // 从后端获取
 }
 
 /**
@@ -393,7 +393,7 @@ export const DEFAULT_CODEX_CONFIG: CodexBackendConfig = {
   permissionMode: 'default',
   skipPermissions: false,
   maxTurns: 10,
-  reasoningEffort: 'medium',
+  reasoningEffort: null,  // 从后端获取
   reasoningSummary: 'auto',
   sandboxMode: 'workspace-write',
 }

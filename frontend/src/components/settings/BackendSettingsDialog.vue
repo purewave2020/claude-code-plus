@@ -285,16 +285,13 @@ watch(
   () => props.codexConfig,
   (newConfig) => {
     const rawEffort = (newConfig as any).reasoningEffort
-    const normalizedEffort = rawEffort && rawEffort !== 'none'
-      ? rawEffort
-      : DEFAULT_CODEX_CONFIG.reasoningEffort
     const rawSandbox = (newConfig as any).sandboxMode
     const normalizedSandbox = rawSandbox === 'full-access'
       ? 'danger-full-access'
-      : (rawSandbox || DEFAULT_CODEX_CONFIG.sandboxMode)
+      : rawSandbox
     localCodexConfig.value = {
       ...newConfig,
-      reasoningEffort: normalizedEffort,
+      reasoningEffort: rawEffort,
       sandboxMode: normalizedSandbox,
       binaryPath: (newConfig as any).binaryPath || '',
     }
@@ -309,16 +306,13 @@ watch(
     if (visible) {
       localClaudeConfig.value = { ...props.claudeConfig }
       const rawEffort = (props.codexConfig as any).reasoningEffort
-      const normalizedEffort = rawEffort && rawEffort !== 'none'
-        ? rawEffort
-        : DEFAULT_CODEX_CONFIG.reasoningEffort
       const rawSandbox = (props.codexConfig as any).sandboxMode
       const normalizedSandbox = rawSandbox === 'full-access'
         ? 'danger-full-access'
-        : (rawSandbox || DEFAULT_CODEX_CONFIG.sandboxMode)
+        : rawSandbox
       localCodexConfig.value = {
         ...props.codexConfig,
-        reasoningEffort: normalizedEffort,
+        reasoningEffort: rawEffort,
         sandboxMode: normalizedSandbox,
         binaryPath: (props.codexConfig as any).binaryPath || '',
       }

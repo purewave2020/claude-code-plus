@@ -1,5 +1,5 @@
 /**
- * Codex Session Implementation
+ * Codex Backend Session Implementation
  *
  * This module implements BackendSession for OpenAI Codex App Server.
  * It uses JSON-RPC over stdio to communicate with the codex-app-server process.

@@ -124,8 +124,8 @@ describe('Default Configs', () => {
     })
 
     it('should have valid default values', () => {
-      expect(DEFAULT_CLAUDE_CONFIG.thinkingEnabled).toBe(true)
-      expect(DEFAULT_CLAUDE_CONFIG.thinkingTokenBudget).toBe(8096)
+      expect(DEFAULT_CLAUDE_CONFIG.thinkingEnabled).toBeNull()
+      expect(DEFAULT_CLAUDE_CONFIG.thinkingTokenBudget).toBeNull()
       expect(DEFAULT_CLAUDE_CONFIG.permissionMode).toBe('default')
       expect(DEFAULT_CLAUDE_CONFIG.skipPermissions).toBe(false)
     })
@@ -145,7 +145,7 @@ describe('Default Configs', () => {
 
     it('should have valid default values', () => {
       expect(DEFAULT_CODEX_CONFIG.modelProvider).toBe('openai')
-      expect(DEFAULT_CODEX_CONFIG.reasoningEffort).toBe('medium')
+      expect(DEFAULT_CODEX_CONFIG.reasoningEffort).toBeNull()
       expect(DEFAULT_CODEX_CONFIG.reasoningSummary).toBe('auto')
       expect(DEFAULT_CODEX_CONFIG.sandboxMode).toBe('workspace-write')
     })
@@ -180,7 +180,7 @@ describe('getDefaultConfig', () => {
     const config = getDefaultConfig('claude') as ClaudeBackendConfig
     config.thinkingEnabled = false
 
-    expect(DEFAULT_CLAUDE_CONFIG.thinkingEnabled).toBe(true)
+    expect(DEFAULT_CLAUDE_CONFIG.thinkingEnabled).toBeNull()
     expect(config.thinkingEnabled).toBe(false)
   })
 })

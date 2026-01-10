@@ -42,8 +42,8 @@ export interface Settings {
 
   // === Claude 特定设置（向后兼容，将迁移到 claudeConfig）===
   claudeModel: string                       // Claude 模型 ID
-  claudeThinkingEnabled: boolean            // 是否启用思考
-  claudeThinkingTokens: number              // 思考 token 预算
+  claudeThinkingEnabled: boolean | null     // 是否启用思考（null = 从后端获取）
+  claudeThinkingTokens: number | null       // 思考 token 预算（null = 从后端获取）
 
   // === Codex 特定设置（向后兼容，将迁移到 codexConfig）===
   codexModel: string                        // Codex 模型 ID
@@ -157,14 +157,14 @@ const DEFAULT_SETTINGS: Settings = {
     maxTurns: null,
   },
 
-  // Claude 设置（向后兼容）
+  // Claude 设置（向后兼容，实际值从后端获取）
   claudeModel: 'claude-opus-4-5-20251101',
-  claudeThinkingEnabled: true,
-  claudeThinkingTokens: 8096,
+  claudeThinkingEnabled: null,   // 从后端获取
+  claudeThinkingTokens: null,    // 从后端获取
 
-  // Codex 设置（向后兼容）
+  // Codex 设置（向后兼容，实际值从后端获取）
   codexModel: 'gpt-5.2-codex',
-  codexReasoningEffort: 'xhigh',
+  codexReasoningEffort: null,  // 从后端获取
   codexReasoningSummary: 'auto',
   codexSandboxMode: 'workspace-write',
 
@@ -238,8 +238,8 @@ export const useSettingsStore = defineStore('settings', () => {
 
       // 迁移旧字段到 Claude 特定字段
       claudeModel: rawSettings.claudeModel || rawSettings.model || DEFAULT_SETTINGS.claudeModel,
-      claudeThinkingEnabled: rawSettings.claudeThinkingEnabled ?? rawSettings.thinkingEnabled ?? true,
-      claudeThinkingTokens: rawSettings.claudeThinkingTokens ?? rawSettings.maxThinkingTokens ?? 8096,
+      claudeThinkingEnabled: rawSettings.claudeThinkingEnabled ?? rawSettings.thinkingEnabled,
+      claudeThinkingTokens: rawSettings.claudeThinkingTokens ?? rawSettings.maxThinkingTokens,
 
       // 新字段使用默认值（如果没有）
       codexModel: rawSettings.codexModel || DEFAULT_SETTINGS.codexModel,
@@ -511,7 +511,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
     // 2. 应用 Claude 思考配置
     const claudeThinkingLevelId = newIdeSettings.claudeThinkingLevelId || newIdeSettings.defaultThinkingLevelId || 'ultra'
-    const claudeThinkingTokens = newIdeSettings.claudeThinkingTokens ?? newIdeSettings.defaultThinkingTokens ?? 8096
+    const claudeThinkingTokens = newIdeSettings.claudeThinkingTokens ?? newIdeSettings.defaultThinkingTokens
     updates.claudeThinkingEnabled = claudeThinkingLevelId !== 'off' && claudeThinkingTokens > 0
     updates.claudeThinkingTokens = claudeThinkingTokens
     console.log('🧠 [IdeSettings] Claude 思考配置:', {

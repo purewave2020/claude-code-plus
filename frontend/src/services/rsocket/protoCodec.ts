@@ -1459,7 +1459,7 @@ function mapSettingsChangedFromProto(proto: IdeSettingsChangedNotify): SettingsC
       codexDefaultReasoningSummary: s?.codexDefaultReasoningSummary || undefined,
       codexDefaultSandboxMode: s?.codexDefaultSandboxMode || undefined,
       defaultThinkingLevel: s?.defaultThinkingLevel || 'ULTRA',
-      defaultThinkingTokens: s?.defaultThinkingTokens ?? 8096,
+      defaultThinkingTokens: s?.defaultThinkingTokens,
       defaultThinkingLevelId: s?.defaultThinkingLevelId || 'ultra',
       thinkingLevels: s?.thinkingLevels && s.thinkingLevels.length > 0
         ? s.thinkingLevels.map((level: ProtoThinkingLevelConfig) => ({
