@@ -15,6 +15,8 @@ export interface JbMeta {
   historyTs?: number
   /** 是否为覆写操作（Write 工具） */
   isOverwrite?: boolean
+  /** 是否支持回滚（项目内文件才支持） */
+  canRollback?: boolean
 }
 
 /** 元数据正则：匹配 [jb:key=value] 格式 */
@@ -42,6 +44,9 @@ export function parseJbMeta(result: string): { meta: JbMeta; content: string } {
         break
       case 'isOverwrite':
         meta.isOverwrite = value === 'true'
+        break
+      case 'canRollback':
+        meta.canRollback = value === 'true'
         break
       // 可扩展更多元数据类型
     }
@@ -83,4 +88,15 @@ export function extractHistoryTs(result: string): number | undefined {
 export function isOverwriteOperation(result: string): boolean | undefined {
   const { meta } = parseJbMeta(result)
   return meta.isOverwrite
+}
+
+/**
+ * 检查是否支持回滚
+ *
+ * @param result 工具结果文本
+ * @returns 是否支持回滚，如果没有元数据返回 undefined
+ */
+export function canRollback(result: string): boolean | undefined {
+  const { meta } = parseJbMeta(result)
+  return meta.canRollback
 }

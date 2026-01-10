@@ -488,6 +488,35 @@ import { ideService } from '@/services/ideaBridge'
 await ideService.myNewFeature({ foo: 'bar' })
 ```
 
+### 路径解析工具 (PathResolver)
+
+处理文件路径时，**必须使用 `PathResolver` 将相对路径转换为绝对路径**。
+
+**位置**: `jetbrains-plugin/src/main/kotlin/com/asakii/plugin/util/PathResolver.kt`
+
+**使用方式**:
+```kotlin
+import com.asakii.plugin.util.PathResolver
+import com.asakii.plugin.util.toAbsolutePath
+
+// 方式1：静态方法 + Project
+val absolutePath = PathResolver.resolve("src/main/App.kt", project)
+
+// 方式2：静态方法 + basePath
+val absolutePath = PathResolver.resolve("src/main/App.kt", basePath)
+
+// 方式3：扩展函数
+val absolutePath = "src/main/App.kt".toAbsolutePath(project)
+
+// 相对路径转换
+val relativePath = absolutePath.toRelativePath(project)
+```
+
+**为什么需要**:
+- IDEA VFS API（如 `LocalFileSystem.findFileByPath()`）只接受绝对路径
+- 前端传递的通常是项目相对路径
+- `java.io.File(相对路径)` 会相对于 JVM 工作目录解析，而非项目根目录
+
 ---
 
 ## 🔍 调试技巧

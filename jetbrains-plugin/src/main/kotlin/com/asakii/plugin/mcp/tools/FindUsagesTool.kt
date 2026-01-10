@@ -15,6 +15,7 @@ import com.intellij.psi.search.GlobalSearchScopes
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.asakii.plugin.services.LanguageAnalysisService
+import com.asakii.plugin.util.PathResolver
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -127,11 +128,7 @@ class FindUsagesTool(private val project: Project) {
         val usageTypes = parseUsageTypes(arguments["usageTypes"])
 
         // ===== 构建路径 =====
-        val absolutePath = if (File(filePath).isAbsolute) {
-            filePath
-        } else {
-            project.basePath?.let { File(it, filePath).absolutePath } ?: filePath
-        }
+        val absolutePath = PathResolver.resolve(filePath, project)
 
         // 等待索引完成，确保能搜索到最新的文件内容
         DumbService.getInstance(project).waitForSmartMode()
@@ -209,8 +206,7 @@ class FindUsagesTool(private val project: Project) {
                     }
                     "Directory" -> {
                         val dirPath = scopeArg!!
-                        val dirAbsPath = if (File(dirPath).isAbsolute) dirPath
-                                         else project.basePath?.let { File(it, dirPath).absolutePath } ?: dirPath
+                        val dirAbsPath = PathResolver.resolve(dirPath, project)
                         val dirFile = LocalFileSystem.getInstance().findFileByPath(dirAbsPath)
                         if (dirFile == null || !dirFile.isDirectory) {
                             throw IllegalArgumentException("""
@@ -593,12 +589,7 @@ class FindUsagesTool(private val project: Project) {
     private fun validateFilePath(arguments: JsonObject): ValidationError? {
         val filePath = arguments.getString("filePath") ?: return null
 
-        val absolutePath = if (File(filePath).isAbsolute) {
-            filePath
-        } else {
-            project.basePath?.let { File(it, filePath).absolutePath } ?: filePath
-        }
-
+        val absolutePath = PathResolver.resolve(filePath, project)
         val file = File(absolutePath)
 
         if (!file.exists()) {

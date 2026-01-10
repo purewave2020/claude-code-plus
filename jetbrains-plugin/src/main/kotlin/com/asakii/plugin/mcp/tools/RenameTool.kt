@@ -17,6 +17,7 @@ import com.intellij.refactoring.rename.RenameProcessor
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import com.asakii.plugin.util.PathResolver
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 
@@ -102,11 +103,7 @@ class RenameTool(private val project: Project) {
         val symbolType = SymbolType.valueOf(symbolTypeStr)
 
         // ===== 构建路径 =====
-        val absolutePath = if (File(filePath).isAbsolute) {
-            filePath
-        } else {
-            project.basePath?.let { File(it, filePath).absolutePath } ?: filePath
-        }
+        val absolutePath = PathResolver.resolve(filePath, project)
 
         val resultRef = AtomicReference<Any>()
 
@@ -298,12 +295,7 @@ class RenameTool(private val project: Project) {
     private fun validateFilePath(arguments: JsonObject): ValidationError? {
         val filePath = arguments.getString("filePath") ?: return null
 
-        val absolutePath = if (File(filePath).isAbsolute) {
-            filePath
-        } else {
-            project.basePath?.let { File(it, filePath).absolutePath } ?: filePath
-        }
-
+        val absolutePath = PathResolver.resolve(filePath, project)
         val file = File(absolutePath)
 
         if (!file.exists()) {

@@ -156,12 +156,14 @@ import { useI18n } from '@/composables/useI18n'
 import { ideaBridge } from '@/services/ideaBridge'
 import { jetbrainsRSocket } from '@/services/jetbrainsRSocket'
 import { useSessionStore } from '@/stores/sessionStore'
+import { useToastStore } from '@/stores/toastStore'
 import type { FileChange, FileModification } from '@/composables/useFileChanges'
 
 const { t } = useI18n()
 
 // 直接从 sessionStore 获取 fileChanges 实例（响应式）
 const sessionStore = useSessionStore()
+const toastStore = useToastStore()
 const fileChangesInstance = computed(() => sessionStore.currentFileChanges)
 
 // 检测是否在 IDE 模式
@@ -319,7 +321,7 @@ async function handleRollbackFile(filePath: string) {
   const result = await fileChangesInstance.value.rollbackFile(filePath)
   if (!result.success) {
     console.error('Rollback failed:', result.error)
-    alert(t('tools.rollbackFailed') + ': ' + result.error)
+    toastStore.error(t('tools.rollbackFailed') + ': ' + result.error)
   }
 }
 
@@ -334,7 +336,7 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   const result = await fileChangesInstance.value.rollbackModification(filePath, historyTs)
   if (!result.success) {
     console.error('Rollback failed:', result.error)
-    alert(t('tools.rollbackFailed') + ': ' + result.error)
+    toastStore.error(t('tools.rollbackFailed') + ': ' + result.error)
   }
 }
 </script>

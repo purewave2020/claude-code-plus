@@ -15,6 +15,7 @@ import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.asakii.plugin.util.VirtualFileResolver
+import com.asakii.plugin.util.PathResolver
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
@@ -57,25 +58,12 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
     // ========== 文件操作 API 实现 ==========
 
     inner class FileApiImpl : JetBrainsFileApi {
-        /**
-         * 将文件路径解析为绝对路径字符串
-         * 如果是相对路径，则基于项目根目录拼接
-         */
-        private fun resolveToAbsolutePath(filePath: String): String {
-            return if (File(filePath).isAbsolute) {
-                filePath
-            } else {
-                // 相对路径：基于项目根目录解析
-                ideaProject.basePath?.let { "$it/$filePath" } ?: filePath
-            }
-        }
-
         override fun openFile(request: JetBrainsOpenFileRequest): Result<Unit> {
             return try {
                 ApplicationManager.getApplication().invokeLater {
                     // 使用 VirtualFileResolver 支持 JAR/ZIP 等多种路径格式
                     val file = VirtualFileResolver.resolve(request.filePath, ideaProject)
-                        ?: LocalFileSystem.getInstance().findFileByPath(resolveToAbsolutePath(request.filePath))
+                        ?: LocalFileSystem.getInstance().findFileByPath(PathResolver.resolve(request.filePath, ideaProject))
                     if (file != null) {
                         val fileEditorManager = FileEditorManager.getInstance(ideaProject)
                         val line = request.line

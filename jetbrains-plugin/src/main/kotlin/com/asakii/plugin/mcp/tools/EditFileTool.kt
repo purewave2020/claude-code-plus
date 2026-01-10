@@ -13,6 +13,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import kotlinx.serialization.json.JsonObject
 import com.asakii.logging.*
+import com.asakii.plugin.util.PathResolver
 import java.io.File
 
 private val logger = getLogger("EditFileTool")
@@ -44,7 +45,7 @@ class EditFileTool(private val project: Project) {
             ?: return ToolResult.error("Cannot get project path")
 
         // 解析路径（支持相对路径和绝对路径）
-        val absolutePath = resolvePath(filePath, projectBasePath)
+        val absolutePath = PathResolver.resolve(filePath, projectBasePath)
 
         // 安全检查：确保文件在允许的范围内（项目内或配置的外部目录内）
         val settings = AgentSettingsService.getInstance()
@@ -62,21 +63,23 @@ class EditFileTool(private val project: Project) {
             return ToolResult.error("File not found: $filePath")
         }
 
-        // 记录历史时间戳并打 LocalHistory 标签
+        // 判断是否是项目内文件（只有项目内文件支持回滚）
+        val isExternalFile = !absolutePath.startsWith(File(projectBasePath).canonicalPath)
+        val canRollback = !isExternalFile
+
+        // 记录历史时间戳并打 LocalHistory 标签（仅项目内文件）
         val historyTs = System.currentTimeMillis()
         val toolUseId = currentToolUseId()
-        if (toolUseId != null) {
+        if (canRollback && toolUseId != null) {
             LocalHistory.getInstance().putSystemLabel(project, "claude_edit_$toolUseId")
             logger.info { "EditFile: created LocalHistory label for toolUseId=$toolUseId, historyTs=$historyTs" }
         }
-
-        val isExternalFile = !absolutePath.startsWith(File(projectBasePath).canonicalPath)
 
         return try {
             var result: Any = ""
             ApplicationManager.getApplication().invokeAndWait {
                 result = WriteAction.compute<Any, Exception> {
-                    editFileContent(file, oldString, newString, replaceAll, filePath, isExternalFile, historyTs)
+                    editFileContent(file, oldString, newString, replaceAll, filePath, isExternalFile, canRollback, historyTs)
                 }
             }
             result
@@ -84,32 +87,6 @@ class EditFileTool(private val project: Project) {
             logger.error(e) { "Error editing file: $filePath" }
             ToolResult.error("Error editing file: ${e.message}")
         }
-    }
-
-    /**
-     * 解析文件路径
-     * 支持相对路径和绝对路径
-     */
-    private fun resolvePath(path: String, projectBasePath: String): String {
-        return if (isRelativePath(path)) {
-            File(projectBasePath, path).canonicalPath
-        } else {
-            File(path).canonicalPath
-        }
-    }
-
-    /**
-     * 判断路径是否为相对路径
-     */
-    private fun isRelativePath(path: String): Boolean {
-        val normalizedPath = path.trim()
-        // 以 / 开头 -> Unix 绝对路径
-        if (normalizedPath.startsWith("/")) return false
-        // 以 盘符: 开头 -> Windows 绝对路径 (C:, D:, etc.)
-        if (normalizedPath.length >= 2 && normalizedPath[1] == ':') return false
-        // 包含 :// -> 协议 URL
-        if (normalizedPath.contains("://")) return false
-        return true
     }
 
     /**
@@ -130,6 +107,7 @@ class EditFileTool(private val project: Project) {
         replaceAll: Boolean,
         originalPath: String,
         isExternalFile: Boolean,
+        canRollback: Boolean,
         historyTs: Long
     ): Any {
         // 尝试获取 VirtualFile
@@ -216,7 +194,7 @@ class EditFileTool(private val project: Project) {
             1
         }
 
-        return formatOutput(originalPath, replacementCount, replaceAll, isExternalFile, historyTs)
+        return formatOutput(originalPath, replacementCount, replaceAll, isExternalFile, canRollback, historyTs)
     }
 
     /**
@@ -242,12 +220,14 @@ class EditFileTool(private val project: Project) {
         replacementCount: Int,
         replaceAll: Boolean,
         isExternalFile: Boolean,
+        canRollback: Boolean,
         historyTs: Long
     ): String {
         val sb = StringBuilder()
 
         // Meta 信息放在开头，方便前端解析
         sb.appendLine("[jb:historyTs=$historyTs]")
+        sb.appendLine("[jb:canRollback=$canRollback]")
 
         val locationHint = if (isExternalFile) " (external)" else ""
         sb.appendLine("Edited File$locationHint: `$originalPath`")

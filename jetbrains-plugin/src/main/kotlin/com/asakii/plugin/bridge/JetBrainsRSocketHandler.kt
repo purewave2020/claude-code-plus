@@ -505,8 +505,10 @@ class JetBrainsRSocketHandler(
             val req = com.asakii.rpc.proto.JetBrainsGetFileHistoryContentRequest.parseFrom(dataBytes)
             logger.info { "📄 [JetBrains] getFileHistoryContent: ${req.filePath} (before: ${req.beforeTimestamp})" }
 
+            // 将相对路径转换为绝对路径
+            val absolutePath = resolvePath(req.filePath)
             val content = com.asakii.plugin.services.FileHistoryService.getContentBefore(
-                req.filePath,
+                absolutePath,
                 req.beforeTimestamp
             )
 
@@ -534,8 +536,10 @@ class JetBrainsRSocketHandler(
             val req = com.asakii.rpc.proto.JetBrainsRollbackFileRequest.parseFrom(dataBytes)
             logger.info { "↩️ [JetBrains] rollbackFile: ${req.filePath} (before: ${req.beforeTimestamp})" }
 
+            // 将相对路径转换为绝对路径
+            val absolutePath = resolvePath(req.filePath)
             val result = com.asakii.plugin.services.FileHistoryService.rollbackToTimestamp(
-                req.filePath,
+                absolutePath,
                 req.beforeTimestamp
             )
 
@@ -858,6 +862,14 @@ class JetBrainsRSocketHandler(
 
     private fun buildErrorResponse(error: String): Payload {
         return buildOperationResponse(false, error)
+    }
+
+    /**
+     * 解析文件路径，将相对路径转换为绝对路径
+     */
+    private fun resolvePath(path: String): String {
+        val projectPath = jetbrainsApi.project.getPath()
+        return com.asakii.plugin.util.PathResolver.resolve(path, projectPath)
     }
 }
 

@@ -13,6 +13,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import kotlinx.serialization.json.JsonObject
 import com.asakii.logging.*
+import com.asakii.plugin.util.PathResolver
 import java.io.File
 
 private val logger = getLogger("WriteFileTool")
@@ -39,7 +40,7 @@ class WriteFileTool(private val project: Project) {
             ?: return ToolResult.error("Cannot get project path")
 
         // 解析路径（支持相对路径和绝对路径）
-        val absolutePath = resolvePath(filePath, projectBasePath)
+        val absolutePath = PathResolver.resolve(filePath, projectBasePath)
 
         // 安全检查：确保文件在允许的范围内（项目内或配置的外部目录内）
         val settings = AgentSettingsService.getInstance()
@@ -54,10 +55,15 @@ class WriteFileTool(private val project: Project) {
 
         val file = File(absolutePath)
         val isOverwrite = file.exists()
+        
+        // 判断是否是项目内文件（只有项目内文件支持回滚）
+        val isExternalFile = !absolutePath.startsWith(File(projectBasePath).canonicalPath)
+        val canRollback = !isExternalFile && isOverwrite  // 只有项目内已存在的文件才支持回滚
+        
         var historyTs: Long? = null
 
-        // 覆盖已有文件时记录历史时间戳并打 LocalHistory 标签
-        if (isOverwrite) {
+        // 覆盖已有文件时记录历史时间戳并打 LocalHistory 标签（仅项目内文件）
+        if (canRollback) {
             historyTs = System.currentTimeMillis()
             val toolUseId = currentToolUseId()
             if (toolUseId != null) {
@@ -66,13 +72,11 @@ class WriteFileTool(private val project: Project) {
             }
         }
 
-        val isExternalFile = !absolutePath.startsWith(File(projectBasePath).canonicalPath)
-
         return try {
             var result: Any = ""
             ApplicationManager.getApplication().invokeAndWait {
                 result = WriteAction.compute<Any, Exception> {
-                    writeFileContent(absolutePath, content, filePath, isExternalFile, isOverwrite, historyTs)
+                    writeFileContent(absolutePath, content, filePath, isExternalFile, isOverwrite, canRollback, historyTs)
                 }
             }
             result
@@ -80,32 +84,6 @@ class WriteFileTool(private val project: Project) {
             logger.error(e) { "Error writing file: $filePath" }
             ToolResult.error("Error writing file: ${e.message}")
         }
-    }
-
-    /**
-     * 解析文件路径
-     * 支持相对路径和绝对路径
-     */
-    private fun resolvePath(path: String, projectBasePath: String): String {
-        return if (isRelativePath(path)) {
-            File(projectBasePath, path).canonicalPath
-        } else {
-            File(path).canonicalPath
-        }
-    }
-
-    /**
-     * 判断路径是否为相对路径
-     */
-    private fun isRelativePath(path: String): Boolean {
-        val normalizedPath = path.trim()
-        // 以 / 开头 -> Unix 绝对路径
-        if (normalizedPath.startsWith("/")) return false
-        // 以 盘符: 开头 -> Windows 绝对路径 (C:, D:, etc.)
-        if (normalizedPath.length >= 2 && normalizedPath[1] == ':') return false
-        // 包含 :// -> 协议 URL
-        if (normalizedPath.contains("://")) return false
-        return true
     }
 
     /**
@@ -117,6 +95,7 @@ class WriteFileTool(private val project: Project) {
         originalPath: String,
         isExternalFile: Boolean,
         isOverwrite: Boolean,
+        canRollback: Boolean,
         historyTs: Long?
     ): Any {
         val file = File(absolutePath)
@@ -159,7 +138,7 @@ class WriteFileTool(private val project: Project) {
             }
         }
 
-        return formatOutput(originalPath, absolutePath, content, isNewFile, isExternalFile, virtualFile, isOverwrite, historyTs)
+        return formatOutput(originalPath, absolutePath, content, isNewFile, isExternalFile, virtualFile, isOverwrite, canRollback, historyTs)
     }
 
     /**
@@ -173,6 +152,7 @@ class WriteFileTool(private val project: Project) {
         isExternalFile: Boolean,
         virtualFile: VirtualFile?,
         isOverwrite: Boolean,
+        canRollback: Boolean,
         historyTs: Long?
     ): String {
         val sb = StringBuilder()
@@ -180,6 +160,7 @@ class WriteFileTool(private val project: Project) {
         // Meta 信息放在开头，方便前端解析
         historyTs?.let { sb.appendLine("[jb:historyTs=$it]") }
         sb.appendLine("[jb:isOverwrite=$isOverwrite]")
+        sb.appendLine("[jb:canRollback=$canRollback]")
 
         val action = if (isNewFile) "Created" else "Updated"
         val locationHint = if (isExternalFile) " (external)" else ""

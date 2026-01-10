@@ -86,15 +86,16 @@ export function isJetBrainsFileEditTool(toolName: string): toolName is JetBrains
  */
 export interface ToolResultMeta {
   historyTs: number | null
+  canRollback: boolean
   linesAdded?: number
   linesRemoved?: number
 }
 
 /**
- * 从工具结果中提取元信息（historyTs、行数变化等）
+ * 从工具结果中提取元信息（historyTs、canRollback、行数变化等）
  */
 export function extractToolResultMeta(result: any): ToolResultMeta {
-  const meta: ToolResultMeta = { historyTs: null }
+  const meta: ToolResultMeta = { historyTs: null, canRollback: false }
   
   if (!result?.content) return meta
   
@@ -112,6 +113,12 @@ export function extractToolResultMeta(result: any): ToolResultMeta {
   const historyMatch = content.match(/\[jb:historyTs=(\d+)\]/)
   if (historyMatch) {
     meta.historyTs = parseInt(historyMatch[1], 10)
+  }
+  
+  // 匹配 [jb:canRollback=xxx] 格式
+  const rollbackMatch = content.match(/\[jb:canRollback=(true|false)\]/)
+  if (rollbackMatch) {
+    meta.canRollback = rollbackMatch[1] === 'true'
   }
   
   return meta
@@ -290,8 +297,15 @@ export function useFileChanges(
     const filePath = extractFilePath(toolCall)
     if (!filePath) return false
     
-    // 提取元信息（historyTs、行数变化等）
+    // 提取元信息（historyTs、canRollback、行数变化等）
     const meta = extractToolResultMeta(toolCall.result)
+    
+    // 检查是否支持回滚（项目外文件不支持）
+    if (!meta.canRollback) {
+      console.info('[useFileChanges] 文件不支持回滚（项目外文件），跳过:', toolCall.toolName)
+      return false
+    }
+    
     if (!meta.historyTs) {
       console.warn('[useFileChanges] 无法提取 historyTs，跳过:', toolCall.toolName)
       return false
