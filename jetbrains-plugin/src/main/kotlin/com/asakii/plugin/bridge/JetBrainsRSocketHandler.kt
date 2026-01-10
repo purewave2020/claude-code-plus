@@ -40,6 +40,11 @@ import com.asakii.rpc.proto.JetBrainsShowEditFullDiffRequest as ProtoShowEditFul
 import com.asakii.rpc.proto.JetBrainsSetLocaleRequest as ProtoSetLocaleRequest
 import com.asakii.rpc.proto.JetBrainsSessionState as ProtoSessionState
 import com.asakii.rpc.proto.JetBrainsSessionCommand as ProtoSessionCommand
+import com.asakii.rpc.proto.JetBrainsBatchRollbackRequest as ProtoBatchRollbackRequest
+import com.asakii.rpc.proto.JetBrainsBatchRollbackEvent
+import com.asakii.rpc.proto.RollbackStatus
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 /**
  * JetBrains IDE 集成 RSocket 处理器
@@ -108,6 +113,21 @@ class JetBrainsRSocketHandler(
                     else -> {
                         logger.warn { "⚠️ [JetBrains RSocket] Unknown route: $route" }
                         buildErrorResponse("Unknown route: $route")
+                    }
+                }
+            }
+
+            // 流式请求处理
+            requestStream { request ->
+                val route = extractRoute(request)
+                val dataBytes = request.data.readByteArray()
+                logger.info { "📡 [JetBrains RSocket] ← Stream: $route" }
+
+                when (route) {
+                    "jetbrains.batchRollback" -> handleBatchRollback(dataBytes)
+                    else -> {
+                        logger.warn { "⚠️ [JetBrains RSocket] Unknown stream route: $route" }
+                        flow { throw IllegalArgumentException("Unknown stream route: $route") }
                     }
                 }
             }
@@ -566,6 +586,73 @@ class JetBrainsRSocketHandler(
                 .build()
             buildPayload { data(response.toByteArray()) }
         }
+    }
+
+    /**
+     * 批量回滚文件（流式返回结果）
+     * 用于前端"回滚所有"功能
+     */
+    private fun handleBatchRollback(dataBytes: ByteArray): Flow<Payload> = flow {
+        val req = ProtoBatchRollbackRequest.parseFrom(dataBytes)
+        logger.info { "↩️ [JetBrains] batchRollback: ${req.itemsCount} items" }
+
+        for (item in req.itemsList) {
+            val filePath = item.filePath
+            val beforeTimestamp = item.beforeTimestamp
+            val toolUseId = item.toolUseId
+
+            // 发送"开始回滚"事件
+            emit(buildRollbackEvent(filePath, toolUseId, RollbackStatus.ROLLBACK_STARTED, null))
+
+            try {
+                // 将相对路径转换为绝对路径
+                val absolutePath = resolvePath(filePath)
+
+                // beforeTimestamp == 0 表示新建文件的回滚，需要删除文件
+                val result = if (beforeTimestamp == 0L) {
+                    logger.info { "↩️ [JetBrains] deleteFile (rollback new file): $absolutePath" }
+                    com.asakii.plugin.services.FileHistoryService.deleteFile(absolutePath)
+                } else {
+                    com.asakii.plugin.services.FileHistoryService.rollbackToTimestamp(
+                        absolutePath,
+                        beforeTimestamp
+                    )
+                }
+
+                // 发送结果事件
+                if (result.success) {
+                    logger.info { "✅ [JetBrains] rollback success: $filePath ($toolUseId)" }
+                    emit(buildRollbackEvent(filePath, toolUseId, RollbackStatus.ROLLBACK_SUCCESS, null))
+                } else {
+                    logger.warn { "❌ [JetBrains] rollback failed: $filePath - ${result.error}" }
+                    emit(buildRollbackEvent(filePath, toolUseId, RollbackStatus.ROLLBACK_FAILED, result.error))
+                }
+            } catch (e: Exception) {
+                logger.error { "❌ [JetBrains] rollback exception: $filePath - ${e.message}" }
+                emit(buildRollbackEvent(filePath, toolUseId, RollbackStatus.ROLLBACK_FAILED, e.message ?: "Unknown error"))
+            }
+        }
+    }
+
+    /**
+     * 构建回滚事件 Payload
+     */
+    private fun buildRollbackEvent(
+        filePath: String,
+        toolUseId: String,
+        status: RollbackStatus,
+        error: String?
+    ): Payload {
+        val builder = JetBrainsBatchRollbackEvent.newBuilder()
+            .setFilePath(filePath)
+            .setToolUseId(toolUseId)
+            .setStatus(status)
+
+        if (error != null) {
+            builder.setError(error)
+        }
+
+        return buildPayload { data(builder.build().toByteArray()) }
     }
 
     // ==================== 反向调用（后端 → 前端）====================

@@ -214,6 +214,7 @@ export default {
     rollbackModification: 'Rollback this modification',
     rollbackFileConfirm: 'Are you sure you want to rollback {file} to the version before modification?',
     rollbackAllConfirm: 'Are you sure you want to rollback all file modifications? This action cannot be undone.',
+    rollbackPartialFailed: '{count} file(s) failed to rollback',
     rollbackModificationConfirm: 'Are you sure you want to rollback this modification? This and all subsequent modifications will be reverted.',
     rollbackFailed: 'Rollback failed',
     rolledBack: 'Rolled back',

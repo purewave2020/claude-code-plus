@@ -254,6 +254,168 @@ function decodeRollbackFileResponse(data: Uint8Array): { success: boolean; error
   }
 }
 
+// ========== 批量回滚相关（手动实现 Protobuf 编解码）==========
+
+/**
+ * 回滚状态枚举
+ */
+export enum RollbackStatus {
+  STARTED = 0,
+  SUCCESS = 1,
+  FAILED = 2
+}
+
+/**
+ * 批量回滚项
+ */
+export interface BatchRollbackItem {
+  filePath: string
+  beforeTimestamp: number
+  toolUseId: string
+}
+
+/**
+ * 批量回滚事件
+ */
+export interface BatchRollbackEvent {
+  filePath: string
+  toolUseId: string
+  status: RollbackStatus
+  error?: string
+}
+
+/**
+ * 手动编码 BatchRollbackRequest (简单 Protobuf 编码)
+ * message JetBrainsBatchRollbackRequest { repeated JetBrainsBatchRollbackItem items = 1; }
+ * message JetBrainsBatchRollbackItem { string file_path=1; int64 before_timestamp=2; string tool_use_id=3; }
+ */
+function encodeBatchRollbackRequest(items: BatchRollbackItem[]): Uint8Array {
+  const parts: Uint8Array[] = []
+  
+  for (const item of items) {
+    // 编码单个 item
+    const itemParts: Uint8Array[] = []
+    
+    // field 1: file_path (string)
+    const filePathBytes = new TextEncoder().encode(item.filePath)
+    itemParts.push(encodeField(1, 2, filePathBytes)) // wire type 2 = length-delimited
+    
+    // field 2: before_timestamp (int64 as varint)
+    itemParts.push(encodeVarintField(2, item.beforeTimestamp))
+    
+    // field 3: tool_use_id (string)
+    const toolUseIdBytes = new TextEncoder().encode(item.toolUseId)
+    itemParts.push(encodeField(3, 2, toolUseIdBytes))
+    
+    // 合并 item 字节
+    const itemBytes = concatUint8Arrays(itemParts)
+    
+    // 将 item 作为嵌套消息添加到 items (field 1)
+    parts.push(encodeField(1, 2, itemBytes))
+  }
+  
+  return concatUint8Arrays(parts)
+}
+
+/**
+ * 编码字段（带 wire type）
+ */
+function encodeField(fieldNum: number, wireType: number, data: Uint8Array): Uint8Array {
+  const tag = (fieldNum << 3) | wireType
+  const tagBytes = encodeVarint(tag)
+  const lenBytes = encodeVarint(data.length)
+  return concatUint8Arrays([tagBytes, lenBytes, data])
+}
+
+/**
+ * 编码 varint 字段
+ */
+function encodeVarintField(fieldNum: number, value: number): Uint8Array {
+  const tag = (fieldNum << 3) | 0 // wire type 0 = varint
+  const tagBytes = encodeVarint(tag)
+  const valueBytes = encodeVarint(value)
+  return concatUint8Arrays([tagBytes, valueBytes])
+}
+
+/**
+ * 编码 varint
+ */
+function encodeVarint(value: number): Uint8Array {
+  const bytes: number[] = []
+  while (value > 127) {
+    bytes.push((value & 0x7f) | 0x80)
+    value = Math.floor(value / 128)
+  }
+  bytes.push(value & 0x7f)
+  return new Uint8Array(bytes)
+}
+
+/**
+ * 合并 Uint8Array 数组
+ */
+function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
+  const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const arr of arrays) {
+    result.set(arr, offset)
+    offset += arr.length
+  }
+  return result
+}
+
+/**
+ * 手动解码 BatchRollbackEvent
+ * message JetBrainsBatchRollbackEvent { string file_path=1; string tool_use_id=2; RollbackStatus status=3; optional string error=4; }
+ */
+function decodeBatchRollbackEvent(data: Uint8Array): BatchRollbackEvent {
+  const result: BatchRollbackEvent = {
+    filePath: '',
+    toolUseId: '',
+    status: RollbackStatus.STARTED
+  }
+  
+  let offset = 0
+  while (offset < data.length) {
+    const tag = data[offset++]
+    const fieldNum = tag >> 3
+    const wireType = tag & 0x7
+    
+    if (wireType === 2) {
+      // length-delimited (string)
+      let len = 0
+      let shift = 0
+      while (offset < data.length) {
+        const b = data[offset++]
+        len |= (b & 0x7f) << shift
+        if (!(b & 0x80)) break
+        shift += 7
+      }
+      const strBytes = data.slice(offset, offset + len)
+      offset += len
+      const str = new TextDecoder().decode(strBytes)
+      
+      if (fieldNum === 1) result.filePath = str
+      else if (fieldNum === 2) result.toolUseId = str
+      else if (fieldNum === 4) result.error = str
+    } else if (wireType === 0) {
+      // varint
+      let value = 0
+      let shift = 0
+      while (offset < data.length) {
+        const b = data[offset++]
+        value |= (b & 0x7f) << shift
+        if (!(b & 0x80)) break
+        shift += 7
+      }
+      
+      if (fieldNum === 3) result.status = value as RollbackStatus
+    }
+  }
+  
+  return result
+}
+
 /**
  * 解码 ActiveFileChangedNotify（用于 getActiveFile 响应）
  */
@@ -1017,6 +1179,53 @@ class JetBrainsRSocketService {
       console.error('[JetBrainsRSocket] Failed to rollback file:', error)
       return { success: false, error: String(error) }
     }
+  }
+
+  /**
+   * 批量回滚文件（流式返回结果）
+   * 用于"回滚所有"功能，实时返回每个文件的回滚状态
+   *
+   * @param items 回滚项列表
+   * @param onEvent 事件回调（每个文件的状态变化）
+   * @returns 取消函数
+   */
+  batchRollback(
+    items: BatchRollbackItem[],
+    onEvent: (event: BatchRollbackEvent) => void,
+    onComplete?: () => void,
+    onError?: (error: Error) => void
+  ): () => void {
+    if (!this.client) {
+      onError?.(new Error('RSocket client not connected'))
+      return () => {}
+    }
+
+    console.log('[JetBrainsRSocket] Starting batch rollback:', items.length, 'items')
+    const data = encodeBatchRollbackRequest(items)
+
+    return this.client.requestStream(
+      'jetbrains.batchRollback',
+      data,
+      {
+        onNext: (responseData: Uint8Array) => {
+          try {
+            const event = decodeBatchRollbackEvent(responseData)
+            console.log('[JetBrainsRSocket] Rollback event:', event.toolUseId, RollbackStatus[event.status])
+            onEvent(event)
+          } catch (e) {
+            console.error('[JetBrainsRSocket] Failed to decode rollback event:', e)
+          }
+        },
+        onComplete: () => {
+          console.log('[JetBrainsRSocket] Batch rollback completed')
+          onComplete?.()
+        },
+        onError: (error: Error) => {
+          console.error('[JetBrainsRSocket] Batch rollback error:', error)
+          onError?.(error)
+        }
+      }
+    )
   }
 
   /**

@@ -196,6 +196,7 @@ export default {
     rollbackModification: '이 수정 롤백',
     rollbackFileConfirm: '{file}을(를) 수정 전 버전으로 롤백하시겠습니까?',
     rollbackAllConfirm: '모든 파일 수정을 롤백하시겠습니까? 이 작업은 취소할 수 없습니다.',
+    rollbackPartialFailed: '{count}개 파일 롤백 실패',
     rollbackModificationConfirm: '이 수정을 롤백하시겠습니까? 이 수정과 이후 모든 수정이 되돌려집니다.',
     rollbackFailed: '롤백 실패',
     rolledBack: '롤백됨',

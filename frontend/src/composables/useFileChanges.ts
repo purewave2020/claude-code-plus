@@ -12,7 +12,7 @@
 import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import type { DisplayItem, ToolCall } from '@/types/display'
 import { ToolCallStatus } from '@/types/display'
-import { jetbrainsRSocket } from '@/services/jetbrainsRSocket'
+import { jetbrainsRSocket, RollbackStatus, type BatchRollbackItem, type BatchRollbackEvent } from '@/services/jetbrainsRSocket'
 
 // ============ 类型定义 ============
 
@@ -233,6 +233,12 @@ export function useFileChanges(
   // 正在回滚的文件集合
   const rollingBackFiles = ref<Set<string>>(new Set())
   
+  // 正在批量回滚所有文件
+  const isRollingBackAll = ref(false)
+  
+  // 正在回滚的 toolUseId 集合（用于显示单个工具的回滚状态）
+  const rollingBackToolIds = ref<Set<string>>(new Set())
+  
   // toolUseId -> FileModification 映射（用于快速查找）
   const fileEditMap = computed(() => 
     new Map(fileEdits.value.map(e => [e.toolUseId, e]))
@@ -406,6 +412,112 @@ export function useFileChanges(
   }
   
   /**
+   * 检查某个工具调用是否正在回滚
+   */
+  function isToolRollingBack(toolUseId: string): boolean {
+    return rollingBackToolIds.value.has(toolUseId)
+  }
+  
+  /**
+   * 批量回滚所有文件（流式返回结果）
+   * 实时更新每个修改的状态
+   * 
+   * @returns Promise 在所有回滚完成或出错时 resolve
+   */
+  function rollbackAll(): Promise<{ success: boolean; failedCount: number }> {
+    return new Promise((resolve) => {
+      // 收集所有未回滚的修改
+      const pendingEdits = fileEdits.value.filter(e => !e.rolledBack && !e.accepted)
+      
+      if (pendingEdits.length === 0) {
+        resolve({ success: true, failedCount: 0 })
+        return
+      }
+      
+      // 设置全局回滚状态
+      isRollingBackAll.value = true
+      
+      // 构建回滚项列表
+      const items: BatchRollbackItem[] = pendingEdits.map(edit => ({
+        filePath: edit.filePath,
+        beforeTimestamp: edit.historyTs,
+        toolUseId: edit.toolUseId
+      }))
+      
+      // 标记所有待回滚的 toolUseId
+      for (const item of items) {
+        rollingBackToolIds.value.add(item.toolUseId)
+        rollingBackFiles.value.add(item.filePath)
+      }
+      
+      let failedCount = 0
+      
+      // 调用批量回滚 API
+      const cancel = jetbrainsRSocket.batchRollback(
+        items,
+        // onEvent: 每个文件的状态变化
+        (event: BatchRollbackEvent) => {
+          const edit = fileEditMap.value.get(event.toolUseId)
+          if (!edit) return
+          
+          switch (event.status) {
+            case RollbackStatus.STARTED:
+              // 开始回滚，保持 rolling back 状态
+              console.log(`[useFileChanges] Rollback started: ${event.toolUseId}`)
+              break
+              
+            case RollbackStatus.SUCCESS:
+              // 回滚成功，标记为已回滚
+              console.log(`[useFileChanges] Rollback success: ${event.toolUseId}`)
+              edit.rolledBack = true
+              rollingBackToolIds.value.delete(event.toolUseId)
+              // 检查该文件是否还有正在回滚的修改
+              const fileStillRolling = fileEdits.value.some(
+                e => e.filePath === edit.filePath && rollingBackToolIds.value.has(e.toolUseId)
+              )
+              if (!fileStillRolling) {
+                rollingBackFiles.value.delete(edit.filePath)
+              }
+              break
+              
+            case RollbackStatus.FAILED:
+              // 回滚失败
+              console.error(`[useFileChanges] Rollback failed: ${event.toolUseId}`, event.error)
+              failedCount++
+              rollingBackToolIds.value.delete(event.toolUseId)
+              // 检查该文件是否还有正在回滚的修改
+              const fileStillRolling2 = fileEdits.value.some(
+                e => e.filePath === edit.filePath && rollingBackToolIds.value.has(e.toolUseId)
+              )
+              if (!fileStillRolling2) {
+                rollingBackFiles.value.delete(edit.filePath)
+              }
+              break
+          }
+        },
+        // onComplete: 所有回滚完成
+        () => {
+          isRollingBackAll.value = false
+          rollingBackToolIds.value.clear()
+          rollingBackFiles.value.clear()
+          resolve({ success: failedCount === 0, failedCount })
+        },
+        // onError: 回滚出错
+        (error: Error) => {
+          console.error('[useFileChanges] Batch rollback error:', error)
+          isRollingBackAll.value = false
+          rollingBackToolIds.value.clear()
+          rollingBackFiles.value.clear()
+          resolve({ success: false, failedCount: -1 })
+        }
+      )
+      
+      // 返回的 cancel 函数可以用于取消回滚，但这里我们不暴露它
+      // 如果需要取消功能，可以返回 { promise, cancel }
+    })
+  }
+  
+  /**
    * 根据 toolUseId 执行回滚
    * 用于工具卡片上的回滚按钮
    */
@@ -517,6 +629,7 @@ export function useFileChanges(
     hasChanges,
     changedFileCount,
     totalEditCount,
+    isRollingBackAll,
     
     // 回滚方法
     addFileEdit,
@@ -524,8 +637,10 @@ export function useFileChanges(
     rollbackFile,
     rollbackModification,
     rollbackByToolUseId,
+    rollbackAll,
     getModificationByToolUseId,
     isRollingBack,
+    isToolRollingBack,
     clear,
     
     // 接受方法

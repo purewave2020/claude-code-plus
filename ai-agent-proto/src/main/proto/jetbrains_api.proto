@@ -213,3 +213,32 @@ message JetBrainsRollbackFileResponse {
   bool success = 1;
   optional string error = 2;
 }
+
+// ========== 批量回滚（流式返回结果）==========
+
+// 单个回滚项
+message JetBrainsBatchRollbackItem {
+  string file_path = 1;              // 文件路径
+  int64 before_timestamp = 2;        // 时间戳（0 表示删除新建文件）
+  string tool_use_id = 3;            // 工具调用 ID（用于前端匹配）
+}
+
+// 批量回滚请求
+message JetBrainsBatchRollbackRequest {
+  repeated JetBrainsBatchRollbackItem items = 1;
+}
+
+// 回滚状态枚举
+enum RollbackStatus {
+  ROLLBACK_STARTED = 0;              // 开始回滚
+  ROLLBACK_SUCCESS = 1;              // 回滚成功
+  ROLLBACK_FAILED = 2;               // 回滚失败
+}
+
+// 批量回滚流式事件
+message JetBrainsBatchRollbackEvent {
+  string file_path = 1;              // 文件路径
+  string tool_use_id = 2;            // 工具调用 ID
+  RollbackStatus status = 3;         // 回滚状态
+  optional string error = 4;         // 错误信息（失败时）
+}

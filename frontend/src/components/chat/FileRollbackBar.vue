@@ -18,10 +18,13 @@
         </button>
         <button
           class="rollback-all-header-btn"
+          :class="{ loading: isRollingBackAll }"
+          :disabled="isRollingBackAll"
           :title="t('tools.rollbackAll')"
           @click="handleRollbackAll"
         >
-          ↩ {{ t('tools.rollbackAll') }}
+          <span v-if="isRollingBackAll" class="spinner" />
+          <span v-else>↩ {{ t('tools.rollbackAll') }}</span>
         </button>
       </div>
     </div>
@@ -67,7 +70,7 @@
             <button
               class="rollback-all-btn"
               :class="{ loading: isRollingBack(file.filePath) }"
-              :disabled="isRollingBack(file.filePath)"
+              :disabled="isRollingBack(file.filePath) || isRollingBackAll"
               :title="t('tools.rollbackAll')"
               @click="handleRollbackFile(file.filePath)"
             >
@@ -113,6 +116,7 @@
               <button
                 v-if="isIdeMode"
                 class="mod-action-btn rollback-btn"
+                :disabled="isRollingBackAll"
                 :title="t('tools.rollbackModification')"
                 @click="handleRollbackModification(file.filePath, mod.historyTs)"
               >
@@ -139,7 +143,7 @@
           v-if="isIdeMode"
           class="rollback-tag-btn"
           :class="{ loading: isRollingBack(file.filePath) }"
-          :disabled="isRollingBack(file.filePath)"
+          :disabled="isRollingBack(file.filePath) || isRollingBackAll"
           @click.stop="handleRollbackFile(file.filePath)"
         >
           <span v-if="isRollingBack(file.filePath)" class="spinner" />
@@ -276,21 +280,28 @@ function handleAcceptAll() {
   fileChangesInstance.value.acceptAll()
 }
 
-// 处理回滚所有改动
+// 是否正在批量回滚
+const isRollingBackAll = computed(() => fileChangesInstance.value?.isRollingBackAll.value ?? false)
+
+// 处理回滚所有改动（使用流式批量回滚 API）
 async function handleRollbackAll() {
   if (!fileChangesInstance.value) return
+  
+  // 如果正在回滚，忽略
+  if (isRollingBackAll.value) return
   
   // 确认对话框
   const confirmed = confirm(t('tools.rollbackAllConfirm'))
   if (!confirmed) return
   
-  // 依次回滚每个文件
-  for (const file of fileChanges.value) {
-    const result = await fileChangesInstance.value.rollbackFile(file.filePath)
-    if (!result.success) {
-      console.error('Rollback failed for', file.filePath, ':', result.error)
-      alert(t('tools.rollbackFailed') + ': ' + result.error)
-      break
+  // 调用批量回滚
+  const result = await fileChangesInstance.value.rollbackAll()
+  
+  if (!result.success) {
+    if (result.failedCount > 0) {
+      toastStore.error(t('tools.rollbackPartialFailed', { count: result.failedCount }))
+    } else {
+      toastStore.error(t('tools.rollbackFailed'))
     }
   }
 }
