@@ -284,6 +284,46 @@ export interface BatchRollbackEvent {
   error?: string
 }
 
+// ========== Terminal 后台执行 ==========
+
+/**
+ * 终端后台状态枚举
+ */
+export enum TerminalBackgroundStatus {
+  STARTED = 0,
+  SUCCESS = 1,
+  FAILED = 2
+}
+
+/**
+ * 终端后台项
+ */
+export interface TerminalBackgroundItem {
+  sessionId: string
+  toolUseId: string
+}
+
+/**
+ * 终端后台事件
+ */
+export interface TerminalBackgroundEvent {
+  sessionId: string
+  toolUseId: string
+  status: TerminalBackgroundStatus
+  error?: string
+}
+
+/**
+ * 可后台的终端任务
+ */
+export interface BackgroundableTerminal {
+  sessionId: string
+  toolUseId: string
+  command: string
+  startTime: number
+  elapsedMs: number
+}
+
 /**
  * 手动编码 BatchRollbackRequest (简单 Protobuf 编码)
  * message JetBrainsBatchRollbackRequest { repeated JetBrainsBatchRollbackItem items = 1; }
@@ -410,6 +450,190 @@ function decodeBatchRollbackEvent(data: Uint8Array): BatchRollbackEvent {
       }
       
       if (fieldNum === 3) result.status = value as RollbackStatus
+    }
+  }
+  
+  return result
+}
+
+// ========== Terminal 后台执行编解码 ==========
+
+/**
+ * 编码 TerminalBackgroundRequest
+ * message JetBrainsTerminalBackgroundRequest { repeated JetBrainsTerminalBackgroundItem items = 1; }
+ * message JetBrainsTerminalBackgroundItem { string session_id=1; string tool_use_id=2; }
+ */
+function encodeTerminalBackgroundRequest(items: TerminalBackgroundItem[]): Uint8Array {
+  const parts: Uint8Array[] = []
+  
+  for (const item of items) {
+    const itemParts: Uint8Array[] = []
+    
+    // field 1: session_id (string)
+    const sessionIdBytes = new TextEncoder().encode(item.sessionId)
+    itemParts.push(encodeField(1, 2, sessionIdBytes))
+    
+    // field 2: tool_use_id (string)
+    const toolUseIdBytes = new TextEncoder().encode(item.toolUseId)
+    itemParts.push(encodeField(2, 2, toolUseIdBytes))
+    
+    const itemBytes = concatUint8Arrays(itemParts)
+    parts.push(encodeField(1, 2, itemBytes))
+  }
+  
+  return concatUint8Arrays(parts)
+}
+
+/**
+ * 解码 TerminalBackgroundEvent
+ * message JetBrainsTerminalBackgroundEvent { string session_id=1; string tool_use_id=2; TerminalBackgroundStatus status=3; optional string error=4; }
+ */
+function decodeTerminalBackgroundEvent(data: Uint8Array): TerminalBackgroundEvent {
+  const result: TerminalBackgroundEvent = {
+    sessionId: '',
+    toolUseId: '',
+    status: TerminalBackgroundStatus.STARTED
+  }
+  
+  let offset = 0
+  while (offset < data.length) {
+    const tag = data[offset++]
+    const fieldNum = tag >> 3
+    const wireType = tag & 0x7
+    
+    if (wireType === 2) {
+      // length-delimited (string)
+      let len = 0
+      let shift = 0
+      while (offset < data.length) {
+        const b = data[offset++]
+        len |= (b & 0x7f) << shift
+        if (!(b & 0x80)) break
+        shift += 7
+      }
+      const strBytes = data.slice(offset, offset + len)
+      offset += len
+      const str = new TextDecoder().decode(strBytes)
+      
+      if (fieldNum === 1) result.sessionId = str
+      else if (fieldNum === 2) result.toolUseId = str
+      else if (fieldNum === 4) result.error = str
+    } else if (wireType === 0) {
+      // varint
+      let value = 0
+      let shift = 0
+      while (offset < data.length) {
+        const b = data[offset++]
+        value |= (b & 0x7f) << shift
+        if (!(b & 0x80)) break
+        shift += 7
+      }
+      
+      if (fieldNum === 3) result.status = value as TerminalBackgroundStatus
+    }
+  }
+  
+  return result
+}
+
+/**
+ * 解码 GetBackgroundableTerminalsResponse
+ * message JetBrainsGetBackgroundableTerminalsResponse { bool success=1; repeated JetBrainsBackgroundableTerminal terminals=2; optional string error=3; }
+ * message JetBrainsBackgroundableTerminal { string session_id=1; string tool_use_id=2; string command=3; int64 start_time=4; int64 elapsed_ms=5; }
+ */
+function decodeGetBackgroundableTerminalsResponse(data: Uint8Array): BackgroundableTerminal[] {
+  const terminals: BackgroundableTerminal[] = []
+  
+  let offset = 0
+  while (offset < data.length) {
+    const tag = data[offset++]
+    const fieldNum = tag >> 3
+    const wireType = tag & 0x7
+    
+    if (wireType === 2 && fieldNum === 2) {
+      // terminals (repeated message)
+      let len = 0
+      let shift = 0
+      while (offset < data.length) {
+        const b = data[offset++]
+        len |= (b & 0x7f) << shift
+        if (!(b & 0x80)) break
+        shift += 7
+      }
+      const terminalBytes = data.slice(offset, offset + len)
+      offset += len
+      
+      // 解码单个 terminal
+      const terminal = decodeBackgroundableTerminal(terminalBytes)
+      terminals.push(terminal)
+    } else if (wireType === 2) {
+      // skip other length-delimited fields
+      let len = 0
+      let shift = 0
+      while (offset < data.length) {
+        const b = data[offset++]
+        len |= (b & 0x7f) << shift
+        if (!(b & 0x80)) break
+        shift += 7
+      }
+      offset += len
+    } else if (wireType === 0) {
+      // skip varint
+      while (offset < data.length && (data[offset++] & 0x80)) {}
+    }
+  }
+  
+  return terminals
+}
+
+/**
+ * 解码单个 BackgroundableTerminal
+ */
+function decodeBackgroundableTerminal(data: Uint8Array): BackgroundableTerminal {
+  const result: BackgroundableTerminal = {
+    sessionId: '',
+    toolUseId: '',
+    command: '',
+    startTime: 0,
+    elapsedMs: 0
+  }
+  
+  let offset = 0
+  while (offset < data.length) {
+    const tag = data[offset++]
+    const fieldNum = tag >> 3
+    const wireType = tag & 0x7
+    
+    if (wireType === 2) {
+      // length-delimited (string)
+      let len = 0
+      let shift = 0
+      while (offset < data.length) {
+        const b = data[offset++]
+        len |= (b & 0x7f) << shift
+        if (!(b & 0x80)) break
+        shift += 7
+      }
+      const strBytes = data.slice(offset, offset + len)
+      offset += len
+      const str = new TextDecoder().decode(strBytes)
+      
+      if (fieldNum === 1) result.sessionId = str
+      else if (fieldNum === 2) result.toolUseId = str
+      else if (fieldNum === 3) result.command = str
+    } else if (wireType === 0) {
+      // varint
+      let value = 0
+      let shift = 0
+      while (offset < data.length) {
+        const b = data[offset++]
+        value |= (b & 0x7f) << shift
+        if (!(b & 0x80)) break
+        shift += 7
+      }
+      
+      if (fieldNum === 4) result.startTime = value
+      else if (fieldNum === 5) result.elapsedMs = value
     }
   }
   
@@ -1222,6 +1446,70 @@ class JetBrainsRSocketService {
         },
         onError: (error: Error) => {
           console.error('[JetBrainsRSocket] Batch rollback error:', error)
+          onError?.(error)
+        }
+      }
+    )
+  }
+
+  // ========== Terminal 后台执行 ==========
+
+  /**
+   * 获取可后台的终端任务
+   */
+  async getBackgroundableTerminals(): Promise<BackgroundableTerminal[]> {
+    if (!this.client) return []
+
+    try {
+      // 发送空请求（使用当前会话）
+      const response = await this.client.requestResponse('jetbrains.getBackgroundableTerminals', new Uint8Array())
+      return decodeGetBackgroundableTerminalsResponse(response)
+    } catch (error) {
+      console.error('[JetBrainsRSocket] Failed to get backgroundable terminals:', error)
+      return []
+    }
+  }
+
+  /**
+   * 批量后台终端任务（流式返回结果）
+   * 
+   * @param items 后台项列表
+   * @param onEvent 事件回调（每个任务的状态变化）
+   * @returns 取消函数
+   */
+  terminalBackground(
+    items: TerminalBackgroundItem[],
+    onEvent: (event: TerminalBackgroundEvent) => void,
+    onComplete?: () => void,
+    onError?: (error: Error) => void
+  ): () => void {
+    if (!this.client) {
+      onError?.(new Error('RSocket client not connected'))
+      return () => {}
+    }
+
+    console.log('[JetBrainsRSocket] Starting terminal background:', items.length, 'items')
+    const data = encodeTerminalBackgroundRequest(items)
+
+    return this.client.requestStream(
+      'jetbrains.terminalBackground',
+      data,
+      {
+        onNext: (responseData: Uint8Array) => {
+          try {
+            const event = decodeTerminalBackgroundEvent(responseData)
+            console.log('[JetBrainsRSocket] Terminal background event:', event.toolUseId, TerminalBackgroundStatus[event.status])
+            onEvent(event)
+          } catch (e) {
+            console.error('[JetBrainsRSocket] Failed to decode terminal background event:', e)
+          }
+        },
+        onComplete: () => {
+          console.log('[JetBrainsRSocket] Terminal background completed')
+          onComplete?.()
+        },
+        onError: (error: Error) => {
+          console.error('[JetBrainsRSocket] Terminal background error:', error)
           onError?.(error)
         }
       }

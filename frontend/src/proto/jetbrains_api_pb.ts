@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file jetbrains_api.proto.
  */
 export const file_jetbrains_api: GenFile = /*@__PURE__*/
-  fileDesc("ChNqZXRicmFpbnNfYXBpLnByb3RvEhRjb20uYXNha2lpLnJwYy5wcm90byI7ChVKZXRCcmFpbnNDYXBhYmlsaXRpZXMSEQoJc3VwcG9ydGVkGAEgASgIEg8KB3ZlcnNpb24YAiABKAkikAQKDUlkZVRoZW1lUHJvdG8SEgoKYmFja2dyb3VuZBgBIAEoCRISCgpmb3JlZ3JvdW5kGAIgASgJEhQKDGJvcmRlcl9jb2xvchgDIAEoCRIYChBwYW5lbF9iYWNrZ3JvdW5kGAQgASgJEh0KFXRleHRfZmllbGRfYmFja2dyb3VuZBgFIAEoCRIcChRzZWxlY3Rpb25fYmFja2dyb3VuZBgGIAEoCRIcChRzZWxlY3Rpb25fZm9yZWdyb3VuZBgHIAEoCRISCgpsaW5rX2NvbG9yGAggASgJEhMKC2Vycm9yX2NvbG9yGAkgASgJEhUKDXdhcm5pbmdfY29sb3IYCiABKAkSFQoNc3VjY2Vzc19jb2xvchgLIAEoCRIXCg9zZXBhcmF0b3JfY29sb3IYDCABKAkSGAoQaG92ZXJfYmFja2dyb3VuZBgNIAEoCRIUCgxhY2NlbnRfY29sb3IYDiABKAkSFwoPaW5mb19iYWNrZ3JvdW5kGA8gASgJEhcKD2NvZGVfYmFja2dyb3VuZBgQIAEoCRIcChRzZWNvbmRhcnlfZm9yZWdyb3VuZBgRIAEoCRITCgtmb250X2ZhbWlseRgSIAEoCRIRCglmb250X3NpemUYEyABKAUSGgoSZWRpdG9yX2ZvbnRfZmFtaWx5GBQgASgJEhgKEGVkaXRvcl9mb250X3NpemUYFSABKAUivQEKGEpldEJyYWluc09wZW5GaWxlUmVxdWVzdBIRCglmaWxlX3BhdGgYASABKAkSEQoEbGluZRgCIAEoBUgAiAEBEhMKBmNvbHVtbhgDIAEoBUgBiAEBEhkKDHN0YXJ0X29mZnNldBgEIAEoBUgCiAEBEhcKCmVuZF9vZmZzZXQYBSABKAVIA4gBAUIHCgVfbGluZUIJCgdfY29sdW1uQg8KDV9zdGFydF9vZmZzZXRCDQoLX2VuZF9vZmZzZXQidQoYSmV0QnJhaW5zU2hvd0RpZmZSZXF1ZXN0EhEKCWZpbGVfcGF0aBgBIAEoCRITCgtvbGRfY29udGVudBgCIAEoCRITCgtuZXdfY29udGVudBgDIAEoCRISCgV0aXRsZRgEIAEoCUgAiAEBQggKBl90aXRsZSJVChZKZXRCcmFpbnNFZGl0T3BlcmF0aW9uEhIKCm9sZF9zdHJpbmcYASABKAkSEgoKbmV3X3N0cmluZxgCIAEoCRITCgtyZXBsYWNlX2FsbBgDIAEoCCKlAQohSmV0QnJhaW5zU2hvd011bHRpRWRpdERpZmZSZXF1ZXN0EhEKCWZpbGVfcGF0aBgBIAEoCRI7CgVlZGl0cxgCIAMoCzIsLmNvbS5hc2FraWkucnBjLnByb3RvLkpldEJyYWluc0VkaXRPcGVyYXRpb24SHAoPY3VycmVudF9jb250ZW50GAMgASgJSACIAQFCEgoQX2N1cnJlbnRfY29udGVudCKPAQofSmV0QnJhaW5zU2hvd0VkaXRQcmV2aWV3UmVxdWVzdBIRCglmaWxlX3BhdGgYASABKAkSOwoFZWRpdHMYAiADKAsyLC5jb20uYXNha2lpLnJwYy5wcm90by5KZXRCcmFpbnNFZGl0T3BlcmF0aW9uEhIKBXRpdGxlGAMgASgJSACIAQFCCAoGX3RpdGxlIk0KHEpldEJyYWluc1Nob3dNYXJrZG93blJlcXVlc3QSDwoHY29udGVudBgBIAEoCRISCgV0aXRsZRgCIAEoCUgAiAEBQggKBl90aXRsZSLEAQogSmV0QnJhaW5zU2hvd0VkaXRGdWxsRGlmZlJlcXVlc3QSEQoJZmlsZV9wYXRoGAEgASgJEhIKCm9sZF9zdHJpbmcYAiABKAkSEgoKbmV3X3N0cmluZxgDIAEoCRITCgtyZXBsYWNlX2FsbBgEIAEoCBISCgV0aXRsZRgFIAEoCUgAiAEBEh0KEG9yaWdpbmFsX2NvbnRlbnQYBiABKAlIAYgBAUIICgZfdGl0bGVCEwoRX29yaWdpbmFsX2NvbnRlbnQioAEKF0pldEJyYWluc1Nlc3Npb25TdW1tYXJ5EgoKAmlkGAEgASgJEg0KBXRpdGxlGAIgASgJEhcKCnNlc3Npb25faWQYAyABKAlIAIgBARIVCg1pc19nZW5lcmF0aW5nGAQgASgIEhQKDGlzX2Nvbm5lY3RlZBgFIAEoCBIVCg1pc19jb25uZWN0aW5nGAYgASgIQg0KC19zZXNzaW9uX2lkIo4BChVKZXRCcmFpbnNTZXNzaW9uU3RhdGUSPwoIc2Vzc2lvbnMYASADKAsyLS5jb20uYXNha2lpLnJwYy5wcm90by5KZXRCcmFpbnNTZXNzaW9uU3VtbWFyeRIeChFhY3RpdmVfc2Vzc2lvbl9pZBgCIAEoCUgAiAEBQhQKEl9hY3RpdmVfc2Vzc2lvbl9pZCLGAQoXSmV0QnJhaW5zU2Vzc2lvbkNvbW1hbmQSPwoEdHlwZRgBIAEoDjIxLmNvbS5hc2FraWkucnBjLnByb3RvLkpldEJyYWluc1Nlc3Npb25Db21tYW5kVHlwZRIXCgpzZXNzaW9uX2lkGAIgASgJSACIAQESFQoIbmV3X25hbWUYAyABKAlIAYgBARITCgZsb2NhbGUYBCABKAlIAogBAUINCgtfc2Vzc2lvbl9pZEILCglfbmV3X25hbWVCCQoHX2xvY2FsZSJLChpKZXRCcmFpbnNPcGVyYXRpb25SZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEhIKBWVycm9yGAIgASgJSACIAQFCCAoGX2Vycm9yIhoKGEpldEJyYWluc0dldFRoZW1lUmVxdWVzdCJPChlKZXRCcmFpbnNHZXRUaGVtZVJlc3BvbnNlEjIKBXRoZW1lGAEgASgLMiMuY29tLmFzYWtpaS5ycGMucHJvdG8uSWRlVGhlbWVQcm90byIgCh5KZXRCcmFpbnNHZXRQcm9qZWN0UGF0aFJlcXVlc3QiNwofSmV0QnJhaW5zR2V0UHJvamVjdFBhdGhSZXNwb25zZRIUCgxwcm9qZWN0X3BhdGgYASABKAkiGwoZSmV0QnJhaW5zR2V0TG9jYWxlUmVxdWVzdCIsChpKZXRCcmFpbnNHZXRMb2NhbGVSZXNwb25zZRIOCgZsb2NhbGUYASABKAkiKwoZSmV0QnJhaW5zU2V0TG9jYWxlUmVxdWVzdBIOCgZsb2NhbGUYASABKAkiOQoiSmV0QnJhaW5zR2V0T3JpZ2luYWxDb250ZW50UmVxdWVzdBITCgt0b29sX3VzZV9pZBgBIAEoCSKFAQojSmV0QnJhaW5zR2V0T3JpZ2luYWxDb250ZW50UmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBINCgVmb3VuZBgCIAEoCBIUCgdjb250ZW50GAMgASgJSACIAQESEgoFZXJyb3IYBCABKAlIAYgBAUIKCghfY29udGVudEIICgZfZXJyb3IiVAolSmV0QnJhaW5zR2V0RmlsZUhpc3RvcnlDb250ZW50UmVxdWVzdBIRCglmaWxlX3BhdGgYASABKAkSGAoQYmVmb3JlX3RpbWVzdGFtcBgCIAEoAyKIAQomSmV0QnJhaW5zR2V0RmlsZUhpc3RvcnlDb250ZW50UmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBINCgVmb3VuZBgCIAEoCBIUCgdjb250ZW50GAMgASgJSACIAQESEgoFZXJyb3IYBCABKAlIAYgBAUIKCghfY29udGVudEIICgZfZXJyb3IiSwocSmV0QnJhaW5zUm9sbGJhY2tGaWxlUmVxdWVzdBIRCglmaWxlX3BhdGgYASABKAkSGAoQYmVmb3JlX3RpbWVzdGFtcBgCIAEoAyJOCh1KZXRCcmFpbnNSb2xsYmFja0ZpbGVSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEhIKBWVycm9yGAIgASgJSACIAQFCCAoGX2Vycm9yIl4KGkpldEJyYWluc0JhdGNoUm9sbGJhY2tJdGVtEhEKCWZpbGVfcGF0aBgBIAEoCRIYChBiZWZvcmVfdGltZXN0YW1wGAIgASgDEhMKC3Rvb2xfdXNlX2lkGAMgASgJImAKHUpldEJyYWluc0JhdGNoUm9sbGJhY2tSZXF1ZXN0Ej8KBWl0ZW1zGAEgAygLMjAuY29tLmFzYWtpaS5ycGMucHJvdG8uSmV0QnJhaW5zQmF0Y2hSb2xsYmFja0l0ZW0imQEKG0pldEJyYWluc0JhdGNoUm9sbGJhY2tFdmVudBIRCglmaWxlX3BhdGgYASABKAkSEwoLdG9vbF91c2VfaWQYAiABKAkSNAoGc3RhdHVzGAMgASgOMiQuY29tLmFzYWtpaS5ycGMucHJvdG8uUm9sbGJhY2tTdGF0dXMSEgoFZXJyb3IYBCABKAlIAIgBAUIICgZfZXJyb3IqqAIKG0pldEJyYWluc1Nlc3Npb25Db21tYW5kVHlwZRIfChtTRVNTSU9OX0NPTU1BTkRfVU5TUEVDSUZJRUQQABIaChZTRVNTSU9OX0NPTU1BTkRfU1dJVENIEAESGgoWU0VTU0lPTl9DT01NQU5EX0NSRUFURRACEhkKFVNFU1NJT05fQ09NTUFORF9DTE9TRRADEhoKFlNFU1NJT05fQ09NTUFORF9SRU5BTUUQBBIiCh5TRVNTSU9OX0NPTU1BTkRfVE9HR0xFX0hJU1RPUlkQBRIeChpTRVNTSU9OX0NPTU1BTkRfU0VUX0xPQ0FMRRAGEhoKFlNFU1NJT05fQ09NTUFORF9ERUxFVEUQBxIZChVTRVNTSU9OX0NPTU1BTkRfUkVTRVQQCCpRCg5Sb2xsYmFja1N0YXR1cxIUChBST0xMQkFDS19TVEFSVEVEEAASFAoQUk9MTEJBQ0tfU1VDQ0VTUxABEhMKD1JPTExCQUNLX0ZBSUxFRBACQisKFGNvbS5hc2FraWkucnBjLnByb3RvQhFKZXRCcmFpbnNBcGlQcm90b1ABYgZwcm90bzM");
+  fileDesc("ChNqZXRicmFpbnNfYXBpLnByb3RvEhRjb20uYXNha2lpLnJwYy5wcm90byI7ChVKZXRCcmFpbnNDYXBhYmlsaXRpZXMSEQoJc3VwcG9ydGVkGAEgASgIEg8KB3ZlcnNpb24YAiABKAkikAQKDUlkZVRoZW1lUHJvdG8SEgoKYmFja2dyb3VuZBgBIAEoCRISCgpmb3JlZ3JvdW5kGAIgASgJEhQKDGJvcmRlcl9jb2xvchgDIAEoCRIYChBwYW5lbF9iYWNrZ3JvdW5kGAQgASgJEh0KFXRleHRfZmllbGRfYmFja2dyb3VuZBgFIAEoCRIcChRzZWxlY3Rpb25fYmFja2dyb3VuZBgGIAEoCRIcChRzZWxlY3Rpb25fZm9yZWdyb3VuZBgHIAEoCRISCgpsaW5rX2NvbG9yGAggASgJEhMKC2Vycm9yX2NvbG9yGAkgASgJEhUKDXdhcm5pbmdfY29sb3IYCiABKAkSFQoNc3VjY2Vzc19jb2xvchgLIAEoCRIXCg9zZXBhcmF0b3JfY29sb3IYDCABKAkSGAoQaG92ZXJfYmFja2dyb3VuZBgNIAEoCRIUCgxhY2NlbnRfY29sb3IYDiABKAkSFwoPaW5mb19iYWNrZ3JvdW5kGA8gASgJEhcKD2NvZGVfYmFja2dyb3VuZBgQIAEoCRIcChRzZWNvbmRhcnlfZm9yZWdyb3VuZBgRIAEoCRITCgtmb250X2ZhbWlseRgSIAEoCRIRCglmb250X3NpemUYEyABKAUSGgoSZWRpdG9yX2ZvbnRfZmFtaWx5GBQgASgJEhgKEGVkaXRvcl9mb250X3NpemUYFSABKAUivQEKGEpldEJyYWluc09wZW5GaWxlUmVxdWVzdBIRCglmaWxlX3BhdGgYASABKAkSEQoEbGluZRgCIAEoBUgAiAEBEhMKBmNvbHVtbhgDIAEoBUgBiAEBEhkKDHN0YXJ0X29mZnNldBgEIAEoBUgCiAEBEhcKCmVuZF9vZmZzZXQYBSABKAVIA4gBAUIHCgVfbGluZUIJCgdfY29sdW1uQg8KDV9zdGFydF9vZmZzZXRCDQoLX2VuZF9vZmZzZXQidQoYSmV0QnJhaW5zU2hvd0RpZmZSZXF1ZXN0EhEKCWZpbGVfcGF0aBgBIAEoCRITCgtvbGRfY29udGVudBgCIAEoCRITCgtuZXdfY29udGVudBgDIAEoCRISCgV0aXRsZRgEIAEoCUgAiAEBQggKBl90aXRsZSJVChZKZXRCcmFpbnNFZGl0T3BlcmF0aW9uEhIKCm9sZF9zdHJpbmcYASABKAkSEgoKbmV3X3N0cmluZxgCIAEoCRITCgtyZXBsYWNlX2FsbBgDIAEoCCKlAQohSmV0QnJhaW5zU2hvd011bHRpRWRpdERpZmZSZXF1ZXN0EhEKCWZpbGVfcGF0aBgBIAEoCRI7CgVlZGl0cxgCIAMoCzIsLmNvbS5hc2FraWkucnBjLnByb3RvLkpldEJyYWluc0VkaXRPcGVyYXRpb24SHAoPY3VycmVudF9jb250ZW50GAMgASgJSACIAQFCEgoQX2N1cnJlbnRfY29udGVudCKPAQofSmV0QnJhaW5zU2hvd0VkaXRQcmV2aWV3UmVxdWVzdBIRCglmaWxlX3BhdGgYASABKAkSOwoFZWRpdHMYAiADKAsyLC5jb20uYXNha2lpLnJwYy5wcm90by5KZXRCcmFpbnNFZGl0T3BlcmF0aW9uEhIKBXRpdGxlGAMgASgJSACIAQFCCAoGX3RpdGxlIk0KHEpldEJyYWluc1Nob3dNYXJrZG93blJlcXVlc3QSDwoHY29udGVudBgBIAEoCRISCgV0aXRsZRgCIAEoCUgAiAEBQggKBl90aXRsZSLEAQogSmV0QnJhaW5zU2hvd0VkaXRGdWxsRGlmZlJlcXVlc3QSEQoJZmlsZV9wYXRoGAEgASgJEhIKCm9sZF9zdHJpbmcYAiABKAkSEgoKbmV3X3N0cmluZxgDIAEoCRITCgtyZXBsYWNlX2FsbBgEIAEoCBISCgV0aXRsZRgFIAEoCUgAiAEBEh0KEG9yaWdpbmFsX2NvbnRlbnQYBiABKAlIAYgBAUIICgZfdGl0bGVCEwoRX29yaWdpbmFsX2NvbnRlbnQioAEKF0pldEJyYWluc1Nlc3Npb25TdW1tYXJ5EgoKAmlkGAEgASgJEg0KBXRpdGxlGAIgASgJEhcKCnNlc3Npb25faWQYAyABKAlIAIgBARIVCg1pc19nZW5lcmF0aW5nGAQgASgIEhQKDGlzX2Nvbm5lY3RlZBgFIAEoCBIVCg1pc19jb25uZWN0aW5nGAYgASgIQg0KC19zZXNzaW9uX2lkIo4BChVKZXRCcmFpbnNTZXNzaW9uU3RhdGUSPwoIc2Vzc2lvbnMYASADKAsyLS5jb20uYXNha2lpLnJwYy5wcm90by5KZXRCcmFpbnNTZXNzaW9uU3VtbWFyeRIeChFhY3RpdmVfc2Vzc2lvbl9pZBgCIAEoCUgAiAEBQhQKEl9hY3RpdmVfc2Vzc2lvbl9pZCLGAQoXSmV0QnJhaW5zU2Vzc2lvbkNvbW1hbmQSPwoEdHlwZRgBIAEoDjIxLmNvbS5hc2FraWkucnBjLnByb3RvLkpldEJyYWluc1Nlc3Npb25Db21tYW5kVHlwZRIXCgpzZXNzaW9uX2lkGAIgASgJSACIAQESFQoIbmV3X25hbWUYAyABKAlIAYgBARITCgZsb2NhbGUYBCABKAlIAogBAUINCgtfc2Vzc2lvbl9pZEILCglfbmV3X25hbWVCCQoHX2xvY2FsZSJLChpKZXRCcmFpbnNPcGVyYXRpb25SZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEhIKBWVycm9yGAIgASgJSACIAQFCCAoGX2Vycm9yIhoKGEpldEJyYWluc0dldFRoZW1lUmVxdWVzdCJPChlKZXRCcmFpbnNHZXRUaGVtZVJlc3BvbnNlEjIKBXRoZW1lGAEgASgLMiMuY29tLmFzYWtpaS5ycGMucHJvdG8uSWRlVGhlbWVQcm90byIgCh5KZXRCcmFpbnNHZXRQcm9qZWN0UGF0aFJlcXVlc3QiNwofSmV0QnJhaW5zR2V0UHJvamVjdFBhdGhSZXNwb25zZRIUCgxwcm9qZWN0X3BhdGgYASABKAkiGwoZSmV0QnJhaW5zR2V0TG9jYWxlUmVxdWVzdCIsChpKZXRCcmFpbnNHZXRMb2NhbGVSZXNwb25zZRIOCgZsb2NhbGUYASABKAkiKwoZSmV0QnJhaW5zU2V0TG9jYWxlUmVxdWVzdBIOCgZsb2NhbGUYASABKAkiOQoiSmV0QnJhaW5zR2V0T3JpZ2luYWxDb250ZW50UmVxdWVzdBITCgt0b29sX3VzZV9pZBgBIAEoCSKFAQojSmV0QnJhaW5zR2V0T3JpZ2luYWxDb250ZW50UmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBINCgVmb3VuZBgCIAEoCBIUCgdjb250ZW50GAMgASgJSACIAQESEgoFZXJyb3IYBCABKAlIAYgBAUIKCghfY29udGVudEIICgZfZXJyb3IiVAolSmV0QnJhaW5zR2V0RmlsZUhpc3RvcnlDb250ZW50UmVxdWVzdBIRCglmaWxlX3BhdGgYASABKAkSGAoQYmVmb3JlX3RpbWVzdGFtcBgCIAEoAyKIAQomSmV0QnJhaW5zR2V0RmlsZUhpc3RvcnlDb250ZW50UmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBINCgVmb3VuZBgCIAEoCBIUCgdjb250ZW50GAMgASgJSACIAQESEgoFZXJyb3IYBCABKAlIAYgBAUIKCghfY29udGVudEIICgZfZXJyb3IiSwocSmV0QnJhaW5zUm9sbGJhY2tGaWxlUmVxdWVzdBIRCglmaWxlX3BhdGgYASABKAkSGAoQYmVmb3JlX3RpbWVzdGFtcBgCIAEoAyJOCh1KZXRCcmFpbnNSb2xsYmFja0ZpbGVSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEhIKBWVycm9yGAIgASgJSACIAQFCCAoGX2Vycm9yIl4KGkpldEJyYWluc0JhdGNoUm9sbGJhY2tJdGVtEhEKCWZpbGVfcGF0aBgBIAEoCRIYChBiZWZvcmVfdGltZXN0YW1wGAIgASgDEhMKC3Rvb2xfdXNlX2lkGAMgASgJImAKHUpldEJyYWluc0JhdGNoUm9sbGJhY2tSZXF1ZXN0Ej8KBWl0ZW1zGAEgAygLMjAuY29tLmFzYWtpaS5ycGMucHJvdG8uSmV0QnJhaW5zQmF0Y2hSb2xsYmFja0l0ZW0imQEKG0pldEJyYWluc0JhdGNoUm9sbGJhY2tFdmVudBIRCglmaWxlX3BhdGgYASABKAkSEwoLdG9vbF91c2VfaWQYAiABKAkSNAoGc3RhdHVzGAMgASgOMiQuY29tLmFzYWtpaS5ycGMucHJvdG8uUm9sbGJhY2tTdGF0dXMSEgoFZXJyb3IYBCABKAlIAIgBAUIICgZfZXJyb3IiSgofSmV0QnJhaW5zVGVybWluYWxCYWNrZ3JvdW5kSXRlbRISCgpzZXNzaW9uX2lkGAEgASgJEhMKC3Rvb2xfdXNlX2lkGAIgASgJImoKIkpldEJyYWluc1Rlcm1pbmFsQmFja2dyb3VuZFJlcXVlc3QSRAoFaXRlbXMYASADKAsyNS5jb20uYXNha2lpLnJwYy5wcm90by5KZXRCcmFpbnNUZXJtaW5hbEJhY2tncm91bmRJdGVtIqkBCiBKZXRCcmFpbnNUZXJtaW5hbEJhY2tncm91bmRFdmVudBISCgpzZXNzaW9uX2lkGAEgASgJEhMKC3Rvb2xfdXNlX2lkGAIgASgJEj4KBnN0YXR1cxgDIAEoDjIuLmNvbS5hc2FraWkucnBjLnByb3RvLlRlcm1pbmFsQmFja2dyb3VuZFN0YXR1cxISCgVlcnJvchgEIAEoCUgAiAEBQggKBl9lcnJvciJaCipKZXRCcmFpbnNHZXRCYWNrZ3JvdW5kYWJsZVRlcm1pbmFsc1JlcXVlc3QSGgoNYWlfc2Vzc2lvbl9pZBgBIAEoCUgAiAEBQhAKDl9haV9zZXNzaW9uX2lkIoMBCh9KZXRCcmFpbnNCYWNrZ3JvdW5kYWJsZVRlcm1pbmFsEhIKCnNlc3Npb25faWQYASABKAkSEwoLdG9vbF91c2VfaWQYAiABKAkSDwoHY29tbWFuZBgDIAEoCRISCgpzdGFydF90aW1lGAQgASgDEhIKCmVsYXBzZWRfbXMYBSABKAMipgEKK0pldEJyYWluc0dldEJhY2tncm91bmRhYmxlVGVybWluYWxzUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBJICgl0ZXJtaW5hbHMYAiADKAsyNS5jb20uYXNha2lpLnJwYy5wcm90by5KZXRCcmFpbnNCYWNrZ3JvdW5kYWJsZVRlcm1pbmFsEhIKBWVycm9yGAMgASgJSACIAQFCCAoGX2Vycm9yKqgCChtKZXRCcmFpbnNTZXNzaW9uQ29tbWFuZFR5cGUSHwobU0VTU0lPTl9DT01NQU5EX1VOU1BFQ0lGSUVEEAASGgoWU0VTU0lPTl9DT01NQU5EX1NXSVRDSBABEhoKFlNFU1NJT05fQ09NTUFORF9DUkVBVEUQAhIZChVTRVNTSU9OX0NPTU1BTkRfQ0xPU0UQAxIaChZTRVNTSU9OX0NPTU1BTkRfUkVOQU1FEAQSIgoeU0VTU0lPTl9DT01NQU5EX1RPR0dMRV9ISVNUT1JZEAUSHgoaU0VTU0lPTl9DT01NQU5EX1NFVF9MT0NBTEUQBhIaChZTRVNTSU9OX0NPTU1BTkRfREVMRVRFEAcSGQoVU0VTU0lPTl9DT01NQU5EX1JFU0VUEAgqUQoOUm9sbGJhY2tTdGF0dXMSFAoQUk9MTEJBQ0tfU1RBUlRFRBAAEhQKEFJPTExCQUNLX1NVQ0NFU1MQARITCg9ST0xMQkFDS19GQUlMRUQQAipkChhUZXJtaW5hbEJhY2tncm91bmRTdGF0dXMSFwoTVEVSTUlOQUxfQkdfU1RBUlRFRBAAEhcKE1RFUk1JTkFMX0JHX1NVQ0NFU1MQARIWChJURVJNSU5BTF9CR19GQUlMRUQQAkIrChRjb20uYXNha2lpLnJwYy5wcm90b0IRSmV0QnJhaW5zQXBpUHJvdG9QAWIGcHJvdG8z");
 
 /**
  * @generated from message com.asakii.rpc.proto.JetBrainsCapabilities
@@ -856,6 +856,192 @@ export const JetBrainsBatchRollbackEventSchema: GenMessage<JetBrainsBatchRollbac
   messageDesc(file_jetbrains_api, 28);
 
 /**
+ * 单个终端后台项
+ *
+ * @generated from message com.asakii.rpc.proto.JetBrainsTerminalBackgroundItem
+ */
+export type JetBrainsTerminalBackgroundItem = Message<"com.asakii.rpc.proto.JetBrainsTerminalBackgroundItem"> & {
+  /**
+   * 终端会话 ID
+   *
+   * @generated from field: string session_id = 1;
+   */
+  sessionId: string;
+
+  /**
+   * MCP 工具调用 ID
+   *
+   * @generated from field: string tool_use_id = 2;
+   */
+  toolUseId: string;
+};
+
+/**
+ * Describes the message com.asakii.rpc.proto.JetBrainsTerminalBackgroundItem.
+ * Use `create(JetBrainsTerminalBackgroundItemSchema)` to create a new message.
+ */
+export const JetBrainsTerminalBackgroundItemSchema: GenMessage<JetBrainsTerminalBackgroundItem> = /*@__PURE__*/
+  messageDesc(file_jetbrains_api, 29);
+
+/**
+ * 终端后台请求（单个或批量）
+ *
+ * @generated from message com.asakii.rpc.proto.JetBrainsTerminalBackgroundRequest
+ */
+export type JetBrainsTerminalBackgroundRequest = Message<"com.asakii.rpc.proto.JetBrainsTerminalBackgroundRequest"> & {
+  /**
+   * 要后台的终端任务
+   *
+   * @generated from field: repeated com.asakii.rpc.proto.JetBrainsTerminalBackgroundItem items = 1;
+   */
+  items: JetBrainsTerminalBackgroundItem[];
+};
+
+/**
+ * Describes the message com.asakii.rpc.proto.JetBrainsTerminalBackgroundRequest.
+ * Use `create(JetBrainsTerminalBackgroundRequestSchema)` to create a new message.
+ */
+export const JetBrainsTerminalBackgroundRequestSchema: GenMessage<JetBrainsTerminalBackgroundRequest> = /*@__PURE__*/
+  messageDesc(file_jetbrains_api, 30);
+
+/**
+ * 终端后台流式事件
+ *
+ * @generated from message com.asakii.rpc.proto.JetBrainsTerminalBackgroundEvent
+ */
+export type JetBrainsTerminalBackgroundEvent = Message<"com.asakii.rpc.proto.JetBrainsTerminalBackgroundEvent"> & {
+  /**
+   * 终端会话 ID
+   *
+   * @generated from field: string session_id = 1;
+   */
+  sessionId: string;
+
+  /**
+   * MCP 工具调用 ID
+   *
+   * @generated from field: string tool_use_id = 2;
+   */
+  toolUseId: string;
+
+  /**
+   * 后台化状态
+   *
+   * @generated from field: com.asakii.rpc.proto.TerminalBackgroundStatus status = 3;
+   */
+  status: TerminalBackgroundStatus;
+
+  /**
+   * 错误信息（失败时）
+   *
+   * @generated from field: optional string error = 4;
+   */
+  error?: string;
+};
+
+/**
+ * Describes the message com.asakii.rpc.proto.JetBrainsTerminalBackgroundEvent.
+ * Use `create(JetBrainsTerminalBackgroundEventSchema)` to create a new message.
+ */
+export const JetBrainsTerminalBackgroundEventSchema: GenMessage<JetBrainsTerminalBackgroundEvent> = /*@__PURE__*/
+  messageDesc(file_jetbrains_api, 31);
+
+/**
+ * @generated from message com.asakii.rpc.proto.JetBrainsGetBackgroundableTerminalsRequest
+ */
+export type JetBrainsGetBackgroundableTerminalsRequest = Message<"com.asakii.rpc.proto.JetBrainsGetBackgroundableTerminalsRequest"> & {
+  /**
+   * AI 会话 ID，为空则使用当前会话
+   *
+   * @generated from field: optional string ai_session_id = 1;
+   */
+  aiSessionId?: string;
+};
+
+/**
+ * Describes the message com.asakii.rpc.proto.JetBrainsGetBackgroundableTerminalsRequest.
+ * Use `create(JetBrainsGetBackgroundableTerminalsRequestSchema)` to create a new message.
+ */
+export const JetBrainsGetBackgroundableTerminalsRequestSchema: GenMessage<JetBrainsGetBackgroundableTerminalsRequest> = /*@__PURE__*/
+  messageDesc(file_jetbrains_api, 32);
+
+/**
+ * 可后台的终端任务信息
+ *
+ * @generated from message com.asakii.rpc.proto.JetBrainsBackgroundableTerminal
+ */
+export type JetBrainsBackgroundableTerminal = Message<"com.asakii.rpc.proto.JetBrainsBackgroundableTerminal"> & {
+  /**
+   * 终端会话 ID
+   *
+   * @generated from field: string session_id = 1;
+   */
+  sessionId: string;
+
+  /**
+   * MCP 工具调用 ID
+   *
+   * @generated from field: string tool_use_id = 2;
+   */
+  toolUseId: string;
+
+  /**
+   * 正在执行的命令
+   *
+   * @generated from field: string command = 3;
+   */
+  command: string;
+
+  /**
+   * 开始时间戳（毫秒）
+   *
+   * @generated from field: int64 start_time = 4;
+   */
+  startTime: bigint;
+
+  /**
+   * 已执行时长（毫秒）
+   *
+   * @generated from field: int64 elapsed_ms = 5;
+   */
+  elapsedMs: bigint;
+};
+
+/**
+ * Describes the message com.asakii.rpc.proto.JetBrainsBackgroundableTerminal.
+ * Use `create(JetBrainsBackgroundableTerminalSchema)` to create a new message.
+ */
+export const JetBrainsBackgroundableTerminalSchema: GenMessage<JetBrainsBackgroundableTerminal> = /*@__PURE__*/
+  messageDesc(file_jetbrains_api, 33);
+
+/**
+ * @generated from message com.asakii.rpc.proto.JetBrainsGetBackgroundableTerminalsResponse
+ */
+export type JetBrainsGetBackgroundableTerminalsResponse = Message<"com.asakii.rpc.proto.JetBrainsGetBackgroundableTerminalsResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: repeated com.asakii.rpc.proto.JetBrainsBackgroundableTerminal terminals = 2;
+   */
+  terminals: JetBrainsBackgroundableTerminal[];
+
+  /**
+   * @generated from field: optional string error = 3;
+   */
+  error?: string;
+};
+
+/**
+ * Describes the message com.asakii.rpc.proto.JetBrainsGetBackgroundableTerminalsResponse.
+ * Use `create(JetBrainsGetBackgroundableTerminalsResponseSchema)` to create a new message.
+ */
+export const JetBrainsGetBackgroundableTerminalsResponseSchema: GenMessage<JetBrainsGetBackgroundableTerminalsResponse> = /*@__PURE__*/
+  messageDesc(file_jetbrains_api, 34);
+
+/**
  * @generated from enum com.asakii.rpc.proto.JetBrainsSessionCommandType
  */
 export enum JetBrainsSessionCommandType {
@@ -960,4 +1146,38 @@ export enum RollbackStatus {
  */
 export const RollbackStatusSchema: GenEnum<RollbackStatus> = /*@__PURE__*/
   enumDesc(file_jetbrains_api, 1);
+
+/**
+ * 终端后台状态枚举
+ *
+ * @generated from enum com.asakii.rpc.proto.TerminalBackgroundStatus
+ */
+export enum TerminalBackgroundStatus {
+  /**
+   * 开始后台化
+   *
+   * @generated from enum value: TERMINAL_BG_STARTED = 0;
+   */
+  TERMINAL_BG_STARTED = 0,
+
+  /**
+   * 后台化成功
+   *
+   * @generated from enum value: TERMINAL_BG_SUCCESS = 1;
+   */
+  TERMINAL_BG_SUCCESS = 1,
+
+  /**
+   * 后台化失败
+   *
+   * @generated from enum value: TERMINAL_BG_FAILED = 2;
+   */
+  TERMINAL_BG_FAILED = 2,
+}
+
+/**
+ * Describes the enum com.asakii.rpc.proto.TerminalBackgroundStatus.
+ */
+export const TerminalBackgroundStatusSchema: GenEnum<TerminalBackgroundStatus> = /*@__PURE__*/
+  enumDesc(file_jetbrains_api, 2);
 

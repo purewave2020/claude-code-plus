@@ -1,7 +1,13 @@
 /**
- * agent_run_to_background 补丁 v6
+ * agent_run_to_background 补丁 v7
  *
- * 添加 agent_run_to_background 控制命令，允许 SDK 将运行中的 Agent（子代理）移到后台。
+ * 添加 agent_run_to_background 和 agents_run_all_to_background 控制命令，
+ * 允许 SDK 将运行中的 Agent（子代理）移到后台。
+ *
+ * v7 变更（适配 CLI 2.1.3，支持批量后台）：
+ * - 新增 agents_run_all_to_background 命令：批量将所有运行中的 agents 移到后台
+ * - 保留 agent_run_to_background 命令：单个 agent 后台化
+ * - 适配 CLI 2.1.3 的变量名变化（fG1 替代 v71）
  *
  * v6 变更（适配 CLI 2.0.77）：
  * - CLI 2.0.77 已内置 background resolver Map 管理机制
@@ -12,8 +18,17 @@
  * 实现原理：
  * - Step 1: 找到内置的 background resolvers Map 变量
  *   - 方法：查找函数参数解构中有 agentId 的函数，其中包含 Promise 和 Map.set 调用
- *   - CLI 2.0.77 模式: function L22({agentId:A, ...}) { ... v71.set(A, I) ... }
- * - Step 2: 在控制请求处理中，添加 agent_run_to_background 命令处理
+ *   - CLI 2.1.3 模式: function M42({agentId:A, ...}) { ... fG1.set(A, I) ... }
+ * - Step 2: 在控制请求处理中，添加控制命令处理
+ *
+ * 支持的控制命令：
+ * 1. agent_run_to_background: { target_id?: string }
+ *    - 有 target_id: 将指定 agent 移到后台
+ *    - 无 target_id: 将第一个运行中的 agent 移到后台
+ *
+ * 2. agents_run_all_to_background: {}
+ *    - 将所有运行中的 agents 批量移到后台
+ *    - 返回被后台化的 agent 数量
  */
 
 module.exports = {
@@ -34,10 +49,10 @@ module.exports = {
     // ========================================
     // Step 1: 找到内置的 background resolvers Map 变量
     // ========================================
-    // CLI 2.0.77 模式:
-    // function L22({agentId:A, ...}) {
+    // CLI 2.1.3 模式:
+    // function M42({agentId:A, ...}) {
     //   let I, W = new Promise((K) => { I = K });
-    //   return v71.set(A, I), xL(X, Z), {taskId: A, backgroundSignal: W}
+    //   return fG1.set(A, I), rL(X, Z), {taskId: A, backgroundSignal: W}
     // }
     //
     // 特征：
@@ -127,10 +142,10 @@ module.exports = {
     }
 
     // ========================================
-    // Step 2: 添加 agent_run_to_background 控制命令处理
+    // Step 2: 添加控制命令处理
     // ========================================
     // 查找 if (*.request.subtype === "interrupt") 模式
-    // 在它前面添加 agent_run_to_background 处理
+    // 在它前面添加 agent_run_to_background 和 agents_run_all_to_background 处理
 
     traverse(ast, {
       IfStatement(path) {
@@ -168,8 +183,59 @@ module.exports = {
           }
         }
 
-        // 创建新的 if 条件: *.request.subtype === "agent_run_to_background"
-        const newCondition = t.binaryExpression(
+        // ========================================
+        // 处理代码 1: agents_run_all_to_background (批量后台)
+        // ========================================
+        const allToBackgroundCondition = t.binaryExpression(
+          '===',
+          t.memberExpression(
+            t.memberExpression(
+              t.cloneNode(requestVar),
+              t.identifier('request')
+            ),
+            t.identifier('subtype')
+          ),
+          t.stringLiteral('agents_run_all_to_background')
+        );
+
+        const allToBackgroundCode = `
+          var __resolvers = ${mapVarName};
+          var __count = 0;
+          var __backgroundedIds = [];
+
+          if (__resolvers && __resolvers.size > 0) {
+            // 批量调用所有 resolver
+            __resolvers.forEach(function(__resolver, __agentId) {
+              try {
+                __resolver();
+                __backgroundedIds.push(__agentId);
+                __count++;
+              } catch (e) {
+                console.error("Background resolver error for " + __agentId + ":", e);
+              }
+            });
+            // 清空 Map
+            __resolvers.clear();
+          }
+
+          // 响应包含后台化的数量和 ID 列表
+          ${responderName}({
+            ...${requestVar.name},
+            response: {
+              subtype: "success",
+              request_id: ${requestVar.name}.request_id,
+              response: {
+                count: __count,
+                backgrounded_ids: __backgroundedIds
+              }
+            }
+          });
+        `;
+
+        // ========================================
+        // 处理代码 2: agent_run_to_background (单个后台)
+        // ========================================
+        const singleToBackgroundCondition = t.binaryExpression(
           '===',
           t.memberExpression(
             t.memberExpression(
@@ -181,12 +247,12 @@ module.exports = {
           t.stringLiteral('agent_run_to_background')
         );
 
-        // 生成处理代码 - 使用内置 Map
-        const handlerCode = `
+        const singleToBackgroundCode = `
           ${responderName}(${requestVar.name});
           var __targetId = ${requestVar.name}.request.target_id;
           var __resolvers = ${mapVarName};
           var __resolver = null;
+          var __backgroundedId = null;
 
           if (__targetId && __resolvers) {
             // 有 target_id: 从 Map 获取指定 resolver
@@ -194,6 +260,7 @@ module.exports = {
             if (__resolver) {
               __resolver();
               __resolvers.delete(__targetId);
+              __backgroundedId = __targetId;
             }
           } else if (__resolvers && __resolvers.size > 0) {
             // 无 target_id 但 Map 非空: 取第一个 resolver（支持多代理逐个后台）
@@ -202,27 +269,47 @@ module.exports = {
             if (__resolver) {
               __resolver();
               __resolvers.delete(__firstKey);
+              __backgroundedId = __firstKey;
             }
           }
         `;
 
         // 解析代码字符串为 AST
-        const handlerAst = require('@babel/parser').parse(handlerCode, {
+        const parser = require('@babel/parser');
+        
+        const allToBackgroundAst = parser.parse(allToBackgroundCode, {
           sourceType: 'script',
           allowReturnOutsideFunction: true
         });
-        const handlerBlock = t.blockStatement(handlerAst.program.body);
+        const allToBackgroundBlock = t.blockStatement(allToBackgroundAst.program.body);
 
-        // 创建新的 if-else
-        const newIfStatement = t.ifStatement(
-          newCondition,
-          handlerBlock,
-          path.node
+        const singleToBackgroundAst = parser.parse(singleToBackgroundCode, {
+          sourceType: 'script',
+          allowReturnOutsideFunction: true
+        });
+        const singleToBackgroundBlock = t.blockStatement(singleToBackgroundAst.program.body);
+
+        // 创建嵌套的 if-else 链:
+        // if (subtype === "agents_run_all_to_background") { ... }
+        // else if (subtype === "agent_run_to_background") { ... }
+        // else if (subtype === "interrupt") { ... } (原有代码)
+
+        const singleToBackgroundIf = t.ifStatement(
+          singleToBackgroundCondition,
+          singleToBackgroundBlock,
+          path.node  // 原有的 interrupt 处理
         );
 
-        path.replaceWith(newIfStatement);
+        const allToBackgroundIf = t.ifStatement(
+          allToBackgroundCondition,
+          allToBackgroundBlock,
+          singleToBackgroundIf
+        );
+
+        path.replaceWith(allToBackgroundIf);
         step2Done = true;
         details.push(`添加了 agent_run_to_background 控制命令处理 (使用内置 Map "${mapVarName}")`);
+        details.push(`添加了 agents_run_all_to_background 批量后台控制命令`);
         path.stop();
       }
     });

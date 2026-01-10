@@ -13,6 +13,7 @@
 
 import { resolveServerHttpUrl } from '@/utils/serverUrl'
 import { jetbrainsRSocket } from './jetbrainsRSocket'
+import { setLocale, normalizeLocale } from '@/i18n'
 
 // ========== 类型定义 ==========
 
@@ -151,6 +152,7 @@ class JetBrainsBridgeService {
    * 初始化桥接服务
    * 1. 检测环境和后端能力（HTTP）
    * 2. 建立 RSocket 连接
+   * 3. 同步 IDEA 语言设置到前端
    */
   async init(): Promise<boolean> {
     // 先检测是否应该启用
@@ -163,8 +165,27 @@ class JetBrainsBridgeService {
     this.enabled = await jetbrainsRSocket.connect()
     if (this.enabled) {
       console.log('[JetBrainsBridge] Initialized with RSocket')
+      
+      // 同步 IDEA 语言设置到前端
+      await this.syncLocaleFromIde()
     }
     return this.enabled
+  }
+  
+  /**
+   * 从 IDEA 同步语言设置
+   */
+  private async syncLocaleFromIde(): Promise<void> {
+    try {
+      const ideLocale = await jetbrainsRSocket.getLocale()
+      if (ideLocale) {
+        const normalizedLocale = normalizeLocale(ideLocale)
+        setLocale(normalizedLocale)
+        console.log(`[JetBrainsBridge] Synced locale from IDE: ${ideLocale} -> ${normalizedLocale}`)
+      }
+    } catch (error) {
+      console.warn('[JetBrainsBridge] Failed to sync locale from IDE:', error)
+    }
   }
 
   /**

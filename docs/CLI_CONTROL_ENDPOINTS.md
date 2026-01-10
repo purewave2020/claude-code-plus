@@ -1,6 +1,6 @@
 # Claude CLI Control Endpoints Analysis
 
-This document analyzes all control request endpoints supported by Claude CLI (v2.0.77) and their implementation status in our SDK.
+This document analyzes all control request endpoints supported by Claude CLI (v2.1.3) and their implementation status in our SDK.
 
 ## Overview
 
@@ -47,6 +47,7 @@ Response format:
 | `mcp_set_servers` | Built-in | Implemented | ControlProtocol.setMcpServers() |
 | `rewind_files` | Built-in | Not Implemented | File checkpoint/rewind feature |
 | `agent_run_to_background` | Patched | Implemented | ControlProtocol.agentRunToBackground() |
+| `agents_run_all_to_background` | Patched | Implemented | ControlProtocol.agentsRunAllToBackground() |
 | `get_chrome_status` | Patched | Implemented | ControlProtocol.getChromeStatus() |
 | `mcp_reconnect` | Patched | Implemented | ControlProtocol.reconnectMcp() |
 | `mcp_tools` | Patched | Implemented | ControlProtocol.getMcpTools() |
@@ -335,6 +336,39 @@ Moves a Task tool (subagent) to background execution.
 {
   "subtype": "success"
 }
+```
+
+**Patch File:** `cli-patches/patches/001-run-in-background.js`
+
+---
+
+### 10.5. agents_run_all_to_background (Patch 001, v7)
+
+Backgrounds ALL running Task tools (subagents) at once. This is equivalent to the unified Ctrl+B feature in CLI 2.1.0+.
+
+**Request:**
+```json
+{
+  "subtype": "agents_run_all_to_background"
+}
+```
+
+**Response:**
+```json
+{
+  "subtype": "success",
+  "response": {
+    "count": 3,
+    "backgrounded_ids": ["agent-1", "agent-2", "agent-3"]
+  }
+}
+```
+
+**SDK Usage:**
+```kotlin
+val result = client.runAllInBackground()
+println("Backgrounded ${result.count} agents")
+println("IDs: ${result.backgroundedIds}")
 ```
 
 **Patch File:** `cli-patches/patches/001-run-in-background.js`
@@ -801,9 +835,13 @@ This ensures:
 
 ## Version History
 
-- **v2.0.77** - Current analyzed version (updated 2026-01-07)
+- **v2.1.3** - Current analyzed version (updated 2026-01-11)
+  - All 6 patches successfully applied
+  - Uses CLI's built-in Map (`fG1`) for background resolvers
+  - **New**: `agents_run_all_to_background` - batch background all running agents (Patch 001 v7)
+- **v2.0.77** - Previous version (2026-01-07)
   - All 6 patches successfully applied
   - 001-run-in-background v6: Uses CLI's built-in Map (`v71`) for background resolvers
-- **v2.0.73** - Previous version
+- **v2.0.73** - Legacy version
   - 001-run-in-background v5: Used custom `__sdkBackgroundResolvers` Map
 - Patches: 001-run-in-background, 002-chrome-status, 003-parent-uuid, 004-mcp-reconnect, 005-mcp-tools, 006-mcp-disable-enable

@@ -1,6 +1,7 @@
 package com.asakii.claude.agent.sdk
 
 import com.asakii.claude.agent.sdk.exceptions.ClientNotConnectedException
+import com.asakii.claude.agent.sdk.protocol.AgentsBackgroundResult
 import com.asakii.claude.agent.sdk.protocol.ControlProtocol
 import com.asakii.claude.agent.sdk.transport.SubprocessTransport
 import com.asakii.claude.agent.sdk.transport.Transport
@@ -367,6 +368,33 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
             controlProtocol!!.agentRunToBackground(targetId)
 
             logger.info { "✅ 任务已移到后台" }
+        }
+    }
+
+    /**
+     * Move ALL running tasks to background at once.
+     *
+     * This is equivalent to the unified Ctrl+B feature in CLI 2.1.0+.
+     * All currently running Task tools (subagents) will be backgrounded simultaneously.
+     *
+     * Example:
+     * ```kotlin
+     * // Background all running agents
+     * val result = client.runAllInBackground()
+     * println("Backgrounded ${result.count} agents: ${result.backgroundedIds}")
+     * ```
+     *
+     * @return AgentsBackgroundResult containing count and list of backgrounded agent IDs
+     */
+    suspend fun runAllInBackground(): AgentsBackgroundResult {
+        return runCommand {
+            ensureConnected()
+            logger.info { "⏸️  将所有运行中的任务移到后台..." }
+
+            val result = controlProtocol!!.agentsRunAllToBackground()
+
+            logger.info { "✅ ${result.count} 个任务已移到后台" }
+            result
         }
     }
 

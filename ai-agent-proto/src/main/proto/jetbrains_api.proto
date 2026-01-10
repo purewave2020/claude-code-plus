@@ -242,3 +242,52 @@ message JetBrainsBatchRollbackEvent {
   RollbackStatus status = 3;         // 回滚状态
   optional string error = 4;         // 错误信息（失败时）
 }
+
+// ========== Terminal 后台执行 ==========
+
+// 单个终端后台项
+message JetBrainsTerminalBackgroundItem {
+  string session_id = 1;             // 终端会话 ID
+  string tool_use_id = 2;            // MCP 工具调用 ID
+}
+
+// 终端后台请求（单个或批量）
+message JetBrainsTerminalBackgroundRequest {
+  repeated JetBrainsTerminalBackgroundItem items = 1;  // 要后台的终端任务
+}
+
+// 终端后台状态枚举
+enum TerminalBackgroundStatus {
+  TERMINAL_BG_STARTED = 0;           // 开始后台化
+  TERMINAL_BG_SUCCESS = 1;           // 后台化成功
+  TERMINAL_BG_FAILED = 2;            // 后台化失败
+}
+
+// 终端后台流式事件
+message JetBrainsTerminalBackgroundEvent {
+  string session_id = 1;             // 终端会话 ID
+  string tool_use_id = 2;            // MCP 工具调用 ID
+  TerminalBackgroundStatus status = 3;  // 后台化状态
+  optional string error = 4;         // 错误信息（失败时）
+}
+
+// ========== 获取可后台的终端任务 ==========
+
+message JetBrainsGetBackgroundableTerminalsRequest {
+  optional string ai_session_id = 1; // AI 会话 ID，为空则使用当前会话
+}
+
+// 可后台的终端任务信息
+message JetBrainsBackgroundableTerminal {
+  string session_id = 1;             // 终端会话 ID
+  string tool_use_id = 2;            // MCP 工具调用 ID
+  string command = 3;                // 正在执行的命令
+  int64 start_time = 4;              // 开始时间戳（毫秒）
+  int64 elapsed_ms = 5;              // 已执行时长（毫秒）
+}
+
+message JetBrainsGetBackgroundableTerminalsResponse {
+  bool success = 1;
+  repeated JetBrainsBackgroundableTerminal terminals = 2;
+  optional string error = 3;
+}

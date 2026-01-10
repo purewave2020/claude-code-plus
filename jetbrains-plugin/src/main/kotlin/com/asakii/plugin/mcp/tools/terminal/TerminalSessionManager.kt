@@ -197,6 +197,9 @@ class TerminalSessionManager(private val project: Project) {
     // AI 会话 -> 溢出终端列表（当默认终端忙时创建的额外终端）
     private val aiSessionOverflowTerminals = ConcurrentHashMap<String, MutableList<String>>()
 
+    // 正在执行的后台任务追踪 (toolUseId -> TerminalBackgroundTask)
+    private val runningTasks = ConcurrentHashMap<String, TerminalBackgroundTask>()
+
     // 当前 AI 会话 ID
     @Volatile
     var currentAiSessionId: String? = null
@@ -893,12 +896,87 @@ class TerminalSessionManager(private val project: Project) {
         return defaultShell
     }
 
+    // ==================== 后台任务追踪 ====================
+
+    /**
+     * 记录任务开始执行
+     * 在 MCP 工具调用开始时调用
+     */
+    fun recordTaskStart(sessionId: String, toolUseId: String, command: String) {
+        val task = TerminalBackgroundTask(
+            sessionId = sessionId,
+            toolUseId = toolUseId,
+            command = command,
+            startTime = System.currentTimeMillis()
+        )
+        runningTasks[toolUseId] = task
+        logger.info { "📝 Recorded task start: toolUseId=$toolUseId, sessionId=$sessionId, command=${command.take(50)}..." }
+    }
+
+    /**
+     * 标记任务完成（移除追踪）
+     */
+    fun recordTaskComplete(toolUseId: String) {
+        runningTasks.remove(toolUseId)?.let { task ->
+            logger.info { "✅ Task completed: toolUseId=$toolUseId, elapsed=${task.getElapsedMs()}ms" }
+        }
+    }
+
+    /**
+     * 将任务标记为后台执行
+     * @return true 表示成功，false 表示任务不存在
+     */
+    fun markTaskAsBackground(toolUseId: String): Boolean {
+        val task = runningTasks[toolUseId] ?: return false
+        if (task.isBackground) {
+            logger.info { "⚠️ Task already in background: toolUseId=$toolUseId" }
+            return true
+        }
+        task.isBackground = true
+        task.backgroundTime = System.currentTimeMillis()
+        logger.info { "⏸️ Task moved to background: toolUseId=$toolUseId, sessionId=${task.sessionId}" }
+        return true
+    }
+
+    /**
+     * 检查任务是否在后台运行
+     */
+    fun isTaskInBackground(toolUseId: String): Boolean {
+        return runningTasks[toolUseId]?.isBackground == true
+    }
+
+    /**
+     * 获取可后台化的任务列表
+     * 返回运行超过指定时长且未后台化的任务
+     */
+    fun getBackgroundableTasks(thresholdMs: Long = 5000): List<TerminalBackgroundTask> {
+        val now = System.currentTimeMillis()
+        return runningTasks.values.filter { task ->
+            !task.isBackground && (now - task.startTime) >= thresholdMs
+        }
+    }
+
+    /**
+     * 获取指定会话的运行中任务
+     */
+    fun getRunningTaskBySession(sessionId: String): TerminalBackgroundTask? {
+        return runningTasks.values.find { it.sessionId == sessionId && !it.isBackground }
+    }
+
+    /**
+     * 获取指定 toolUseId 的任务
+     */
+    fun getTask(toolUseId: String): TerminalBackgroundTask? {
+        return runningTasks[toolUseId]
+    }
+
     /**
      * 清理所有会话
      */
     fun dispose() {
         sessions.keys.toList().forEach { killSession(it) }
         sessions.clear()
+        runningTasks.clear()
     }
 }
 
@@ -954,3 +1032,21 @@ data class ShellTypeInfo(
     val command: String?,
     val isDefault: Boolean
 )
+
+/**
+ * 终端后台任务信息
+ * 用于追踪正在执行的 MCP 工具调用
+ */
+data class TerminalBackgroundTask(
+    val sessionId: String,           // 终端会话 ID
+    val toolUseId: String,           // MCP 工具调用 ID
+    val command: String,             // 执行的命令
+    val startTime: Long,             // 开始时间戳（毫秒）
+    var isBackground: Boolean = false,  // 是否已移到后台
+    var backgroundTime: Long? = null    // 移到后台的时间戳
+) {
+    /**
+     * 获取已执行时长（毫秒）
+     */
+    fun getElapsedMs(): Long = System.currentTimeMillis() - startTime
+}

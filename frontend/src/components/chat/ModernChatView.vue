@@ -44,6 +44,9 @@
       <!-- 文件改动回滚条（输入框上方） -->
       <FileRollbackBar />
 
+      <!-- 终端后台运行条（输入框上方） -->
+      <TerminalBackgroundBar />
+
       <!-- 输入区域 -->
       <ChatInput
         ref="chatInputRef"
@@ -179,6 +182,7 @@ import SessionListOverlay from './SessionListOverlay.vue'
 import PendingMessageQueue from './PendingMessageQueue.vue'
 import CompactingCard from './CompactingCard.vue'
 import FileRollbackBar from './FileRollbackBar.vue'
+import TerminalBackgroundBar from './TerminalBackgroundBar.vue'
 import ToolPermissionInteractive from '@/components/tools/ToolPermissionInteractive.vue'
 import AskUserQuestionInteractive from '@/components/tools/AskUserQuestionInteractive.vue'
 import { calculateToolStats } from '@/utils/toolStatistics'

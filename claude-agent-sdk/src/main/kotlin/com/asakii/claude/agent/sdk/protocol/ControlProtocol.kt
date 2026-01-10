@@ -675,6 +675,40 @@ class ControlProtocol(
     }
 
     /**
+     * Send agents_run_all_to_background request to CLI.
+     * This will background ALL currently running Task tools (subagents) at once.
+     *
+     * This is equivalent to the unified Ctrl+B feature in CLI 2.1.0+, which
+     * moves all foreground tasks to background simultaneously.
+     *
+     * @return AgentsBackgroundResult containing count and list of backgrounded agent IDs
+     */
+    suspend fun agentsRunAllToBackground(): AgentsBackgroundResult {
+        val request = buildJsonObject {
+            put("subtype", "agents_run_all_to_background")
+        }
+        logger.info { "📤 [ControlProtocol] 发送 agents_run_all_to_background 请求 (批量后台)" }
+
+        val response = sendControlRequestInternal(request)
+        logger.info { "📥 [ControlProtocol] 收到 agents_run_all_to_background 响应: subtype=${response.subtype}" }
+
+        if (response.subtype == "error") {
+            throw ControlProtocolException("Agents run all to background failed: ${response.error}")
+        }
+
+        // 解析响应
+        val responseData = response.response
+        val count = responseData?.get("count")?.jsonPrimitive?.intOrNull ?: 0
+        val backgroundedIds = responseData?.get("backgrounded_ids")?.jsonArray
+            ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+            ?: emptyList()
+
+        logger.info { "✅ [ControlProtocol] 批量后台完成: $count 个 agents 已后台化 (IDs: $backgroundedIds)" }
+
+        return AgentsBackgroundResult(count, backgroundedIds)
+    }
+
+    /**
      * Set max thinking tokens for the current session.
      * This allows dynamic control of thinking mode without reconnecting.
      *
@@ -1180,6 +1214,17 @@ class ControlProtocol(
     }
 
 }
+
+/**
+ * Result of agents_run_all_to_background operation.
+ *
+ * @property count Number of agents that were backgrounded
+ * @property backgroundedIds List of agent IDs that were backgrounded
+ */
+data class AgentsBackgroundResult(
+    val count: Int,
+    val backgroundedIds: List<String>
+)
 
 
 

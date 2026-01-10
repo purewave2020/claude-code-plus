@@ -43,6 +43,14 @@ import com.asakii.rpc.proto.JetBrainsSessionCommand as ProtoSessionCommand
 import com.asakii.rpc.proto.JetBrainsBatchRollbackRequest as ProtoBatchRollbackRequest
 import com.asakii.rpc.proto.JetBrainsBatchRollbackEvent
 import com.asakii.rpc.proto.RollbackStatus
+import com.asakii.rpc.proto.JetBrainsTerminalBackgroundRequest as ProtoTerminalBackgroundRequest
+import com.asakii.rpc.proto.JetBrainsTerminalBackgroundEvent
+import com.asakii.rpc.proto.TerminalBackgroundStatus
+import com.asakii.rpc.proto.JetBrainsGetBackgroundableTerminalsRequest as ProtoGetBackgroundableTerminalsRequest
+import com.asakii.rpc.proto.JetBrainsGetBackgroundableTerminalsResponse
+import com.asakii.rpc.proto.JetBrainsBackgroundableTerminal
+import com.asakii.server.mcp.TerminalMcpServerProvider
+import com.asakii.plugin.mcp.TerminalMcpServerImpl
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -71,7 +79,8 @@ import kotlinx.coroutines.flow.flow
  * - jetbrains.onActiveFileChanged: 活跃文件变化
  */
 class JetBrainsRSocketHandler(
-    private val jetbrainsApi: JetBrainsApi
+    private val jetbrainsApi: JetBrainsApi,
+    private val terminalMcpServerProvider: TerminalMcpServerProvider? = null
 ) : JetBrainsRSocketHandlerProvider {
     private val logger = getLogger("JetBrainsRSocketHandler")
 
@@ -110,6 +119,7 @@ class JetBrainsRSocketHandler(
                     "jetbrains.getOriginalContent" -> handleGetOriginalContent(dataBytes)
                     "jetbrains.getFileHistoryContent" -> handleGetFileHistoryContent(dataBytes)
                     "jetbrains.rollbackFile" -> handleRollbackFile(dataBytes)
+                    "jetbrains.getBackgroundableTerminals" -> handleGetBackgroundableTerminals(dataBytes)
                     else -> {
                         logger.warn { "⚠️ [JetBrains RSocket] Unknown route: $route" }
                         buildErrorResponse("Unknown route: $route")
@@ -125,6 +135,7 @@ class JetBrainsRSocketHandler(
 
                 when (route) {
                     "jetbrains.batchRollback" -> handleBatchRollback(dataBytes)
+                    "jetbrains.terminalBackground" -> handleTerminalBackground(dataBytes)
                     else -> {
                         logger.warn { "⚠️ [JetBrains RSocket] Unknown stream route: $route" }
                         flow { throw IllegalArgumentException("Unknown stream route: $route") }
@@ -645,6 +656,111 @@ class JetBrainsRSocketHandler(
     ): Payload {
         val builder = JetBrainsBatchRollbackEvent.newBuilder()
             .setFilePath(filePath)
+            .setToolUseId(toolUseId)
+            .setStatus(status)
+
+        if (error != null) {
+            builder.setError(error)
+        }
+
+        return buildPayload { data(builder.build().toByteArray()) }
+    }
+
+    // ==================== Terminal 后台执行 ====================
+
+    /**
+     * 获取可后台化的终端任务
+     */
+    private fun handleGetBackgroundableTerminals(dataBytes: ByteArray): Payload {
+        return try {
+            val terminalServer = terminalMcpServerProvider?.getServer() as? TerminalMcpServerImpl
+            if (terminalServer == null) {
+                logger.warn { "⚠️ [JetBrains] Terminal MCP Server not available" }
+                return buildPayload {
+                    data(JetBrainsGetBackgroundableTerminalsResponse.newBuilder()
+                        .setSuccess(false)
+                        .setError("Terminal MCP Server not available")
+                        .build().toByteArray())
+                }
+            }
+
+            val tasks = terminalServer.sessionManager.getBackgroundableTasks()
+            logger.info { "📋 [JetBrains] getBackgroundableTerminals: ${tasks.size} tasks" }
+
+            val response = JetBrainsGetBackgroundableTerminalsResponse.newBuilder()
+                .setSuccess(true)
+                .addAllTerminals(tasks.map { task ->
+                    JetBrainsBackgroundableTerminal.newBuilder()
+                        .setSessionId(task.sessionId)
+                        .setToolUseId(task.toolUseId)
+                        .setCommand(task.command)
+                        .setStartTime(task.startTime)
+                        .setElapsedMs(task.getElapsedMs())
+                        .build()
+                })
+                .build()
+
+            buildPayload { data(response.toByteArray()) }
+        } catch (e: Exception) {
+            logger.error { "❌ [JetBrains] getBackgroundableTerminals failed: ${e.message}" }
+            buildPayload {
+                data(JetBrainsGetBackgroundableTerminalsResponse.newBuilder()
+                    .setSuccess(false)
+                    .setError(e.message ?: "Unknown error")
+                    .build().toByteArray())
+            }
+        }
+    }
+
+    /**
+     * 批量后台终端任务（流式返回结果）
+     */
+    private fun handleTerminalBackground(dataBytes: ByteArray): Flow<Payload> = flow {
+        val req = ProtoTerminalBackgroundRequest.parseFrom(dataBytes)
+        logger.info { "⏸️ [JetBrains] terminalBackground: ${req.itemsCount} items" }
+
+        val terminalServer = terminalMcpServerProvider?.getServer() as? TerminalMcpServerImpl
+        if (terminalServer == null) {
+            logger.warn { "⚠️ [JetBrains] Terminal MCP Server not available" }
+            emit(buildTerminalBackgroundEvent("", "", TerminalBackgroundStatus.TERMINAL_BG_FAILED, "Terminal MCP Server not available"))
+            return@flow
+        }
+
+        for (item in req.itemsList) {
+            val sessionId = item.sessionId
+            val toolUseId = item.toolUseId
+
+            // 发送"开始后台化"事件
+            emit(buildTerminalBackgroundEvent(sessionId, toolUseId, TerminalBackgroundStatus.TERMINAL_BG_STARTED, null))
+
+            try {
+                val success = terminalServer.sessionManager.markTaskAsBackground(toolUseId)
+                
+                if (success) {
+                    logger.info { "✅ [JetBrains] terminal background success: $toolUseId" }
+                    emit(buildTerminalBackgroundEvent(sessionId, toolUseId, TerminalBackgroundStatus.TERMINAL_BG_SUCCESS, null))
+                } else {
+                    logger.warn { "❌ [JetBrains] terminal background failed: $toolUseId - Task not found" }
+                    emit(buildTerminalBackgroundEvent(sessionId, toolUseId, TerminalBackgroundStatus.TERMINAL_BG_FAILED, "Task not found"))
+                }
+            } catch (e: Exception) {
+                logger.error { "❌ [JetBrains] terminal background exception: $toolUseId - ${e.message}" }
+                emit(buildTerminalBackgroundEvent(sessionId, toolUseId, TerminalBackgroundStatus.TERMINAL_BG_FAILED, e.message ?: "Unknown error"))
+            }
+        }
+    }
+
+    /**
+     * 构建终端后台事件 Payload
+     */
+    private fun buildTerminalBackgroundEvent(
+        sessionId: String,
+        toolUseId: String,
+        status: TerminalBackgroundStatus,
+        error: String?
+    ): Payload {
+        val builder = JetBrainsTerminalBackgroundEvent.newBuilder()
+            .setSessionId(sessionId)
             .setToolUseId(toolUseId)
             .setStatus(status)
 

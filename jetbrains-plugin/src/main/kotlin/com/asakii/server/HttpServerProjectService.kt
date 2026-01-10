@@ -125,7 +125,19 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             val ideTools = IdeToolsImpl(project)
             val jetbrainsApi = JetBrainsApiImpl(project)
             _jetbrainsApi = jetbrainsApi  // 保存引用供 title actions 使用
-            val jetbrainsRSocketHandler = JetBrainsRSocketHandler(jetbrainsApi)
+
+            // 创建 MCP Server Providers（封装到 McpProviders）
+            // Terminal Provider 需要先创建，因为 JetBrainsRSocketHandler 需要它
+            val terminalMcpServerProvider = TerminalMcpServerProviderImpl(project)
+            val mcpProviders = McpProviders(
+                jetBrains = JetBrainsMcpServerProviderImpl(project),
+                jetBrainsFile = JetBrainsFileMcpServerProviderImpl(project),
+                terminal = terminalMcpServerProvider,
+                git = GitMcpServerProviderImpl(project)
+            )
+
+            // 创建 JetBrains RSocket Handler（传入 Terminal Provider 以支持后台执行功能）
+            val jetbrainsRSocketHandler = JetBrainsRSocketHandler(jetbrainsApi, terminalMcpServerProvider)
 
             // 监听主题变化，通过 RSocket 推送给前端（非阻塞）
             jetbrainsApi.theme.addChangeListener { theme ->
@@ -168,14 +180,6 @@ class HttpServerProjectService(private val project: Project) : Disposable {
 
             // 监听文件编辑器切换，通过 RSocket 推送给前端
             setupFileEditorListener(ideTools, jetbrainsRSocketHandler)
-
-            // 创建 MCP Server Providers（封装到 McpProviders）
-            val mcpProviders = McpProviders(
-                jetBrains = JetBrainsMcpServerProviderImpl(project),
-                jetBrainsFile = JetBrainsFileMcpServerProviderImpl(project),
-                terminal = TerminalMcpServerProviderImpl(project),
-                git = GitMcpServerProviderImpl(project)
-            )
 
             // 创建服务配置提供者（每次 connect 时调用，获取最新的用户设置）
             val serviceConfigProvider: () -> AiAgentServiceConfig = {

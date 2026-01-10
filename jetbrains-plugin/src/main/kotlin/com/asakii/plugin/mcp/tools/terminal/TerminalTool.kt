@@ -1,5 +1,6 @@
 package com.asakii.plugin.mcp.tools.terminal
 
+import com.asakii.claude.agent.sdk.mcp.currentToolUseId
 import com.asakii.plugin.mcp.getBoolean
 import com.asakii.plugin.mcp.getLong
 import com.asakii.plugin.mcp.getString
@@ -28,7 +29,7 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
      *   - wait: Boolean? - 是否等待命令完成并返回输出（默认 false）
      *   - timeout: Long? - 等待超时时间（秒，默认 30，0 表示无限等待）
      */
-    fun execute(arguments: JsonObject): String {
+    suspend fun execute(arguments: JsonObject): String {
         val command = arguments.getString("command")
             ?: return TerminalResultFormatter.formatTerminalResult(
                 success = false,
@@ -80,6 +81,9 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
             )
         }
 
+        // 获取当前 toolUseId 用于后台任务追踪
+        val toolUseId = currentToolUseId()
+
         // 执行命令
         val execResult = sessionManager.executeCommandAsync(session.id, command)
 
@@ -91,6 +95,12 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
                 message = null,
                 error = execResult.error
             )
+        }
+
+        // 记录任务开始（用于后台执行追踪）
+        if (toolUseId != null) {
+            sessionManager.recordTaskStart(session.id, toolUseId, command)
+            logger.debug { "Recorded task start: sessionId=${session.id}, toolUseId=$toolUseId" }
         }
 
         // 如果不等待，直接返回
@@ -113,6 +123,12 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
             waitForIdle = true,
             timeoutMs = timeoutMs ?: 30_000L
         )
+
+        // 命令完成，记录任务结束
+        if (toolUseId != null) {
+            sessionManager.recordTaskComplete(toolUseId)
+            logger.debug { "Recorded task complete: toolUseId=$toolUseId" }
+        }
 
         return if (readResult.success) {
             TerminalResultFormatter.formatReadResult(
