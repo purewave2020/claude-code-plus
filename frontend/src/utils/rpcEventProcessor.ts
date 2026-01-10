@@ -30,8 +30,8 @@ const log = loggers.stream
 export interface RpcEventContext {
   messages: Message[]  // 会话消息列表
   toolInputJsonAccumulator: Map<string, string>  // JSON 累积器 (toolId -> partial_json)
-  // registerToolCall/updateToolResult 回调已移除
-  // 工具状态现在通过 resolveToolStatus 从消息列表实时计算
+  // 注册工具调用回调（用于 pendingToolCalls 跟踪）
+  registerToolCall?: (block: ToolUseContent) => void
 }
 
 /**
@@ -388,7 +388,10 @@ function processToolStart(
   const accumulatorKey = `tool_input_${event.toolId}`
   context.toolInputJsonAccumulator.set(accumulatorKey, '')
 
-  // registerToolCall 回调已移除，工具状态通过 resolveToolStatus 实时计算
+  // 注册工具调用到 pendingToolCalls（用于后续 tool_result 匹配）
+  if (context.registerToolCall) {
+    context.registerToolCall(toolUseBlock)
+  }
 
   return {
     shouldUpdateMessages: true,

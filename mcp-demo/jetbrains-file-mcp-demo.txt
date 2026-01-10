@@ -1,5 +1,0 @@
-JetBrains File MCP 演示文件
-
-目标：演示 WriteFile 与 EditFile。
-
-原始内容：Hello, MCP!（已通过 EditFile 修改）

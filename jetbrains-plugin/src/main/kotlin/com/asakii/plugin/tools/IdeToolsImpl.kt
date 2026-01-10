@@ -92,7 +92,9 @@ class IdeToolsImpl(
                     val file = LocalFileSystem.getInstance().findFileByPath(request.filePath)
                         ?: throw IllegalStateException("File not found: ${request.filePath}")
                      file.refresh(false, false)
-                    val currentContent = String(file.contentsToByteArray(), Charsets.UTF_8)
+                    val currentContent = ApplicationManager.getApplication().runReadAction<String> {
+                        String(file.contentsToByteArray(), file.charset)
+                    }
                     
                     val edits = request.edits ?: listOf(
                         EditOperation(
@@ -308,10 +310,10 @@ class IdeToolsImpl(
         }
         
         return try {
-            val file = LocalFileSystem.getInstance().findFileByIoFile(File(path))
-                ?: return Result.failure(IllegalArgumentException("File not found: $path"))
-            
-            val content = String(file.contentsToByteArray(), Charsets.UTF_8)
+            val content = ApplicationManager.getApplication().runReadAction<String?> {
+                val file = LocalFileSystem.getInstance().findFileByIoFile(File(path)) ?: return@runReadAction null
+                String(file.contentsToByteArray(), file.charset)
+            } ?: return Result.failure(IllegalArgumentException("File not found: $path"))
             
             val result = if (lineStart != null && lineEnd != null) {
                 val lines = content.lines()
@@ -332,7 +334,9 @@ class IdeToolsImpl(
     
     override fun getRecentFiles(maxResults: Int): Result<List<FileInfo>> {
         return try {
-            val files = FileEditorManager.getInstance(project).openFiles
+            val files = com.intellij.openapi.application.runReadAction {
+                FileEditorManager.getInstance(project).openFiles.toList()
+            }
             val result = files.take(maxResults).map { file ->
                 FileInfo(file.path)
             }
@@ -1010,4 +1014,3 @@ class IdeToolsImpl(
         return com.asakii.plugin.services.FileHistoryService.getContentBefore(filePath, beforeTimestamp)
     }
 }
-

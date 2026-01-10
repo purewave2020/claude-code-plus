@@ -2114,6 +2114,7 @@ export function useSessionTab(initialOrder: number = 0) {
 
             case 'tool_completed': {
                 log.info(`[Tab ${tabId}] 工具完成: ${event.itemId}, success=${event.success}`)
+                log.info(`[Tab ${tabId}] event.result 类型: ${typeof event.result}, 内容:`, event.result)
                 
                 if (event.itemId) {
                     const toolBlockIndex = codexRpcState.toolBlockIndexMap.get(event.itemId)
@@ -2124,7 +2125,10 @@ export function useSessionTab(initialOrder: number = 0) {
                     
                     // 更新工具结果（用于 UI 显示）
                     if (event.result) {
-                        tools.updateToolResult(event.itemId, event.result as import('@/types/display').ToolResult)
+                        const updateSuccess = tools.updateToolResult(event.itemId, event.result as import('@/types/display').ToolResult)
+                        log.info(`[Tab ${tabId}] updateToolResult 结果: ${updateSuccess}`)
+                    } else {
+                        log.warn(`[Tab ${tabId}] event.result 为空，无法更新工具结果`)
                     }
                     
                     // 更新累积的工具块结果

@@ -58,7 +58,8 @@ class WriteFileTool(private val project: Project) {
         
         // 判断是否是项目内文件（只有项目内文件支持回滚）
         val isExternalFile = !absolutePath.startsWith(File(projectBasePath).canonicalPath)
-        val canRollback = !isExternalFile && isOverwrite  // 只有项目内已存在的文件才支持回滚
+        // 项目内文件都支持回滚：覆盖文件恢复内容，新建文件则删除
+        val canRollback = !isExternalFile
         
         var historyTs: Long? = null
 
@@ -67,7 +68,9 @@ class WriteFileTool(private val project: Project) {
             historyTs = System.currentTimeMillis()
             val toolUseId = currentToolUseId()
             if (toolUseId != null) {
-                LocalHistory.getInstance().putSystemLabel(project, "claude_write_$toolUseId")
+                ApplicationManager.getApplication().runReadAction {
+                    LocalHistory.getInstance().putSystemLabel(project, "claude_write_$toolUseId")
+                }
                 logger.info { "WriteFile: created LocalHistory label for toolUseId=$toolUseId, historyTs=$historyTs" }
             }
         }
@@ -75,8 +78,8 @@ class WriteFileTool(private val project: Project) {
         return try {
             var result: Any = ""
             ApplicationManager.getApplication().invokeAndWait {
-                result = WriteAction.compute<Any, Exception> {
-                    writeFileContent(absolutePath, content, filePath, isExternalFile, isOverwrite, canRollback, historyTs)
+                WriteAction.run<Exception> {
+                    result = writeFileContent(absolutePath, content, filePath, isExternalFile, isOverwrite, canRollback, historyTs)
                 }
             }
             result
@@ -160,6 +163,7 @@ class WriteFileTool(private val project: Project) {
         // Meta 信息放在开头，方便前端解析
         historyTs?.let { sb.appendLine("[jb:historyTs=$it]") }
         sb.appendLine("[jb:isOverwrite=$isOverwrite]")
+        sb.appendLine("[jb:isNewFile=$isNewFile]")
         sb.appendLine("[jb:canRollback=$canRollback]")
 
         val action = if (isNewFile) "Created" else "Updated"

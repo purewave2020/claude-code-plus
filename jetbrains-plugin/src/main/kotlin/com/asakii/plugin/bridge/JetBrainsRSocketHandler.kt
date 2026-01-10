@@ -538,10 +538,17 @@ class JetBrainsRSocketHandler(
 
             // 将相对路径转换为绝对路径
             val absolutePath = resolvePath(req.filePath)
-            val result = com.asakii.plugin.services.FileHistoryService.rollbackToTimestamp(
-                absolutePath,
-                req.beforeTimestamp
-            )
+            
+            // beforeTimestamp == 0 表示新建文件的回滚，需要删除文件
+            val result = if (req.beforeTimestamp == 0L) {
+                logger.info { "↩️ [JetBrains] deleteFile (rollback new file): $absolutePath" }
+                com.asakii.plugin.services.FileHistoryService.deleteFile(absolutePath)
+            } else {
+                com.asakii.plugin.services.FileHistoryService.rollbackToTimestamp(
+                    absolutePath,
+                    req.beforeTimestamp
+                )
+            }
 
             val responseBuilder = com.asakii.rpc.proto.JetBrainsRollbackFileResponse.newBuilder()
                 .setSuccess(result.success)

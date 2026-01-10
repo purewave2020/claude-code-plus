@@ -32,7 +32,7 @@ type JetBrainsFileEditToolName = typeof JETBRAINS_FILE_EDIT_TOOLS[number]
 export interface FileModification {
   /** 工具调用 ID */
   toolUseId: string
-  /** 本地历史时间戳（用于回滚） */
+  /** 本地历史时间戳（用于回滚），新建文件为 0 */
   historyTs: number
   /** 工具名称 */
   toolName: 'WriteFile' | 'EditFile'
@@ -46,6 +46,8 @@ export interface FileModification {
   accepted: boolean
   /** 时间戳（显示用） */
   timestamp: number
+  /** 是否是新建文件（回滚时删除文件） */
+  isNewFile: boolean
   /** 增加的行数 */
   linesAdded?: number
   /** 删除的行数 */
@@ -87,15 +89,16 @@ export function isJetBrainsFileEditTool(toolName: string): toolName is JetBrains
 export interface ToolResultMeta {
   historyTs: number | null
   canRollback: boolean
+  isNewFile: boolean
   linesAdded?: number
   linesRemoved?: number
 }
 
 /**
- * 从工具结果中提取元信息（historyTs、canRollback、行数变化等）
+ * 从工具结果中提取元信息（historyTs、canRollback、isNewFile、行数变化等）
  */
 export function extractToolResultMeta(result: any): ToolResultMeta {
-  const meta: ToolResultMeta = { historyTs: null, canRollback: false }
+  const meta: ToolResultMeta = { historyTs: null, canRollback: false, isNewFile: false }
   
   if (!result?.content) return meta
   
@@ -119,6 +122,12 @@ export function extractToolResultMeta(result: any): ToolResultMeta {
   const rollbackMatch = content.match(/\[jb:canRollback=(true|false)\]/)
   if (rollbackMatch) {
     meta.canRollback = rollbackMatch[1] === 'true'
+  }
+  
+  // 匹配 [jb:isNewFile=xxx] 格式
+  const newFileMatch = content.match(/\[jb:isNewFile=(true|false)\]/)
+  if (newFileMatch) {
+    meta.isNewFile = newFileMatch[1] === 'true'
   }
   
   return meta
@@ -306,8 +315,10 @@ export function useFileChanges(
       return false
     }
     
-    if (!meta.historyTs) {
-      console.warn('[useFileChanges] 无法提取 historyTs，跳过:', toolCall.toolName)
+    // 新建文件不需要 historyTs（回滚时使用 0 表示删除文件）
+    // 覆盖文件需要 historyTs
+    if (!meta.isNewFile && !meta.historyTs) {
+      console.warn('[useFileChanges] 无法提取 historyTs（非新建文件），跳过:', toolCall.toolName)
       return false
     }
     
@@ -317,16 +328,17 @@ export function useFileChanges(
     // 从工具输入计算行数变化
     const lineStats = calculateLineChanges(toolCall)
     
-    // 添加记录
+    // 添加记录（新建文件 historyTs 为 0，回滚时会删除文件）
     fileEdits.value.push({
       toolUseId: toolCall.id,
-      historyTs: meta.historyTs,
+      historyTs: meta.isNewFile ? 0 : meta.historyTs!,
       toolName: getShortToolName(toolCall.toolName),
       summary: generateSummary(toolCall),
       filePath,
       rolledBack: false,
       accepted: false,
       timestamp: toolCall.timestamp,
+      isNewFile: meta.isNewFile,
       linesAdded: lineStats.added,
       linesRemoved: lineStats.removed
     })

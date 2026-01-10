@@ -71,15 +71,17 @@ class EditFileTool(private val project: Project) {
         val historyTs = System.currentTimeMillis()
         val toolUseId = currentToolUseId()
         if (canRollback && toolUseId != null) {
-            LocalHistory.getInstance().putSystemLabel(project, "claude_edit_$toolUseId")
+            ApplicationManager.getApplication().runReadAction {
+                LocalHistory.getInstance().putSystemLabel(project, "claude_edit_$toolUseId")
+            }
             logger.info { "EditFile: created LocalHistory label for toolUseId=$toolUseId, historyTs=$historyTs" }
         }
 
         return try {
             var result: Any = ""
             ApplicationManager.getApplication().invokeAndWait {
-                result = WriteAction.compute<Any, Exception> {
-                    editFileContent(file, oldString, newString, replaceAll, filePath, isExternalFile, canRollback, historyTs)
+                WriteAction.run<Exception> {
+                    result = editFileContent(file, oldString, newString, replaceAll, filePath, isExternalFile, canRollback, historyTs)
                 }
             }
             result

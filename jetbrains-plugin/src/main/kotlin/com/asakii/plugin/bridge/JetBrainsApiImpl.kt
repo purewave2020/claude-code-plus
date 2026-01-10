@@ -158,7 +158,9 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                         ?: throw IllegalStateException("File not found: ${request.filePath}")
                     file.refresh(false, false)
                     val currentContent = request.currentContent
-                        ?: String(file.contentsToByteArray(), Charsets.UTF_8)
+                        ?: ApplicationManager.getApplication().runReadAction<String> {
+                            String(file.contentsToByteArray(), file.charset)
+                        }
 
                     val beforeContent = rebuildBeforeContent(currentContent, request.edits)
                     val fileName = File(request.filePath).name
@@ -199,7 +201,11 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                         return@invokeLater
                     }
 
-                    val currentContent = file?.let { String(it.contentsToByteArray(), Charsets.UTF_8) } ?: ""
+                    val currentContent = file?.let { vf ->
+                        ApplicationManager.getApplication().runReadAction<String> {
+                            String(vf.contentsToByteArray(), vf.charset)
+                        }
+                    } ?: ""
 
                     // 依次应用所有编辑操作得到预览后的内容
                     var afterContent = currentContent
@@ -284,7 +290,11 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                                 }
                             } else {
                                 // oldString 不在原始内容中，使用当前文件内容
-                                file?.let { String(it.contentsToByteArray(), Charsets.UTF_8) } ?: ""
+                                file?.let { vf ->
+                                    ApplicationManager.getApplication().runReadAction<String> {
+                                        String(vf.contentsToByteArray(), vf.charset)
+                                    }
+                                } ?: ""
                             }
                         }
                     } else {

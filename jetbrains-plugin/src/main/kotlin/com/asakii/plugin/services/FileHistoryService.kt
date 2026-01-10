@@ -33,27 +33,29 @@ object FileHistoryService {
                 return null
             }
 
-            // 检查文件是否在 LocalHistory 控制下
-            if (!LocalHistory.getInstance().isUnderControl(file)) {
-                logger.info { "File not under LocalHistory control: $filePath" }
-                return null
-            }
+            ApplicationManager.getApplication().runReadAction<String?> {
+                // 检查文件是否在 LocalHistory 控制下
+                if (!LocalHistory.getInstance().isUnderControl(file)) {
+                    logger.info { "File not under LocalHistory control: $filePath" }
+                    return@runReadAction null
+                }
 
-            // 使用时间戳比较器获取历史内容
-            // FileRevisionTimestampComparator 返回第一个满足条件的版本
-            val byteContent = LocalHistory.getInstance().getByteContent(file) { revisionTimestamp ->
-                // 返回时间戳小于指定时间的版本（即之前的版本）
-                revisionTimestamp < beforeTimestamp
-            }
+                // 使用时间戳比较器获取历史内容
+                // FileRevisionTimestampComparator 返回第一个满足条件的版本
+                val byteContent = LocalHistory.getInstance().getByteContent(file) { revisionTimestamp ->
+                    // 返回时间戳小于指定时间的版本（即之前的版本）
+                    revisionTimestamp < beforeTimestamp
+                }
 
-            if (byteContent == null) {
-                logger.info { "No history content found before timestamp $beforeTimestamp for: $filePath" }
-                return null
-            }
+                if (byteContent == null) {
+                    logger.info { "No history content found before timestamp $beforeTimestamp for: $filePath" }
+                    return@runReadAction null
+                }
 
-            val content = byteContent.toString(Charsets.UTF_8)
-            logger.info { "Found history content (${content.length} chars) before $beforeTimestamp for: $filePath" }
-            content
+                val content = byteContent.toString(file.charset)
+                logger.info { "Found history content (${content.length} chars) before $beforeTimestamp for: $filePath" }
+                content
+            }
         } catch (e: Exception) {
             logger.warn("Failed to get history content for $filePath: ${e.message}", e)
             null
@@ -80,33 +82,46 @@ object FileHistoryService {
                 )
             }
 
-            // 检查文件是否在 LocalHistory 控制下
-            if (!LocalHistory.getInstance().isUnderControl(virtualFile)) {
-                logger.warn { "Rollback failed - file not under LocalHistory control: $filePath" }
-                return RollbackResult(
-                    success = false,
-                    error = "File not under LocalHistory control: $filePath"
-                )
+            data class HistoryLookup(
+                val content: String? = null,
+                val error: String? = null,
+            )
+
+            val lookup = com.intellij.openapi.application.runReadAction {
+                // 检查文件是否在 LocalHistory 控制下
+                if (!LocalHistory.getInstance().isUnderControl(virtualFile)) {
+                    logger.warn { "Rollback failed - file not under LocalHistory control: $filePath" }
+                    return@runReadAction HistoryLookup(
+                        error = "File not under LocalHistory control: $filePath"
+                    )
+                }
+
+                // 获取历史内容
+                val byteContent = LocalHistory.getInstance().getByteContent(virtualFile) { revisionTs ->
+                    revisionTs < beforeTimestamp
+                }
+
+                if (byteContent == null) {
+                    logger.warn { "Rollback failed - no history found before timestamp $beforeTimestamp for: $filePath" }
+                    return@runReadAction HistoryLookup(
+                        error = "No history found before timestamp $beforeTimestamp"
+                    )
+                }
+
+                HistoryLookup(content = byteContent.toString(virtualFile.charset))
             }
 
-            // 获取历史内容
-            val byteContent = LocalHistory.getInstance().getByteContent(virtualFile) { revisionTs ->
-                revisionTs < beforeTimestamp
+            if (lookup.error != null) {
+                return RollbackResult(success = false, error = lookup.error)
             }
-
-            if (byteContent == null) {
-                logger.warn { "Rollback failed - no history found before timestamp $beforeTimestamp for: $filePath" }
-                return RollbackResult(
-                    success = false,
-                    error = "No history found before timestamp $beforeTimestamp"
-                )
-            }
-
-            val historicalContent = byteContent.toString(Charsets.UTF_8)
+            val historicalContent = lookup.content ?: return RollbackResult(
+                success = false,
+                error = "Unknown error during rollback (no content)",
+            )
 
             // 写回文件
             var writeResult: RollbackResult? = null
-            ApplicationManager.getApplication().invokeAndWait {
+            val writeTask = {
                 WriteAction.run<Exception> {
                     try {
                         virtualFile.setBinaryContent(historicalContent.toByteArray(virtualFile.charset))
@@ -122,6 +137,13 @@ object FileHistoryService {
                 }
             }
 
+            val app = ApplicationManager.getApplication()
+            if (app.isDispatchThread) {
+                writeTask()
+            } else {
+                app.invokeAndWait { writeTask() }
+            }
+
             writeResult ?: RollbackResult(success = false, error = "Unknown error during rollback")
 
         } catch (e: ProcessCanceledException) {
@@ -131,6 +153,62 @@ object FileHistoryService {
             RollbackResult(
                 success = false,
                 error = "Rollback failed: ${e.message}"
+            )
+        }
+    }
+
+    /**
+     * 删除文件（用于新建文件的回滚）
+     *
+     * @param filePath 文件绝对路径
+     * @return RollbackResult 删除结果
+     */
+    fun deleteFile(filePath: String): RollbackResult {
+        logger.info { "Delete file request (rollback new file): $filePath" }
+
+        return try {
+            val virtualFile = LocalFileSystem.getInstance()
+                .findFileByIoFile(File(filePath)) ?: run {
+                logger.warn { "Delete failed - file not found: $filePath" }
+                return RollbackResult(
+                    success = false,
+                    error = "File not found: $filePath"
+                )
+            }
+
+            var deleteResult: RollbackResult? = null
+            val deleteTask = {
+                WriteAction.run<Exception> {
+                    try {
+                        virtualFile.delete(this)
+                        deleteResult = RollbackResult(success = true)
+                        logger.info { "File deleted successfully: $filePath" }
+                    } catch (e: Exception) {
+                        logger.error("Failed to delete file: $filePath", e)
+                        deleteResult = RollbackResult(
+                            success = false,
+                            error = "Failed to delete file: ${e.message}"
+                        )
+                    }
+                }
+            }
+
+            val app = ApplicationManager.getApplication()
+            if (app.isDispatchThread) {
+                deleteTask()
+            } else {
+                app.invokeAndWait { deleteTask() }
+            }
+
+            deleteResult ?: RollbackResult(success = false, error = "Unknown error during delete")
+
+        } catch (e: ProcessCanceledException) {
+            throw e
+        } catch (e: Exception) {
+            logger.error("Delete file failed: $filePath", e)
+            RollbackResult(
+                success = false,
+                error = "Delete failed: ${e.message}"
             )
         }
     }

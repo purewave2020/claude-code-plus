@@ -436,6 +436,11 @@ class AiAgentRpcServiceImpl(
                                 sdkLog.info("[executeTurn] event #$eventCount ($eventType) sent")
 
                                 when (event) {
+                                    is UiToolStart -> {
+                                        // 🔍 调试日志：确认 UiToolStart 事件已发送到前端
+                                        sdkLog.info("🔧 [executeTurn] UiToolStart sent: toolId=${event.toolId}, toolName=${event.toolName}, toolType=${event.toolType}")
+                                    }
+
                                     is UiMessageComplete -> {
                                         val stopEvent = wrapAsStreamEvent(RpcMessageStopEvent(), rpcProvider)
                                         messageHistory.add(stopEvent)
@@ -444,7 +449,11 @@ class AiAgentRpcServiceImpl(
                                     }
 
                                     is UiToolComplete -> {
+                                        // 🔍 调试日志：确认 result 的类型
+                                        sdkLog.info("🔧 [UiToolComplete] toolId=${event.toolId}, result.type=${event.result::class.simpleName}")
                                         val resultBlock = event.result.toRpcContentBlock()
+                                        // 🔍 调试日志：确认转换后的 RPC block 类型
+                                        sdkLog.info("🔧 [UiToolComplete] resultBlock.type=${resultBlock::class.simpleName}, resultBlock=$resultBlock")
                                         val toolResultMessage = RpcUserMessage(
                                             message = RpcMessageContent(content = listOf(resultBlock)),
                                             // 使用 event.parentToolUseId（父工具调用 ID），而不是 event.toolId
@@ -1389,6 +1398,8 @@ class AiAgentRpcServiceImpl(
                 } else {
                     ToolType.fromToolName(toolName).type
                 }
+                // 🔍 调试日志：确认 UiToolStart -> RpcContentBlockStartEvent 转换
+                sdkLog.info("🔧 [toRpcMessage] UiToolStart -> content_block_start: toolId=$toolId, toolName=$toolName, toolType=$resolvedToolType, index=$index")
                 wrapAsStreamEvent(
                     RpcContentBlockStartEvent(
                         index = index,
@@ -1533,12 +1544,15 @@ class AiAgentRpcServiceImpl(
                 status = status.toRpcStatus()
             )
         }
-        is ToolResultContent -> RpcToolResultBlock(
-            toolUseId = toolUseId,
-            content = content,
-            isError = isError,
-            agentId = agentId
-        )
+        is ToolResultContent -> {
+            sdkLog.info("🔧 [toRpcContentBlock] ToolResultContent: toolUseId=$toolUseId, isError=$isError, contentPreview=${content?.toString()?.take(100)}")
+            RpcToolResultBlock(
+                toolUseId = toolUseId,
+                content = content,
+                isError = isError,
+                agentId = agentId
+            )
+        }
         // CommandExecutionContent, FileChangeContent, WebSearchContent 已删除
         // 统一使用 ToolUseContent + ToolResultContent
         is TodoListContent -> RpcTodoListBlock(
