@@ -39,11 +39,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 import type { GenericToolCall } from '@/types/display'
-import type { FileChangesInstance } from '@/composables/useFileChanges'
 import { isJetBrainsFileEditTool, extractHistoryTs } from '@/composables/useFileChanges'
+import { useSessionStore } from '@/stores/sessionStore'
 import CompactToolCard from '../CompactToolCard.vue'
 import { extractToolDisplayInfo } from '@/utils/toolDisplayInfo'
 import CodeSnippet from '../CodeSnippet.vue'
@@ -58,8 +58,9 @@ const props = defineProps<Props>()
 // 默认折叠
 const expanded = ref(false)
 
-// 注入 fileChanges 实例
-const fileChangesInstance = inject<FileChangesInstance>('fileChanges')
+// 直接从 sessionStore 获取 fileChanges 实例（响应式）
+const sessionStore = useSessionStore()
+const fileChangesInstance = computed(() => sessionStore.currentFileChanges)
 
 // 提取工具显示信息
 const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall, props.toolCall.result))
@@ -90,15 +91,15 @@ const canAccept = computed(() => {
 // 检查是否已接受
 const isAccepted = computed(() => {
   const toolUseId = props.toolCall.id || props.toolCall.result?.tool_use_id
-  if (!toolUseId || !fileChangesInstance) return false
-  return fileChangesInstance.isAccepted(toolUseId)
+  if (!toolUseId || !fileChangesInstance.value) return false
+  return fileChangesInstance.value.isAccepted(toolUseId)
 })
 
 // 处理接受
 function handleAccept() {
   const toolUseId = props.toolCall.id || props.toolCall.result?.tool_use_id
-  if (!toolUseId || !fileChangesInstance) return
-  fileChangesInstance.acceptByToolUseId(toolUseId)
+  if (!toolUseId || !fileChangesInstance.value) return
+  fileChangesInstance.value.acceptByToolUseId(toolUseId)
 }
 
 // 计算被跳过的前置空行数量（支持 \n 和 \r\n）

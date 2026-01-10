@@ -207,9 +207,8 @@ const settingsStore = useSettingsStore()
 provide('projectPath', computed(() => props.projectPath))
 provide('aiAgentService', aiAgentService)
 
-// 文件改动追踪（从当前 Tab 获取，使用事件驱动优化）
-const fileChanges = computed(() => sessionStore.currentFileChanges)
-provide('fileChanges', fileChanges)
+// 文件改动追踪：子组件直接使用 sessionStore.currentFileChanges
+// 不再通过 provide/inject，避免 ComputedRef 类型处理问题
 const { t } = useI18n()
 const { isInIde, detectEnvironment } = useEnvironment()
 const isIdeMode = isInIde

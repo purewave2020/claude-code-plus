@@ -145,16 +145,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 import { ideaBridge } from '@/services/ideaBridge'
 import { jetbrainsRSocket } from '@/services/jetbrainsRSocket'
-import type { FileChangesInstance, FileChange, FileModification } from '@/composables/useFileChanges'
+import { useSessionStore } from '@/stores/sessionStore'
+import type { FileChange, FileModification } from '@/composables/useFileChanges'
 
 const { t } = useI18n()
 
-// 注入 fileChanges 实例（由父组件 provide）
-const fileChangesInstance = inject<FileChangesInstance>('fileChanges')
+// 直接从 sessionStore 获取 fileChanges 实例（响应式）
+const sessionStore = useSessionStore()
+const fileChangesInstance = computed(() => sessionStore.currentFileChanges)
 
 // 检测是否在 IDE 模式
 const isIdeMode = computed(() => ideaBridge.isInIde())
@@ -166,14 +168,14 @@ const expanded = ref(false)
 const expandedFiles = ref<Set<string>>(new Set())
 
 // 从 composable 获取数据
-const fileChanges = computed(() => fileChangesInstance?.fileChanges.value ?? [])
-const hasChanges = computed(() => fileChangesInstance?.hasChanges.value ?? false)
-const changedFileCount = computed(() => fileChangesInstance?.changedFileCount.value ?? 0)
-const totalEditCount = computed(() => fileChangesInstance?.totalEditCount.value ?? 0)
+const fileChanges = computed(() => fileChangesInstance.value?.fileChanges.value ?? [])
+const hasChanges = computed(() => fileChangesInstance.value?.hasChanges.value ?? false)
+const changedFileCount = computed(() => fileChangesInstance.value?.changedFileCount.value ?? 0)
+const totalEditCount = computed(() => fileChangesInstance.value?.totalEditCount.value ?? 0)
 
 // 检查文件是否正在回滚
 function isRollingBack(filePath: string): boolean {
-  return fileChangesInstance?.isRollingBack(filePath) ?? false
+  return fileChangesInstance.value?.isRollingBack(filePath) ?? false
 }
 
 // 获取文件的活跃修改（未回滚、未接受的）
@@ -247,13 +249,13 @@ async function handleViewDiff(mod: FileModification) {
 
 // 处理接受所有改动
 function handleAcceptAll() {
-  if (!fileChangesInstance) return
-  fileChangesInstance.acceptAll()
+  if (!fileChangesInstance.value) return
+  fileChangesInstance.value.acceptAll()
 }
 
 // 处理回滚所有改动
 async function handleRollbackAll() {
-  if (!fileChangesInstance) return
+  if (!fileChangesInstance.value) return
   
   // 确认对话框
   const confirmed = confirm(t('tools.rollbackAllConfirm'))
@@ -261,7 +263,7 @@ async function handleRollbackAll() {
   
   // 依次回滚每个文件
   for (const file of fileChanges.value) {
-    const result = await fileChangesInstance.rollbackFile(file.filePath)
+    const result = await fileChangesInstance.value.rollbackFile(file.filePath)
     if (!result.success) {
       console.error('Rollback failed for', file.filePath, ':', result.error)
       alert(t('tools.rollbackFailed') + ': ' + result.error)
@@ -272,19 +274,19 @@ async function handleRollbackAll() {
 
 // 处理接受单个文件的所有改动
 function handleAcceptFile(filePath: string) {
-  if (!fileChangesInstance) return
-  fileChangesInstance.acceptFile(filePath)
+  if (!fileChangesInstance.value) return
+  fileChangesInstance.value.acceptFile(filePath)
 }
 
 // 处理接受单个修改
 function handleAcceptModification(filePath: string, historyTs: number) {
-  if (!fileChangesInstance) return
-  fileChangesInstance.acceptModification(filePath, historyTs)
+  if (!fileChangesInstance.value) return
+  fileChangesInstance.value.acceptModification(filePath, historyTs)
 }
 
 // 处理回滚整个文件
 async function handleRollbackFile(filePath: string) {
-  if (!fileChangesInstance) return
+  if (!fileChangesInstance.value) return
   
   const file = fileChanges.value.find(f => f.filePath === filePath)
   if (!file) return
@@ -293,7 +295,7 @@ async function handleRollbackFile(filePath: string) {
   const confirmed = confirm(t('tools.rollbackFileConfirm', { file: file.fileName }))
   if (!confirmed) return
   
-  const result = await fileChangesInstance.rollbackFile(filePath)
+  const result = await fileChangesInstance.value.rollbackFile(filePath)
   if (!result.success) {
     console.error('Rollback failed:', result.error)
     alert(t('tools.rollbackFailed') + ': ' + result.error)
@@ -302,13 +304,13 @@ async function handleRollbackFile(filePath: string) {
 
 // 处理回滚单个修改
 async function handleRollbackModification(filePath: string, historyTs: number) {
-  if (!fileChangesInstance) return
+  if (!fileChangesInstance.value) return
   
   // 确认对话框
   const confirmed = confirm(t('tools.rollbackModificationConfirm'))
   if (!confirmed) return
   
-  const result = await fileChangesInstance.rollbackModification(filePath, historyTs)
+  const result = await fileChangesInstance.value.rollbackModification(filePath, historyTs)
   if (!result.success) {
     console.error('Rollback failed:', result.error)
     alert(t('tools.rollbackFailed') + ': ' + result.error)

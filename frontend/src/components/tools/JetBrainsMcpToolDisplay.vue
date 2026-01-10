@@ -83,13 +83,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject } from 'vue'
+import { ref, computed } from 'vue'
 import type { GenericToolCall } from '@/types/display'
 import CompactToolCard, { type ToolCallData } from './CompactToolCard.vue'
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer.vue'
 import { extractToolDisplayInfo } from '@/utils/toolDisplayInfo'
 import { useI18n } from '@/composables/useI18n'
-import { isJetBrainsFileEditTool, type FileChangesInstance } from '@/composables/useFileChanges'
+import { isJetBrainsFileEditTool } from '@/composables/useFileChanges'
+import { useSessionStore } from '@/stores/sessionStore'
 
 const { t } = useI18n()
 
@@ -99,8 +100,9 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// 注入 fileChanges 实例
-const fileChangesInstance = inject<FileChangesInstance>('fileChanges')
+// 直接从 sessionStore 获取 fileChanges 实例（响应式）
+const sessionStore = useSessionStore()
+const fileChangesInstance = computed(() => sessionStore.currentFileChanges)
 
 // 默认折叠，与其他工具保持一致
 const expanded = ref(false)
@@ -123,16 +125,16 @@ const showRollbackBtn = computed(() => {
   // 只对 WriteFile/EditFile 工具显示
   if (!props.toolCall || !isJetBrainsFileEditTool(props.toolCall.toolName)) return false
   // 检查是否在当前会话中且可以回滚
-  return fileChangesInstance?.canRollback(props.toolCall.id) ?? false
+  return fileChangesInstance.value?.canRollback(props.toolCall.id) ?? false
 })
 
 // 处理回滚
 async function handleRollback() {
-  if (!fileChangesInstance || isRollingBack.value) return
+  if (!fileChangesInstance.value || isRollingBack.value) return
   
   isRollingBack.value = true
   try {
-    const result = await fileChangesInstance.rollbackByToolUseId(props.toolCall.id)
+    const result = await fileChangesInstance.value.rollbackByToolUseId(props.toolCall.id)
     if (!result.success) {
       console.error('Rollback failed:', result.error)
       alert(t('tools.rollbackFailed') + ': ' + result.error)
