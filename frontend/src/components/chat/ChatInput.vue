@@ -164,6 +164,29 @@
       <!-- 左侧控件组 - Cursor 风格紧凑布局 -->
       <div class="toolbar-left">
         <div class="cursor-style-selectors">
+          <!-- 后端切换器 - 放在最左侧 -->
+          <div class="backend-switcher-inline" @click.stop="toggleBackendSwitcher">
+            <BackendIcon :type="backendType" :size="14" />
+            <span class="backend-name">{{ getBackendDisplayName(backendType) }}</span>
+            <svg class="dropdown-arrow" width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
+              <path d="M1 2.5L4 5.5L7 2.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            </svg>
+            <!-- 下拉菜单 -->
+            <div v-if="showBackendSwitcher" class="backend-dropdown">
+              <div
+                v-for="backend in availableBackends"
+                :key="backend"
+                class="backend-option"
+                :class="{ active: backend === backendType }"
+                @click.stop="handleBackendChange(backend)"
+              >
+                <BackendIcon :type="backend" :size="14" />
+                <span>{{ getBackendDisplayName(backend) }}</span>
+                <span v-if="backend === backendType" class="check-icon">✓</span>
+              </div>
+            </div>
+          </div>
+
           <!-- Claude 权限模式选择器 - Cursor 风格（带灰色背景） -->
           <el-select
             v-if="showPermissionControls && backendType === 'claude'"
@@ -483,6 +506,8 @@ import { useContextMenu } from '@/composables/useContextMenu'
 // Multi-backend types
 import type { BackendType } from '@/types/backend'
 import type { ThinkingConfig } from '@/types/thinking'
+import { getAvailableBackends, getBackendDisplayName } from '@/services/backendCapabilities'
+import BackendIcon from '@/components/icons/BackendIcon.vue'
 import { isCodexThinking, getCodexEffortLevels } from '@/types/thinking'
 // Codex types
 import type { CodexSandboxMode, CodexReasoningEffort } from '@/types/codex'
@@ -554,6 +579,7 @@ interface Emits {
   (e: 'cancel'): void  // 取消编辑（仅 inline 模式）
   (e: 'update:modelValue', value: string): void  // v-model 支持
   (e: 'update:thinkingConfig', value: ThinkingConfig): void  // 思考配置更新
+  (e: 'update:backendType', value: BackendType): void  // 后端类型切换
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -678,6 +704,35 @@ function cycleCodexSandboxMode() {
   const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % options.length
   handleCodexSandboxModeChange(options[nextIndex])
 }
+
+// ========== 后端切换器 ==========
+
+const showBackendSwitcher = ref(false)
+const availableBackends = computed(() => getAvailableBackends())
+
+function toggleBackendSwitcher() {
+  showBackendSwitcher.value = !showBackendSwitcher.value
+}
+
+function closeBackendSwitcher() {
+  showBackendSwitcher.value = false
+}
+
+function handleBackendChange(newBackend: BackendType) {
+  showBackendSwitcher.value = false
+  if (newBackend !== props.backendType) {
+    emit('update:backendType', newBackend)
+  }
+}
+
+// 点击外部关闭后端切换器
+onMounted(() => {
+  document.addEventListener('click', closeBackendSwitcher)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeBackendSwitcher)
+})
 
 // ========== Multi-Backend Thinking Config ==========
 
@@ -2163,6 +2218,74 @@ onUnmounted(() => {
 
 .auto-cleanup-toggle {
   white-space: nowrap;
+}
+
+/* ========== 后端切换器 ========== */
+.backend-switcher-inline {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--theme-secondary-foreground, #6a737d);
+  background: rgba(0, 0, 0, 0.08);
+  transition: background 0.15s ease;
+  user-select: none;
+}
+
+.backend-switcher-inline:hover {
+  background: var(--theme-hover-background, rgba(0, 0, 0, 0.12));
+}
+
+.backend-switcher-inline .backend-name {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.backend-switcher-inline .dropdown-arrow {
+  opacity: 0.6;
+  margin-left: 2px;
+}
+
+.backend-dropdown {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  min-width: 140px;
+  background: var(--theme-dropdown-background, #ffffff);
+  border: 1px solid var(--theme-border-color, #e1e4e8);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.backend-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--theme-foreground, #24292e);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.backend-option:hover {
+  background: var(--theme-hover-background, #f6f8fa);
+}
+
+.backend-option.active {
+  background: var(--theme-selection-background, #e8f4fd);
+}
+
+.backend-option .check-icon {
+  margin-left: auto;
+  color: var(--theme-accent-color, #0366d6);
+  font-size: 12px;
 }
 
 /* ========== Cursor 风格选择器容器 ========== */

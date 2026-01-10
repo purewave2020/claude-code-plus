@@ -75,6 +75,7 @@
         @context-add="handleAddContext"
         @context-remove="handleRemoveContext"
         @auto-cleanup-change="handleAutoCleanupChange"
+        @update:backend-type="handleBackendTypeChange"
       />
     </div>
 
@@ -185,6 +186,7 @@ import type { ContentBlock } from '@/types/message'
 import type { ContextReference, AiModel, PermissionMode, TokenUsage as EnhancedTokenUsage } from '@/types/enhancedMessage'
 import type { PendingTask } from '@/types/pendingTask'
 import type { HistorySessionMetadata } from '@/types/session'
+import type { BackendType } from '@/types/backend'
 
 // Props 定义
 interface Props {
@@ -659,6 +661,20 @@ function handleRemoveContext(context: ContextReference) {
 function handleAutoCleanupChange(cleanup: boolean) {
   console.log('Changing auto cleanup contexts:', cleanup)
   currentTabAutoCleanup.value = cleanup
+}
+
+async function handleBackendTypeChange(newBackend: BackendType) {
+  console.log('Switching backend type:', newBackend)
+  const currentTab = sessionStore.currentTab
+  if (!currentTab) return
+
+  if (newBackend === currentTab.backendType.value) {
+    return // 无需切换
+  }
+
+  // 切换后端并重置会话
+  await sessionStore.switchTabBackend(currentTab, newBackend)
+  await sessionStore.resetCurrentTab()
 }
 
 function handleClearError() {
