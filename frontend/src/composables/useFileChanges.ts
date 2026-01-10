@@ -364,91 +364,32 @@ export function useFileChanges(
     return edit != null && !edit.rolledBack
   }
   
-  /**
-   * 回滚单个修改
-   * 会同时标记该修改及其之后的所有修改为已回滚
-   */
-  async function rollbackModification(filePath: string, historyTs: number): Promise<RollbackResult> {
-    // 设置回滚中状态
-    rollingBackFiles.value.add(filePath)
-    
-    try {
-      // 调用 RSocket API 执行回滚
-      const result = await jetbrainsRSocket.rollbackFile(filePath, historyTs)
-      
-      if (result.success) {
-        // 标记该文件中 historyTs >= 指定时间的所有修改为已回滚
-        for (const edit of fileEdits.value) {
-          if (edit.filePath === filePath && edit.historyTs >= historyTs) {
-            edit.rolledBack = true
-          }
-        }
-      }
-      
-      return result
-    } finally {
-      rollingBackFiles.value.delete(filePath)
-    }
-  }
+  // ============ 核心回滚方法 ============
   
   /**
-   * 回滚整个文件（回滚到最早的修改之前）
-   */
-  async function rollbackFile(filePath: string): Promise<RollbackResult> {
-    // 找到该文件最早的未回滚修改
-    const fileModifications = fileEdits.value
-      .filter(e => e.filePath === filePath && !e.rolledBack)
-      .sort((a, b) => a.timestamp - b.timestamp)
-    
-    if (fileModifications.length === 0) {
-      return { success: false, error: 'No modifications to rollback' }
-    }
-    
-    const earliestMod = fileModifications[0]
-    return rollbackModification(filePath, earliestMod.historyTs)
-  }
-  
-  /**
-   * 检查文件是否正在回滚
-   */
-  function isRollingBack(filePath: string): boolean {
-    return rollingBackFiles.value.has(filePath)
-  }
-  
-  /**
-   * 检查某个工具调用是否正在回滚
-   */
-  function isToolRollingBack(toolUseId: string): boolean {
-    return rollingBackToolIds.value.has(toolUseId)
-  }
-  
-  /**
-   * 批量回滚所有文件（流式返回结果）
-   * 实时更新每个修改的状态
+   * 核心回滚方法（统一使用批量回滚 API）
+   * 所有回滚操作都复用此方法，单个回滚 = items.length = 1
    * 
-   * @returns Promise 在所有回滚完成或出错时 resolve
+   * @param items 回滚项列表
+   * @param isBatchAll 是否是"回滚所有"操作（控制 isRollingBackAll 状态）
+   * @returns Promise 在所有回滚完成时 resolve
    */
-  function rollbackAll(): Promise<{ success: boolean; failedCount: number }> {
+  function executeRollback(
+    items: BatchRollbackItem[],
+    isBatchAll: boolean = false
+  ): Promise<{ success: boolean; failedCount: number }> {
     return new Promise((resolve) => {
-      // 收集所有未回滚的修改
-      const pendingEdits = fileEdits.value.filter(e => !e.rolledBack && !e.accepted)
-      
-      if (pendingEdits.length === 0) {
+      if (items.length === 0) {
         resolve({ success: true, failedCount: 0 })
         return
       }
       
-      // 设置全局回滚状态
-      isRollingBackAll.value = true
+      // 设置回滚状态
+      if (isBatchAll) {
+        isRollingBackAll.value = true
+      }
       
-      // 构建回滚项列表
-      const items: BatchRollbackItem[] = pendingEdits.map(edit => ({
-        filePath: edit.filePath,
-        beforeTimestamp: edit.historyTs,
-        toolUseId: edit.toolUseId
-      }))
-      
-      // 标记所有待回滚的 toolUseId
+      // 标记所有待回滚的 toolUseId 和文件
       for (const item of items) {
         rollingBackToolIds.value.add(item.toolUseId)
         rollingBackFiles.value.add(item.filePath)
@@ -456,8 +397,8 @@ export function useFileChanges(
       
       let failedCount = 0
       
-      // 调用批量回滚 API
-      const cancel = jetbrainsRSocket.batchRollback(
+      // 调用批量回滚 API（单个回滚也用这个，items.length = 1）
+      jetbrainsRSocket.batchRollback(
         items,
         // onEvent: 每个文件的状态变化
         (event: BatchRollbackEvent) => {
@@ -466,12 +407,10 @@ export function useFileChanges(
           
           switch (event.status) {
             case RollbackStatus.STARTED:
-              // 开始回滚，保持 rolling back 状态
               console.log(`[useFileChanges] Rollback started: ${event.toolUseId}`)
               break
               
             case RollbackStatus.SUCCESS:
-              // 回滚成功，标记为已回滚
               console.log(`[useFileChanges] Rollback success: ${event.toolUseId}`)
               edit.rolledBack = true
               rollingBackToolIds.value.delete(event.toolUseId)
@@ -485,7 +424,6 @@ export function useFileChanges(
               break
               
             case RollbackStatus.FAILED:
-              // 回滚失败，立即弹 toast 通知用户
               console.error(`[useFileChanges] Rollback failed: ${event.toolUseId}`, event.error)
               failedCount++
               rollingBackToolIds.value.delete(event.toolUseId)
@@ -504,36 +442,132 @@ export function useFileChanges(
         },
         // onComplete: 所有回滚完成
         () => {
-          isRollingBackAll.value = false
-          rollingBackToolIds.value.clear()
-          rollingBackFiles.value.clear()
+          if (isBatchAll) {
+            isRollingBackAll.value = false
+          }
+          // 清理状态（只清理本次回滚涉及的）
+          for (const item of items) {
+            rollingBackToolIds.value.delete(item.toolUseId)
+            rollingBackFiles.value.delete(item.filePath)
+          }
           resolve({ success: failedCount === 0, failedCount })
         },
         // onError: 回滚出错
         (error: Error) => {
           console.error('[useFileChanges] Batch rollback error:', error)
-          isRollingBackAll.value = false
-          rollingBackToolIds.value.clear()
-          rollingBackFiles.value.clear()
+          if (isBatchAll) {
+            isRollingBackAll.value = false
+          }
+          // 清理状态
+          for (const item of items) {
+            rollingBackToolIds.value.delete(item.toolUseId)
+            rollingBackFiles.value.delete(item.filePath)
+          }
           resolve({ success: false, failedCount: -1 })
         }
       )
-      
-      // 返回的 cancel 函数可以用于取消回滚，但这里我们不暴露它
-      // 如果需要取消功能，可以返回 { promise, cancel }
     })
   }
   
+  // ============ 回滚操作方法（都复用 executeRollback） ============
+  
   /**
-   * 根据 toolUseId 执行回滚
-   * 用于工具卡片上的回滚按钮
+   * 回滚单个修改（通过 filePath + historyTs）
+   */
+  async function rollbackModification(filePath: string, historyTs: number): Promise<RollbackResult> {
+    // 找到对应的修改记录
+    const edit = fileEdits.value.find(
+      e => e.filePath === filePath && e.historyTs === historyTs && !e.rolledBack
+    )
+    
+    if (!edit) {
+      return { success: false, error: 'Modification not found' }
+    }
+    
+    const items: BatchRollbackItem[] = [{
+      filePath: edit.filePath,
+      beforeTimestamp: edit.historyTs,
+      toolUseId: edit.toolUseId
+    }]
+    
+    const result = await executeRollback(items, false)
+    return { success: result.success, error: result.failedCount > 0 ? 'Rollback failed' : undefined }
+  }
+  
+  /**
+   * 回滚整个文件（回滚该文件的所有未回滚修改）
+   */
+  async function rollbackFile(filePath: string): Promise<RollbackResult> {
+    // 找到该文件所有未回滚的修改
+    const fileModifications = fileEdits.value.filter(
+      e => e.filePath === filePath && !e.rolledBack && !e.accepted
+    )
+    
+    if (fileModifications.length === 0) {
+      return { success: false, error: 'No modifications to rollback' }
+    }
+    
+    const items: BatchRollbackItem[] = fileModifications.map(edit => ({
+      filePath: edit.filePath,
+      beforeTimestamp: edit.historyTs,
+      toolUseId: edit.toolUseId
+    }))
+    
+    const result = await executeRollback(items, false)
+    return { success: result.success, error: result.failedCount > 0 ? `${result.failedCount} rollback(s) failed` : undefined }
+  }
+  
+  /**
+   * 检查文件是否正在回滚
+   */
+  function isRollingBack(filePath: string): boolean {
+    return rollingBackFiles.value.has(filePath)
+  }
+  
+  /**
+   * 检查某个工具调用是否正在回滚
+   */
+  function isToolRollingBack(toolUseId: string): boolean {
+    return rollingBackToolIds.value.has(toolUseId)
+  }
+  
+  /**
+   * 回滚所有文件（批量回滚）
+   */
+  function rollbackAll(): Promise<{ success: boolean; failedCount: number }> {
+    // 收集所有未回滚的修改
+    const pendingEdits = fileEdits.value.filter(e => !e.rolledBack && !e.accepted)
+    
+    if (pendingEdits.length === 0) {
+      return Promise.resolve({ success: true, failedCount: 0 })
+    }
+    
+    const items: BatchRollbackItem[] = pendingEdits.map(edit => ({
+      filePath: edit.filePath,
+      beforeTimestamp: edit.historyTs,
+      toolUseId: edit.toolUseId
+    }))
+    
+    return executeRollback(items, true)
+  }
+  
+  /**
+   * 根据 toolUseId 执行回滚（用于工具卡片上的回滚按钮）
    */
   async function rollbackByToolUseId(toolUseId: string): Promise<RollbackResult> {
     const edit = fileEditMap.value.get(toolUseId)
     if (!edit) {
       return { success: false, error: 'Modification not found' }
     }
-    return rollbackModification(edit.filePath, edit.historyTs)
+    
+    const items: BatchRollbackItem[] = [{
+      filePath: edit.filePath,
+      beforeTimestamp: edit.historyTs,
+      toolUseId: edit.toolUseId
+    }]
+    
+    const result = await executeRollback(items, false)
+    return { success: result.success, error: result.failedCount > 0 ? 'Rollback failed' : undefined }
   }
   
   /**
