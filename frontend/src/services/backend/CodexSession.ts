@@ -151,7 +151,7 @@ export class CodexSession extends BaseBackendSession {
   // Capabilities
   private static readonly CAPABILITIES: BackendCapabilities = {
     type: 'codex',
-    displayName: 'OpenAI Codex',
+    displayName: 'Codex',
     supportsThinking: true,
     thinkingConfigType: 'effort_level',
     supportsSubAgents: false,

@@ -69,7 +69,7 @@ function getBackendDescription(type: BackendType): string {
   if (type === BackendTypes.CLAUDE) {
     return 'Anthropic Claude - 强大的代码助手，支持扩展思考和子任务'
   } else if (type === BackendTypes.CODEX) {
-    return 'OpenAI Codex - 代码生成专家，支持沙盒模式'
+    return 'Codex - 代码生成专家，支持沙盒模式'
   }
 
   return capabilities.displayName

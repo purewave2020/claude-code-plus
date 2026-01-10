@@ -11,7 +11,7 @@
           后端类型:
           <select v-model="example1Backend" class="backend-select">
             <option value="claude">Claude</option>
-            <option value="codex">OpenAI Codex</option>
+            <option value="codex">Codex</option>
           </select>
         </label>
       </div>
@@ -95,7 +95,7 @@
           <label>后端类型</label>
           <select v-model="example5Backend" class="backend-select">
             <option value="claude">Claude</option>
-            <option value="codex">OpenAI Codex</option>
+            <option value="codex">Codex</option>
           </select>
         </div>
 

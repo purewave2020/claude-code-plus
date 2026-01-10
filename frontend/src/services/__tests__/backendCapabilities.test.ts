@@ -42,7 +42,7 @@ describe('Capability Lookups', () => {
     it('should return Codex capabilities for codex type', () => {
       const caps = getCapabilities('codex')
       expect(caps.type).toBe('codex')
-      expect(caps.displayName).toBe('OpenAI Codex')
+      expect(caps.displayName).toBe('Codex')
     })
   })
 
@@ -322,7 +322,7 @@ describe('Display Helpers', () => {
     })
 
     it('should return "OpenAI Codex" for codex', () => {
-      expect(getBackendDisplayName('codex')).toBe('OpenAI Codex')
+      expect(getBackendDisplayName('codex')).toBe('Codex')
     })
   })
 

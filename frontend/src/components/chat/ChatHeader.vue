@@ -78,27 +78,7 @@
       >
         📋
       </button>
-      <!-- 后端切换按钮 -->
-      <div class="backend-switcher" @click="toggleBackendMenu">
-        <BackendIcon :type="currentBackendType" :size="16" />
-        <svg class="dropdown-arrow" width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
-          <path d="M1 2.5L4 5.5L7 2.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-        </svg>
-        <!-- 下拉菜单 -->
-        <div v-if="showBackendMenu" class="backend-menu">
-          <div
-            v-for="backend in availableBackends"
-            :key="backend"
-            class="backend-menu-item"
-            :class="{ active: backend === currentBackendType }"
-            @click.stop="handleSwitchBackend(backend)"
-          >
-            <BackendIcon :type="backend" :size="14" />
-            <span>{{ getBackendDisplayName(backend) }}</span>
-            <span v-if="backend === currentBackendType" class="check-mark">✓</span>
-          </div>
-        </div>
-      </div>
+
       <button
         class="icon-btn server-btn"
         type="button"
@@ -133,11 +113,10 @@ import { useSessionStore } from '@/stores/sessionStore'
 import { useToastStore } from '@/stores/toastStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { ConnectionStatus } from '@/types/display'
-import type { BackendType } from '@/types/backend'
 import { BackendTypes } from '@/types/backend'
-import { getAvailableBackends, getBackendDisplayName } from '@/services/backendCapabilities'
+
 import SessionTabs, { type SessionTabInfo } from './SessionTabs.vue'
-import BackendIcon from '@/components/icons/BackendIcon.vue'
+
 import ThemeSwitcher from '@/components/toolbar/ThemeSwitcher.vue'
 import LanguageSwitcher from '@/components/toolbar/LanguageSwitcher.vue'
 import McpStatusPopup from '@/components/toolbar/McpStatusPopup.vue'
@@ -152,9 +131,7 @@ let mcpRefreshTimer: ReturnType<typeof setInterval> | null = null
 // i18n
 const { t } = useI18n()
 
-// 后端切换菜单
-const showBackendMenu = ref(false)
-const availableBackends = computed(() => getAvailableBackends())
+
 const isReconnecting = ref(false)
 
 // 会话操作菜单
@@ -167,35 +144,12 @@ const canReconnect = computed(() => {
   return !tab.isConnecting.value
 })
 
-function toggleBackendMenu() {
-  showBackendMenu.value = !showBackendMenu.value
-}
-
-function closeBackendMenu() {
-  showBackendMenu.value = false
-}
-
 function toggleSessionMenu() {
   showSessionMenu.value = !showSessionMenu.value
 }
 
 function closeSessionMenu() {
   showSessionMenu.value = false
-}
-
-async function handleSwitchBackend(newBackend: BackendType) {
-  showBackendMenu.value = false
-
-  if (newBackend === currentBackendType.value) {
-    return // 无需切换
-  }
-
-  const currentTab = sessionStore.currentTab
-  if (!currentTab) return
-
-  // 切换后端并重置会话
-  await sessionStore.switchTabBackend(currentTab, newBackend)
-  await sessionStore.resetCurrentTab()
 }
 
 async function handleReconnect() {
@@ -220,9 +174,6 @@ async function handleResetSession() {
 // 点击外部关闭菜单
 function handleClickOutside(event: MouseEvent) {
   const target = event.target as HTMLElement
-  if (!target.closest('.backend-switcher')) {
-    closeBackendMenu()
-  }
   if (!target.closest('.session-menu-trigger')) {
     closeSessionMenu()
   }
@@ -298,11 +249,6 @@ watch(currentTabId, () => {
     fetchedMcpServers.value = []
     void refreshMcpStatus()
   }
-})
-
-// 当前会话的后端类型
-const currentBackendType = computed<BackendType>(() => {
-  return sessionStore.currentTab?.backendType.value ?? BackendTypes.CLAUDE
 })
 
 // 当前 Tab 的 MCP 服务器状态（优先使用 API 获取的数据）
@@ -525,82 +471,6 @@ function handleRename(tabId: string, newName: string) {
   to {
     transform: rotate(360deg);
   }
-}
-
-/* 后端切换按钮 */
-.backend-switcher {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 6px;
-  border-radius: 6px;
-  border: 1px solid var(--theme-border, #d0d7de);
-  background: var(--theme-background, #ffffff);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.backend-switcher:hover {
-  border-color: var(--theme-accent, #0366d6);
-  background: var(--theme-hover-background, rgba(0, 0, 0, 0.02));
-}
-
-.backend-switcher .dropdown-arrow {
-  color: var(--theme-muted-foreground, #656d76);
-  margin-left: 2px;
-}
-
-/* 后端下拉菜单 */
-.backend-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  min-width: 160px;
-  background: var(--theme-card-background, #ffffff);
-  border: 1px solid var(--theme-border, #d0d7de);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  overflow: hidden;
-  animation: menuFadeIn 0.15s ease;
-}
-
-@keyframes menuFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.backend-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--theme-foreground, #24292e);
-  cursor: pointer;
-  transition: background 0.1s ease;
-}
-
-.backend-menu-item:hover {
-  background: var(--theme-hover-background, rgba(0, 0, 0, 0.04));
-}
-
-.backend-menu-item.active {
-  background: var(--theme-accent-background, rgba(3, 102, 214, 0.08));
-  color: var(--theme-accent, #0366d6);
-}
-
-.backend-menu-item .check-mark {
-  margin-left: auto;
-  color: var(--theme-accent, #0366d6);
-  font-weight: bold;
 }
 
 /* 会话操作菜单 */

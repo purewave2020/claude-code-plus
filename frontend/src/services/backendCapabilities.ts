@@ -130,7 +130,7 @@ export const CODEX_SANDBOX_MODES: SandboxMode[] = [
  */
 export const CODEX_CAPABILITIES: BackendCapabilities = {
   type: 'codex',
-  displayName: 'OpenAI Codex',
+  displayName: 'Codex',
   supportsThinking: true,
   thinkingConfigType: 'effort_level',
   supportsSubAgents: false,

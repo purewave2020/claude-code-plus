@@ -75,7 +75,7 @@ vi.mock('@/services/backendCapabilities', () => ({
     return models.find(m => m.modelId === id)
   },
   getBackendDisplayName: (type: BackendType) => {
-    return type === 'claude' ? 'Claude' : 'OpenAI Codex'
+    return type === 'claude' ? 'Claude' : 'Codex'
   },
   isValidModel: (type: BackendType, modelId: string) => {
     const models = type === 'claude'
@@ -118,7 +118,7 @@ describe('ModelSelector', () => {
       })
 
       expect(wrapper.exists()).toBe(true)
-      expect(wrapper.find('.backend-badge').text()).toContain('OpenAI Codex')
+      expect(wrapper.find('.backend-badge').text()).toContain('Codex')
     })
 
     it('should show disabled state', () => {
