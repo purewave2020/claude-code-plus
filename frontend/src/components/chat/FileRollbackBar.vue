@@ -297,10 +297,6 @@ async function handleRollbackAll() {
   // 如果正在回滚，忽略
   if (isRollingBackAll.value) return
   
-  // 确认对话框
-  const confirmed = confirm(t('tools.rollbackAllConfirm'))
-  if (!confirmed) return
-  
   // 调用批量回滚
   const result = await fileChangesInstance.value.rollbackAll()
   
@@ -332,10 +328,6 @@ async function handleRollbackFile(filePath: string) {
   const file = fileChanges.value.find(f => f.filePath === filePath)
   if (!file) return
   
-  // 确认对话框
-  const confirmed = confirm(t('tools.rollbackFileConfirm', { file: file.fileName }))
-  if (!confirmed) return
-  
   const result = await fileChangesInstance.value.rollbackFile(filePath)
   if (!result.success) {
     console.error('Rollback failed:', result.error)
@@ -346,10 +338,6 @@ async function handleRollbackFile(filePath: string) {
 // 处理回滚单个修改
 async function handleRollbackModification(filePath: string, historyTs: number) {
   if (!fileChangesInstance.value) return
-  
-  // 确认对话框
-  const confirmed = confirm(t('tools.rollbackModificationConfirm'))
-  if (!confirmed) return
   
   const result = await fileChangesInstance.value.rollbackModification(filePath, historyTs)
   if (!result.success) {
