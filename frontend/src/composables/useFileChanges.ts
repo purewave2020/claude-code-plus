@@ -361,7 +361,7 @@ export function useFileChanges(
    */
   function canRollback(toolUseId: string): boolean {
     const edit = fileEditMap.value.get(toolUseId)
-    return edit != null && !edit.rolledBack
+    return edit != null && !edit.rolledBack && !edit.accepted
   }
   
   // ============ 核心回滚方法 ============
