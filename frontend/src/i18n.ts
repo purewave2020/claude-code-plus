@@ -8,14 +8,15 @@
  */
 import { createI18n } from 'vue-i18n'
 import zhCN from './locales/zh-CN'
+import zhTW from './locales/zh-TW'
 import enUS from './locales/en-US'
 import koKR from './locales/ko-KR'
 import jaJP from './locales/ja-JP'
 
-export type SupportedLocale = 'zh-CN' | 'en-US' | 'ko-KR' | 'ja-JP'
+export type SupportedLocale = 'zh-CN' | 'zh-TW' | 'en-US' | 'ko-KR' | 'ja-JP'
 
 const LOCALE_STORAGE_KEY = 'claude-code-plus-locale'
-const SUPPORTED_LOCALES: SupportedLocale[] = ['zh-CN', 'en-US', 'ko-KR', 'ja-JP']
+const SUPPORTED_LOCALES: SupportedLocale[] = ['zh-CN', 'zh-TW', 'en-US', 'ko-KR', 'ja-JP']
 
 /**
  * 将任意语言代码标准化为支持的语言
@@ -23,7 +24,13 @@ const SUPPORTED_LOCALES: SupportedLocale[] = ['zh-CN', 'en-US', 'ko-KR', 'ja-JP'
 export function normalizeLocale(locale: string): SupportedLocale {
   const normalized = locale.toLowerCase().replace('_', '-')
 
-  if (normalized.startsWith('zh')) return 'zh-CN'
+  if (normalized.startsWith('zh')) {
+    // 区分简体和繁体中文
+    if (normalized === 'zh-tw' || normalized === 'zh-hk' || normalized === 'zh-hant') {
+      return 'zh-TW'
+    }
+    return 'zh-CN'
+  }
   if (normalized.startsWith('ko')) return 'ko-KR'
   if (normalized.startsWith('ja')) return 'ja-JP'
   return 'en-US'
@@ -50,6 +57,7 @@ export const i18n = createI18n({
   fallbackLocale: 'en-US',
   messages: {
     'zh-CN': zhCN,
+    'zh-TW': zhTW,
     'en-US': enUS,
     'ko-KR': koKR,
     'ja-JP': jaJP

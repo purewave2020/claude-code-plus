@@ -7,6 +7,7 @@ import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import zhTw from 'element-plus/es/locale/lang/zh-tw'
 import en from 'element-plus/es/locale/lang/en'
 import koKr from 'element-plus/es/locale/lang/ko'
 import jaJp from 'element-plus/es/locale/lang/ja'
@@ -66,6 +67,7 @@ if (!(window as any).__serverUrl) {
 function getElementPlusLocale(locale: string) {
   const localeMap: Record<string, any> = {
     'zh-CN': zhCn,
+    'zh-TW': zhTw,
     'en-US': en,
     'ko-KR': koKr,
     'ja-JP': jaJp

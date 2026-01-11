@@ -30,7 +30,8 @@ import { setLocale, type SupportedLocale } from '@/i18n'
 const { locale } = useI18n()
 
 const supportedLocales = [
-  { value: 'zh-CN', label: '中文', code: '中' },
+  { value: 'zh-CN', label: '简体中文', code: '简' },
+  { value: 'zh-TW', label: '繁體中文', code: '繁' },
   { value: 'en-US', label: 'English', code: 'EN' },
   { value: 'ko-KR', label: '한국어', code: '한' },
   { value: 'ja-JP', label: '日本語', code: '日' }
