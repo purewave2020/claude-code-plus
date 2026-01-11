@@ -1259,11 +1259,9 @@ class AiAgentRpcServiceImpl(
                 runCatching { SandboxMode.valueOf(it.uppercase()) }.getOrNull()
             }
 
-        val approvalPolicy = when (options.permissionMode) {
-            RpcPermissionMode.BYPASS_PERMISSIONS -> ApprovalMode.NEVER
-            null -> null
-            else -> ApprovalMode.ON_REQUEST
-        }
+        // Codex 永远使用 ON_REQUEST（始终发起权限请求）
+        // 绕过权限由前端通过 skipPermissions 处理（自动批准）
+        val approvalPolicy = ApprovalMode.ON_REQUEST
 
         val reasoningEffort = parseReasoningEffort(
             options.codexReasoningEffort ?: codexDefaults.defaultReasoningEffort
@@ -1277,7 +1275,7 @@ class AiAgentRpcServiceImpl(
         val apiKeyPresent = !(options.apiKey ?: codexDefaults.apiKey).isNullOrBlank()
         val baseUrlLog = options.baseUrl ?: codexDefaults.baseUrl ?: "default"
         val sandboxLog = sandboxMode?.name ?: "default"
-        val approvalLog = approvalPolicy?.name ?: "default"
+        val approvalLog = approvalPolicy.name
         val effortLog = reasoningEffort?.wireValue ?: "default"
         val summaryLog = reasoningSummary ?: "default"
         val cwdLog = workingDirectory ?: "default"
