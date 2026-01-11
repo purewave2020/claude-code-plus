@@ -768,11 +768,14 @@ async function handleHistorySelect(sessionId: string) {
         console.log('🔄 Resuming history session:', sessionId)
         // 优先使用 customTitle（重命名后的标题），否则使用 firstUserMessage
         const sessionTitle = historySession.customTitle || historySession.firstUserMessage
+        // 使用当前 Tab 的后端类型（因为历史列表是按当前后端加载的）
+        const currentBackendType = sessionStore.currentTab?.backendType.value
         await sessionStore.resumeSession(
           sessionId,
           sessionTitle,
           historySession.projectPath,
-          historySession.messageCount
+          historySession.messageCount,
+          currentBackendType
         )
       }
     }
