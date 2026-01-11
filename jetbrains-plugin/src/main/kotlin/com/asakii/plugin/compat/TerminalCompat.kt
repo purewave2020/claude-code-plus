@@ -139,7 +139,12 @@ class TerminalWidgetWrapper(private val widget: ShellTerminalWidget) {
             "SIGTSTP" -> "\u001A"  // Ctrl+Z (SUB, ASCII 26)
             else -> "\u0003"       // 默认 SIGINT
         }
-        widget.terminalStarter?.sendBytes(bytes.toByteArray(), false)
+        // 使用 TtyConnector.write() 替代已废弃的 terminalStarter.sendBytes()
+        try {
+            widget.ttyConnector?.write(bytes.toByteArray())
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to send interrupt signal: $signal" }
+        }
     }
 
     /**
@@ -148,9 +153,9 @@ class TerminalWidgetWrapper(private val widget: ShellTerminalWidget) {
     val terminalTextBuffer get() = widget.terminalTextBuffer
 
     /**
-     * 获取 terminalStarter
+     * 获取 TtyConnector（用于发送数据到终端）
      */
-    val terminalStarter get() = widget.terminalStarter
+    val ttyConnector get() = widget.ttyConnector
 
     /**
      * 获取终端输出内容

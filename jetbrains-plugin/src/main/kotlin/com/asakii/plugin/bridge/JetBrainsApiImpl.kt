@@ -117,7 +117,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error { "❌ [JetBrainsApi.file] Failed to open: ${e.message}" }
+                logger.logError { "❌ [JetBrainsApi.file] Failed to open: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -146,7 +146,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error { "❌ [JetBrainsApi.file] Failed to show diff: ${e.message}" }
+                logger.logError { "❌ [JetBrainsApi.file] Failed to show diff: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -184,7 +184,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error { "❌ [JetBrainsApi.file] Failed to show multi-edit diff: ${e.message}" }
+                logger.logError { "❌ [JetBrainsApi.file] Failed to show multi-edit diff: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -249,7 +249,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error { "❌ [JetBrainsApi.file] Failed to show edit preview diff: ${e.message}" }
+                logger.logError { "❌ [JetBrainsApi.file] Failed to show edit preview diff: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -329,7 +329,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error { "❌ [JetBrainsApi.file] Failed to show edit full diff: ${e.message}" }
+                logger.logError { "❌ [JetBrainsApi.file] Failed to show edit full diff: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -349,7 +349,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                logger.error { "❌ [JetBrainsApi.file] Failed to show markdown: ${e.message}" }
+                logger.logError { "❌ [JetBrainsApi.file] Failed to show markdown: ${e.message}" }
                 Result.failure(e)
             }
         }
@@ -431,7 +431,7 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
             } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
                 throw e  // 必须重新抛出
             } catch (e: Exception) {
-                logger.error { "❌ [JetBrainsApi.file] Failed to get active file: ${e.message}" }
+                logger.logError { "❌ [JetBrainsApi.file] Failed to get active file: ${e.message}" }
                 null
             }
         }

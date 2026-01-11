@@ -1,6 +1,6 @@
 package com.asakii.plugin.settings
 
-import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.asakii.plugin.compat.BrowseButtonCompat
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
@@ -93,14 +93,14 @@ class CodexConfigurable(private val project: Project) : Configurable {
      */
     private fun initializeComponents() {
         // Codex 二进制路径字段
-        binaryPathField = TextFieldWithBrowseButton().apply {
-            addBrowseFolderListener(
-                "选择 Codex 二进制文件",
-                "请选择 Codex 可执行文件",
-                project,
-                FileChooserDescriptorFactory.createSingleFileDescriptor()
-            )
-        }
+        binaryPathField = TextFieldWithBrowseButton()
+        BrowseButtonCompat.addBrowseFolderListener(
+            binaryPathField,
+            "选择 Codex 二进制文件",
+            "请选择 Codex 可执行文件",
+            project,
+            BrowseButtonCompat.createSingleFileDescriptor()
+        )
 
         // 自动检测按钮
         autoDetectButton = JButton("自动检测").apply {

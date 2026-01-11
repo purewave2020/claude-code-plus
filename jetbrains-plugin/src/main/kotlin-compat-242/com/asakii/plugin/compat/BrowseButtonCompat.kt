@@ -1,6 +1,7 @@
 package com.asakii.plugin.compat
 
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
 
@@ -30,5 +31,19 @@ object BrowseButtonCompat {
     ) {
         @Suppress("DEPRECATION")
         textField.addBrowseFolderListener(title, description, project, descriptor)
+    }
+
+    /**
+     * 创建单文件选择器描述符
+     *
+     * 兼容层：
+     * - 2024.2 ~ 2024.3: createSingleFileDescriptor() 未废弃
+     * - 2025.1 ~ 2025.2: createSingleFileDescriptor() 已废弃但仍可用
+     *
+     * @return FileChooserDescriptor 单文件选择器
+     */
+    @Suppress("DEPRECATION")
+    fun createSingleFileDescriptor(): FileChooserDescriptor {
+        return FileChooserDescriptorFactory.createSingleFileDescriptor()
     }
 }

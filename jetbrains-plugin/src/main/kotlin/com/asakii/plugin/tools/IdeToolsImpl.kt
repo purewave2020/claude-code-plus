@@ -73,7 +73,7 @@ class IdeToolsImpl(
             }
             Result.success(Unit)
         } catch (e: Exception) {
-            logger.error { "❌ Failed to open file: ${e.message}" }
+            logger.logError { "❌ Failed to open file: ${e.message}" }
             Result.failure(e)
         }
     }
@@ -140,7 +140,7 @@ class IdeToolsImpl(
             
             Result.success(Unit)
         } catch (e: Exception) {
-            logger.error { "❌ Failed to show diff: ${e.message}" }
+            logger.logError { "❌ Failed to show diff: ${e.message}" }
             Result.failure(e)
         }
     }
@@ -327,7 +327,7 @@ class IdeToolsImpl(
             
             Result.success(result)
         } catch (e: Exception) {
-            logger.error { "Failed to get file content: ${e.message}" }
+            logger.logError { "Failed to get file content: ${e.message}" }
             Result.failure(e)
         }
     }

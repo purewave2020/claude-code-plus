@@ -1,21 +1,17 @@
 package com.asakii.settings
 
+import com.intellij.DynamicBundle
 import org.jetbrains.annotations.PropertyKey
-import java.util.Locale
-import java.util.ResourceBundle
 
-private const val BUNDLE = "messages.McpBundle"
+private const val BUNDLE_PATH = "messages.McpBundle"
 
 /**
  * MCP 国际化资源包
  *
  * 用于加载 UI 短文本（描述、警告等）
+ * 使用 DynamicBundle 跟随 IDEA 语言设置
  */
-object McpBundle {
-
-    private val bundle: ResourceBundle by lazy {
-        ResourceBundle.getBundle(BUNDLE, Locale.getDefault())
-    }
+object McpBundle : DynamicBundle(BUNDLE_PATH) {
 
     /**
      * 获取本地化消息
@@ -25,13 +21,8 @@ object McpBundle {
      * @return 本地化字符串
      */
     @JvmStatic
-    fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): String {
-        return try {
-            val value = bundle.getString(key)
-            if (params.isEmpty()) value else String.format(value, *params)
-        } catch (e: Exception) {
-            key // fallback to key if not found
-        }
+    fun message(@PropertyKey(resourceBundle = BUNDLE_PATH) key: String, vararg params: Any): String {
+        return getMessage(key, *params)
     }
 }
 
@@ -39,14 +30,15 @@ object McpBundle {
  * MCP 提示词加载器
  *
  * 用于加载长提示词（.md 文件）
+ * 跟随 IDEA 语言设置
  */
 object McpInstructions {
 
     /**
-     * 根据当前语言环境获取语言目录
+     * 根据 IDEA 语言设置获取语言目录
      */
     private fun getLanguageDir(): String {
-        val locale = Locale.getDefault()
+        val locale = DynamicBundle.getLocale()
         return when (locale.language) {
             "zh" -> "zh_CN"
             "ja" -> "ja"

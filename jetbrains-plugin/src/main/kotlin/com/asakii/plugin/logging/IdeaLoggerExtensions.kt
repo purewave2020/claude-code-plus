@@ -65,14 +65,19 @@ inline fun Logger.warn(throwable: Throwable?, message: () -> String) {
 
 /**
  * ERROR 级别日志（Lambda 版本，延迟计算消息）
+ *
+ * 注意：使用 logError 而非 error，避免与已废弃的 Logger.error(Object) 成员函数冲突。
+ * 成员函数优先级高于扩展函数，如果使用 error 作为名称，Kotlin 会调用废弃的成员函数。
  */
-inline fun Logger.error(message: () -> String) {
-    error(message())
+inline fun Logger.logError(message: () -> String) {
+    error(message(), null as Throwable?)
 }
 
 /**
  * ERROR 级别日志（Lambda 版本，带异常）
+ *
+ * 注意：使用 logError 而非 error，避免与已废弃的 Logger.error(Object) 成员函数冲突。
  */
-inline fun Logger.error(throwable: Throwable?, message: () -> String) {
+inline fun Logger.logError(throwable: Throwable?, message: () -> String) {
     error(message(), throwable)
 }
