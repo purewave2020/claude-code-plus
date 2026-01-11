@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.asakii.plugin.compat
 
 import com.intellij.diff.editor.DiffRequestProcessorEditor
@@ -8,6 +10,9 @@ import com.intellij.openapi.fileEditor.FileEditor
  * Diff Editor 兼容层 - 适用于 2024.1 ~ 2024.2 (241-242)
  *
  * 使用 DiffRequestProcessorEditor.getProcessor().getActiveRequest() 直接 API 调用
+ *
+ * 注意：DiffRequestProcessorEditor 和 getProcessor() 在 2024.3+ 已废弃，
+ * 但在 242 及之前版本中是唯一可用的 API。
  */
 object DiffEditorCompat {
 
