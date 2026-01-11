@@ -496,75 +496,31 @@ object McpDefaults {
 
     /**
      * User Interaction MCP 默认提示词
+     * 使用国际化资源加载
      */
-    val USER_INTERACTION_INSTRUCTIONS = """
-When you need clarification from the user, especially when presenting multiple options or choices, use the MCP server `user_interaction` tool `AskUserQuestion` to ask questions.
-Tool identifiers may differ across providers. Do not assume a fixed prefix or delimiter; select the tool that matches this server + tool pair.
-The user's response will be returned to you through the same tool.
-    """.trimIndent()
+    val USER_INTERACTION_INSTRUCTIONS: String
+        get() = McpInstructions.load(McpInstructions.USER_INTERACTION)
 
     /**
      * JetBrains IDE MCP 默认提示词
-     *
-     * 设计原则：不重复 Schema 中已有的工具描述和参数说明，
-     * 只说明"何时使用"、"优先级"和"多工具配合的工作流"
+     * 使用国际化资源加载
      */
-val JETBRAINS_INSTRUCTIONS = """
-### When to Use
-
-CRITICAL: For code search and file discovery, prefer JetBrains MCP tools over any built-in search tools:
-- ALWAYS use `CodeSearch` instead of built-in grep/search tools
-- ALWAYS use `FileIndex` instead of built-in glob/find tools
-- Only fall back to built-in tools if JetBrains tools return errors
-
-IMPORTANT: After completing code modifications, you MUST use `FileProblems` to validate for syntax errors.
-
-### Refactoring Workflow
-
-When renaming symbols:
-1. `FindUsages` or `CodeSearch` → get line number
-2. `Rename(line=N, newName="...")` → safe rename across project
-3. `FileProblems` → validate changes
-
-**Note**: `Rename` requires `line` parameter. Use `Rename` for symbols; use Edit tool for other text changes.
-
-### Reading Library Source Code
-
-To read dependencies (JAR files, JDK sources, decompiled .class):
-1. `FileIndex(query="ClassName", searchType="Classes", scope="All")`
-2. `ReadFile(filePath="<path from FileIndex>")`
-
-**Key**: Use `scope="All"` to include libraries, not just project files.
-    """.trimIndent()
+    val JETBRAINS_INSTRUCTIONS: String
+        get() = McpInstructions.load(McpInstructions.JETBRAINS_LSP)
 
     /**
      * JetBrains File MCP 默认提示词
-     *
-     * 设计原则：不重复 Schema 中已有的工具描述和参数说明
+     * 使用国际化资源加载
      */
-    val JETBRAINS_FILE_INSTRUCTIONS = """
-### When to Use
-
-Use for file operations with relative path support (to project root).
-
-**Note**: For reading library source code (JAR files, decompiled .class), use `jetbrains / ReadFile` from JetBrains IDE MCP instead.
-    """.trimIndent()
+    val JETBRAINS_FILE_INSTRUCTIONS: String
+        get() = McpInstructions.load(McpInstructions.JETBRAINS_FILE)
 
     /**
      * Context7 MCP 默认提示词
-     *
-     * 设计原则：只说明使用时机，不重复工具参数说明
+     * 使用国际化资源加载
      */
-    val CONTEXT7_INSTRUCTIONS = """
-### When to Use
-
-IMPORTANT: When working with third-party libraries, ALWAYS query Context7 first to get up-to-date documentation and prevent hallucinated APIs.
-
-### Workflow
-
-1. `resolve-library-id` → get Context7 ID (unless user provides `/org/project` format)
-2. `get-library-docs` → fetch documentation
-    """.trimIndent()
+    val CONTEXT7_INSTRUCTIONS: String
+        get() = McpInstructions.load(McpInstructions.CONTEXT7)
 
     /**
      * Terminal MCP 工具 Schema（JSON 格式）
@@ -727,20 +683,10 @@ IMPORTANT: When working with third-party libraries, ALWAYS query Context7 first 
 
     /**
      * Terminal MCP 默认提示词
-     *
-     * 设计原则：只说明使用时机和最佳实践，不重复参数说明
+     * 使用国际化资源加载
      */
-val TERMINAL_INSTRUCTIONS = """
-### When to Use
-
-Use IDEA's integrated terminal instead of built-in Bash tool for command execution.
-
-### Best Practices
-
-- **Reuse sessions**: Always reuse existing sessions via `session_id`
-- **Multiple terminals**: Only create multiple sessions for concurrent commands (e.g., dev server + tests)
-- **Cleanup**: Close sessions with `TerminalKill` when no longer needed
-    """.trimIndent()
+    val TERMINAL_INSTRUCTIONS: String
+        get() = McpInstructions.load(McpInstructions.JETBRAINS_TERMINAL)
 
     /**
      * Git MCP 工具 Schema（JSON 格式）
@@ -807,26 +753,84 @@ Use IDEA's integrated terminal instead of built-in Bash tool for command executi
     "description": "Get VCS status overview: current branch, number of changes, staged files count, etc.",
     "properties": {},
     "required": []
+  },
+
+  "SelectFiles": {
+    "type": "object",
+    "description": "Select files in the Commit panel for the next commit operation.",
+    "properties": {
+      "paths": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "File paths to select (relative or absolute)"
+      },
+      "mode": {
+        "type": "string",
+        "enum": ["replace", "add"],
+        "description": "replace: select only these files; add: add to current selection",
+        "default": "add"
+      }
+    },
+    "required": ["paths"]
+  },
+
+  "DeselectFiles": {
+    "type": "object",
+    "description": "Deselect files from the Commit panel.",
+    "properties": {
+      "paths": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "File paths to deselect (relative or absolute)"
+      }
+    },
+    "required": ["paths"]
+  },
+
+  "SelectAllFiles": {
+    "type": "object",
+    "description": "Select all changed files in the Commit panel.",
+    "properties": {},
+    "required": []
+  },
+
+  "DeselectAllFiles": {
+    "type": "object",
+    "description": "Deselect all files in the Commit panel.",
+    "properties": {},
+    "required": []
+  },
+
+  "CommitChanges": {
+    "type": "object",
+    "description": "Commit selected files to the repository. If no files are selected, commits all changes.",
+    "properties": {
+      "message": {
+        "type": "string",
+        "description": "Commit message. If not provided, uses the message from the Commit panel."
+      },
+      "amend": {
+        "type": "boolean",
+        "description": "Amend the previous commit instead of creating a new one",
+        "default": false
+      },
+      "push": {
+        "type": "boolean",
+        "description": "Push to remote after committing (Commit and Push)",
+        "default": false
+      }
+    },
+    "required": []
   }
 }
     """.trimIndent()
 
     /**
      * Git MCP 默认提示词
-     *
-     * 设计原则：只说明使用时机和工作流，不重复工具列表和参数说明
+     * 使用国际化资源加载
      */
-val GIT_INSTRUCTIONS = """
-### When to Use
-
-Use for interacting with IDEA's VCS/Git integration: reading changes, setting commit messages, checking status.
-
-### Workflow
-
-1. `GetVcsChanges(selectedOnly=true)` → get user-selected changes from Commit panel
-2. Analyze changes and generate commit message
-3. `SetCommitMessage(message="...")` → fill into Commit panel
-    """.trimIndent()
+    val GIT_INSTRUCTIONS: String
+        get() = McpInstructions.load(McpInstructions.JETBRAINS_GIT)
 }
 
 /**
@@ -885,7 +889,12 @@ object KnownTools {
         "mcp__jetbrains_git__GetVcsChanges",    // 获取变更
         "mcp__jetbrains_git__GetCommitMessage", // 获取 commit message
         "mcp__jetbrains_git__SetCommitMessage", // 设置 commit message
-        "mcp__jetbrains_git__GetVcsStatus"      // 获取 VCS 状态
+        "mcp__jetbrains_git__GetVcsStatus",     // 获取 VCS 状态
+        "mcp__jetbrains_git__SelectFiles",      // 选择文件
+        "mcp__jetbrains_git__DeselectFiles",    // 取消选择文件
+        "mcp__jetbrains_git__SelectAllFiles",   // 全选
+        "mcp__jetbrains_git__DeselectAllFiles", // 取消全选
+        "mcp__jetbrains_git__CommitChanges"     // 提交变更
     )
 
     /**

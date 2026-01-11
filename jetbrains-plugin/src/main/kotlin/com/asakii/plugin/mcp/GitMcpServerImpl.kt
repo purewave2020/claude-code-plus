@@ -3,9 +3,14 @@
 import com.asakii.claude.agent.sdk.mcp.McpServer
 import com.asakii.claude.agent.sdk.mcp.McpServerBase
 import com.asakii.claude.agent.sdk.mcp.annotations.McpServerConfig
+import com.asakii.plugin.mcp.git.CommitChangesTool
+import com.asakii.plugin.mcp.git.DeselectAllFilesTool
+import com.asakii.plugin.mcp.git.DeselectFilesTool
 import com.asakii.plugin.mcp.git.GetCommitMessageTool
 import com.asakii.plugin.mcp.git.GetVcsChangesTool
 import com.asakii.plugin.mcp.git.GetVcsStatusTool
+import com.asakii.plugin.mcp.git.SelectAllFilesTool
+import com.asakii.plugin.mcp.git.SelectFilesTool
 import com.asakii.plugin.mcp.git.SetCommitMessageTool
 import com.asakii.server.mcp.GitMcpServerProvider
 import com.asakii.settings.AgentSettingsService
@@ -43,6 +48,11 @@ class GitMcpServerImpl(private val project: Project) : McpServerBase() {
     private lateinit var getCommitMessageTool: GetCommitMessageTool
     private lateinit var setCommitMessageTool: SetCommitMessageTool
     private lateinit var getVcsStatusTool: GetVcsStatusTool
+    private lateinit var selectFilesTool: SelectFilesTool
+    private lateinit var deselectFilesTool: DeselectFilesTool
+    private lateinit var selectAllFilesTool: SelectAllFilesTool
+    private lateinit var deselectAllFilesTool: DeselectAllFilesTool
+    private lateinit var commitChangesTool: CommitChangesTool
 
     override fun getSystemPromptAppendix(): String {
         return AgentSettingsService.getInstance().effectiveGitInstructions
@@ -52,7 +62,12 @@ class GitMcpServerImpl(private val project: Project) : McpServerBase() {
         "GetVcsChanges",
         "GetCommitMessage",
         "SetCommitMessage",
-        "GetVcsStatus"
+        "GetVcsStatus",
+        "SelectFiles",
+        "DeselectFiles",
+        "SelectAllFiles",
+        "DeselectAllFiles"
+        // CommitChanges is NOT auto-allowed - requires user confirmation
     )
 
     companion object {
@@ -95,6 +110,11 @@ class GitMcpServerImpl(private val project: Project) : McpServerBase() {
             getCommitMessageTool = GetCommitMessageTool(project)
             setCommitMessageTool = SetCommitMessageTool(project)
             getVcsStatusTool = GetVcsStatusTool(project)
+            selectFilesTool = SelectFilesTool(project)
+            deselectFilesTool = DeselectFilesTool(project)
+            selectAllFilesTool = SelectAllFilesTool(project)
+            deselectAllFilesTool = DeselectAllFilesTool(project)
+            commitChangesTool = CommitChangesTool(project)
             logger.info { "All Git MCP tool instances created" }
 
             registerToolFromSchema("GetVcsChanges", getToolSchema("GetVcsChanges")) { arguments ->
@@ -113,7 +133,27 @@ class GitMcpServerImpl(private val project: Project) : McpServerBase() {
                 wrapToolResult(getVcsStatusTool.execute(arguments))
             }
 
-            logger.info { "Git MCP Server initialized, registered 4 tools" }
+            registerToolFromSchema("SelectFiles", getToolSchema("SelectFiles")) { arguments ->
+                wrapToolResult(selectFilesTool.execute(arguments))
+            }
+
+            registerToolFromSchema("DeselectFiles", getToolSchema("DeselectFiles")) { arguments ->
+                wrapToolResult(deselectFilesTool.execute(arguments))
+            }
+
+            registerToolFromSchema("SelectAllFiles", getToolSchema("SelectAllFiles")) { arguments ->
+                wrapToolResult(selectAllFilesTool.execute(arguments))
+            }
+
+            registerToolFromSchema("DeselectAllFiles", getToolSchema("DeselectAllFiles")) { arguments ->
+                wrapToolResult(deselectAllFilesTool.execute(arguments))
+            }
+
+            registerToolFromSchema("CommitChanges", getToolSchema("CommitChanges")) { arguments ->
+                wrapToolResult(commitChangesTool.execute(arguments))
+            }
+
+            logger.info { "Git MCP Server initialized, registered 9 tools" }
         } catch (e: Exception) {
             logger.error(e) { "Failed to initialize Git MCP Server: ${e.message}" }
             throw e

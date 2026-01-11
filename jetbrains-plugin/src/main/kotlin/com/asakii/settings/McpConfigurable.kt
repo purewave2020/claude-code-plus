@@ -413,12 +413,12 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         }
 
         // 检查内置服务器配置
-        val userInteractionEntry = builtInServers.find { it.name == "User Interaction MCP" }
-        val jetbrainsEntry = builtInServers.find { it.name == "JetBrains IDE MCP" }
-        val jetbrainsFileEntry = builtInServers.find { it.name == "JetBrains File MCP" }
-        val context7Entry = builtInServers.find { it.name == "Context7 MCP" }
-        val terminalEntry = builtInServers.find { it.name == "JetBrains Terminal MCP" }
-        val gitEntry = builtInServers.find { it.name == "JetBrains Git MCP" }
+        val userInteractionEntry = builtInServers.find { it.name == McpBundle.message("mcp.userInteraction.name") }
+        val jetbrainsEntry = builtInServers.find { it.name == McpBundle.message("mcp.jetbrainsIde.name") }
+        val jetbrainsFileEntry = builtInServers.find { it.name == McpBundle.message("mcp.jetbrainsFile.name") }
+        val context7Entry = builtInServers.find { it.name == McpBundle.message("mcp.context7.name") }
+        val terminalEntry = builtInServers.find { it.name == McpBundle.message("mcp.jetbrainsTerminal.name") }
+        val gitEntry = builtInServers.find { it.name == McpBundle.message("mcp.jetbrainsGit.name") }
 
         if (userInteractionEntry?.enabled != settings.enableUserInteractionMcp ||
             jetbrainsEntry?.enabled != settings.enableJetBrainsMcp ||
@@ -491,12 +491,12 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         val mcpSettings = service<McpSettingsService>()
 
         // 保存内置服务器配置
-        val userInteractionEntry = builtInServers.find { it.name == "User Interaction MCP" }
-        val jetbrainsEntry = builtInServers.find { it.name == "JetBrains IDE MCP" }
-        val jetbrainsFileEntry = builtInServers.find { it.name == "JetBrains File MCP" }
-        val context7Entry = builtInServers.find { it.name == "Context7 MCP" }
-        val terminalEntry = builtInServers.find { it.name == "JetBrains Terminal MCP" }
-        val gitEntry = builtInServers.find { it.name == "JetBrains Git MCP" }
+        val userInteractionEntry = builtInServers.find { it.name == McpBundle.message("mcp.userInteraction.name") }
+        val jetbrainsEntry = builtInServers.find { it.name == McpBundle.message("mcp.jetbrainsIde.name") }
+        val jetbrainsFileEntry = builtInServers.find { it.name == McpBundle.message("mcp.jetbrainsFile.name") }
+        val context7Entry = builtInServers.find { it.name == McpBundle.message("mcp.context7.name") }
+        val terminalEntry = builtInServers.find { it.name == McpBundle.message("mcp.jetbrainsTerminal.name") }
+        val gitEntry = builtInServers.find { it.name == McpBundle.message("mcp.jetbrainsGit.name") }
 
         settings.enableUserInteractionMcp = userInteractionEntry?.enabled ?: true
         settings.enableJetBrainsMcp = jetbrainsEntry?.enabled ?: true
@@ -623,22 +623,22 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         // 加载内置服务器
         builtInServers.clear()
         builtInServers.add(McpServerEntry(
-            name = "User Interaction MCP",
+            name = McpBundle.message("mcp.userInteraction.name"),
             enabled = settings.enableUserInteractionMcp,
             enabledBackends = userInteractionBackends,
             level = McpServerLevel.BUILTIN,
-            configSummary = "Allows the agent to ask questions",
+            configSummary = McpBundle.message("mcp.userInteraction.description"),
             isBuiltIn = true,
             instructions = settings.userInteractionInstructions,
             defaultInstructions = McpDefaults.USER_INTERACTION_INSTRUCTIONS,
             toolTimeoutSec = settings.userInteractionMcpTimeout
         ))
         builtInServers.add(McpServerEntry(
-            name = "JetBrains IDE MCP",
+            name = McpBundle.message("mcp.jetbrainsIde.name"),
             enabled = settings.enableJetBrainsMcp,
             enabledBackends = jetbrainsBackends,
             level = McpServerLevel.BUILTIN,
-            configSummary = "Code search, file indexing",
+            configSummary = McpBundle.message("mcp.jetbrainsIde.description"),
             isBuiltIn = true,
             instructions = settings.jetbrainsInstructions,
             defaultInstructions = McpDefaults.JETBRAINS_INSTRUCTIONS,
@@ -646,11 +646,11 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             toolTimeoutSec = settings.jetbrainsMcpTimeout
         ))
         builtInServers.add(McpServerEntry(
-            name = "JetBrains File MCP",
+            name = McpBundle.message("mcp.jetbrainsFile.name"),
             enabled = settings.enableJetBrainsFileMcp,
             enabledBackends = jetbrainsFileBackends,
             level = McpServerLevel.BUILTIN,
-            configSummary = "File read/write/edit operations",
+            configSummary = McpBundle.message("mcp.jetbrainsFile.description"),
             isBuiltIn = true,
             instructions = settings.jetbrainsFileInstructions,
             defaultInstructions = McpDefaults.JETBRAINS_FILE_INSTRUCTIONS,
@@ -662,11 +662,11 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             fileExternalRules = settings.jetbrainsFileExternalRules
         ))
         builtInServers.add(McpServerEntry(
-            name = "Context7 MCP",
+            name = McpBundle.message("mcp.context7.name"),
             enabled = settings.enableContext7Mcp,
             enabledBackends = context7Backends,
             level = McpServerLevel.BUILTIN,
-            configSummary = "Library documentation",
+            configSummary = McpBundle.message("mcp.context7.description"),
             isBuiltIn = true,
             instructions = settings.context7Instructions,
             apiKey = settings.context7ApiKey,
@@ -674,11 +674,11 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             toolTimeoutSec = settings.context7McpTimeout
         ))
         builtInServers.add(McpServerEntry(
-            name = "JetBrains Terminal MCP",
+            name = McpBundle.message("mcp.jetbrainsTerminal.name"),
             enabled = settings.enableTerminalMcp,
             enabledBackends = terminalBackends,
             level = McpServerLevel.BUILTIN,
-            configSummary = "IDEA integrated terminal",
+            configSummary = McpBundle.message("mcp.jetbrainsTerminal.description"),
             isBuiltIn = true,
             instructions = settings.terminalInstructions,
             defaultInstructions = McpDefaults.TERMINAL_INSTRUCTIONS,
@@ -693,11 +693,11 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             toolTimeoutSec = settings.terminalMcpTimeout
         ))
         builtInServers.add(McpServerEntry(
-            name = "JetBrains Git MCP",
+            name = McpBundle.message("mcp.jetbrainsGit.name"),
             enabled = settings.enableGitMcp,
             enabledBackends = gitBackends,
             level = McpServerLevel.BUILTIN,
-            configSummary = "VCS integration and commit message generation",
+            configSummary = McpBundle.message("mcp.jetbrainsGit.description"),
             isBuiltIn = true,
             instructions = settings.gitInstructions,
             defaultInstructions = McpDefaults.GIT_INSTRUCTIONS,
