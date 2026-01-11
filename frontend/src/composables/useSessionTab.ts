@@ -2387,8 +2387,8 @@ export function useSessionTab(initialOrder: number = 0) {
         if (backendConfig.value.type === 'claude') {
             return {
                 type: 'claude',
-                enabled: backendConfig.value.thinkingEnabled,
-                tokenBudget: backendConfig.value.thinkingTokenBudget
+                enabled: backendConfig.value.thinkingEnabled ?? true,
+                tokenBudget: backendConfig.value.thinkingTokenBudget ?? 8096
             }
         } else {
             return {

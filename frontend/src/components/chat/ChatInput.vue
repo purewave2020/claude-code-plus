@@ -493,7 +493,8 @@ import StatusToggle from './StatusToggle.vue'
 import ThinkingConfigPanel from '@/components/settings/ThinkingConfigPanel.vue'
 import CodexToolbar from './CodexToolbar.vue'
 import { fileSearchService, type IndexedFileInfo } from '@/services/fileSearchService'
-import { jetbrainsBridge } from '@/services/jetbrainsApi'
+// jetbrainsBridge 保留供未来使用
+// import { jetbrainsBridge } from '@/services/jetbrainsApi'
 import { isInAtQuery } from '@/utils/atSymbolDetector'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useSettingsStore } from '@/stores/settingsStore'
@@ -621,9 +622,9 @@ const {
   thinkingEnabled: _thinkingEnabled,
   selectedPermissionValue,
   skipPermissionsValue,
-  baseModelOptions,
+  baseModelOptions: _baseModelOptions,
   claudeModelOptions,  // Claude 模型列表
-  getBaseModelLabel,
+  getBaseModelLabel: _getBaseModelLabel,
   getModeIcon,
   handleBaseModelChange,
   handleThinkingLevelChange,
@@ -757,15 +758,15 @@ const currentThinkingConfig = computed<ThinkingConfig>(() => {
   }
 })
 
-// Codex thinking helpers
-const codexThinkingEnabled = computed(() => {
+// Codex thinking helpers (保留以备将来使用)
+const _codexThinkingEnabled = computed(() => {
   if (isCodexThinking(currentThinkingConfig.value)) {
     return true
   }
   return false
 })
 
-const codexEffortLabel = computed(() => {
+const _codexEffortLabel = computed(() => {
   if (!isCodexThinking(currentThinkingConfig.value)) return codexReasoningEffort.value
   const effort = currentThinkingConfig.value.effort
   if (effort === null) return codexReasoningEffort.value
@@ -775,7 +776,7 @@ const codexEffortLabel = computed(() => {
   return level?.label || effort
 })
 
-const codexThinkingTooltip = computed(() => {
+const _codexThinkingTooltip = computed(() => {
   if (!isCodexThinking(currentThinkingConfig.value)) return '配置推理强度'
   const effort = currentThinkingConfig.value.effort
   if (effort === null) return '使用默认推理强度'
@@ -785,7 +786,7 @@ const codexThinkingTooltip = computed(() => {
   return level?.description || '配置推理强度'
 })
 
-function toggleThinkingConfigPanel() {
+function _toggleThinkingConfigPanel() {
   showThinkingConfig.value = !showThinkingConfig.value
 }
 
@@ -1026,7 +1027,7 @@ const activeFileLineRange = computed(() => {
 })
 
 // 获取活跃文件的显示文本（只显示文件名和范围）- 保留以兼容其他地方
-const activeFileDisplayText = computed(() => {
+const _activeFileDisplayText = computed(() => {
   if (!currentActiveFile.value) return ''
   const file = currentActiveFile.value
   const fileName = getFileName(file.relativePath)

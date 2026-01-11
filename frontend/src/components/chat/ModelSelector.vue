@@ -117,7 +117,7 @@ const { t } = useI18n()
 /**
  * 获取当前后端可用的模型列表
  */
-const availableModels = computed<BackendModelInfo[]>(() => {
+const _availableModels = computed<BackendModelInfo[]>(() => {
   if (!props.backendType) {
     return []
   }

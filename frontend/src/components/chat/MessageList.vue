@@ -373,7 +373,7 @@ const streamingStats = computed(() => {
 })
 
 // 格式化耗时显示（保留以备后用）
-const formattedElapsedTime = computed(() => formatDuration(elapsedTime.value))
+const _formattedElapsedTime = computed(() => formatDuration(elapsedTime.value))
 
 // 启动计时器
 function startTimer() {

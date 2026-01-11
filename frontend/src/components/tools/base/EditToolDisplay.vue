@@ -70,7 +70,7 @@ const replaceAll = computed(() => input.value.replace_all || false)
 
 // 检查是否可以接受（是 JetBrains 文件编辑工具且有 historyTs）
 const canAccept = computed(() => {
-  const toolName = props.toolCall.toolName || props.toolCall.name || ''
+  const toolName = props.toolCall.toolName || ''
   if (!isJetBrainsFileEditTool(toolName)) return false
   const historyTs = extractHistoryTs(props.toolCall.result)
   return historyTs !== null

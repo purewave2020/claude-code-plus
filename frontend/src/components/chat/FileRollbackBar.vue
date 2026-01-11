@@ -159,7 +159,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from '@/composables/useI18n'
-import { ideaBridge } from '@/services/ideaBridge'
+import { ideaBridge, getFileContent } from '@/services/ideaBridge'
 import { jetbrainsRSocket } from '@/services/jetbrainsRSocket'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useToastStore } from '@/stores/toastStore'
@@ -249,9 +249,9 @@ async function handleViewDiff(mod: FileModification) {
       const originalContent = await jetbrainsRSocket.getFileHistoryContent(mod.filePath, mod.historyTs)
       if (originalContent !== null) {
         // 获取当前内容
-        const response = await jetbrainsRSocket.readFile({ filePath: mod.filePath })
-        const currentContent = typeof response === 'string' ? response : ''
-        
+        const response = await getFileContent(mod.filePath)
+        const currentContent = (response?.data as { content?: string })?.content ?? ''
+
         await jetbrainsRSocket.showDiff({
           filePath: mod.filePath,
           oldContent: originalContent,

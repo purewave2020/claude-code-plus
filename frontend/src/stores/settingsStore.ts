@@ -290,8 +290,8 @@ export const useSettingsStore = defineStore('settings', () => {
   function getThinkingConfigForBackend(backendType: BackendType): ThinkingConfig {
     if (backendType === 'claude') {
       return createClaudeThinkingConfig(
-        settings.value.claudeThinkingEnabled,
-        settings.value.claudeThinkingTokens
+        settings.value.claudeThinkingEnabled ?? true,
+        settings.value.claudeThinkingTokens ?? 8096
       )
     } else {
       return createCodexThinkingConfig(
@@ -304,7 +304,7 @@ export const useSettingsStore = defineStore('settings', () => {
   /**
    * 设置后端的思考配置
    */
-  function setThinkingConfigForBackend(backendType: BackendType, config: ThinkingConfig) {
+  function setThinkingConfigForBackend(_backendType: BackendType, config: ThinkingConfig) {
     if (config.type === 'claude') {
       settings.value.claudeThinkingEnabled = config.enabled
       settings.value.claudeThinkingTokens = config.tokenBudget
@@ -385,7 +385,7 @@ export const useSettingsStore = defineStore('settings', () => {
       console.log('⚙️ Loading IDE settings from JetBrains...')
 
       // 同时加载 IDE 设置和可用模型列表
-      const [settingsResult, modelsResult] = await Promise.all([
+      const [settingsResult] = await Promise.all([
         jetbrainsRSocket.getSettings(),
         loadAvailableModels()
       ])
@@ -511,7 +511,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
     // 2. 应用 Claude 思考配置
     const claudeThinkingLevelId = newIdeSettings.claudeThinkingLevelId || newIdeSettings.defaultThinkingLevelId || 'ultra'
-    const claudeThinkingTokens = newIdeSettings.claudeThinkingTokens ?? newIdeSettings.defaultThinkingTokens
+    const claudeThinkingTokens = newIdeSettings.claudeThinkingTokens ?? newIdeSettings.defaultThinkingTokens ?? 0
     updates.claudeThinkingEnabled = claudeThinkingLevelId !== 'off' && claudeThinkingTokens > 0
     updates.claudeThinkingTokens = claudeThinkingTokens
     console.log('🧠 [IdeSettings] Claude 思考配置:', {
@@ -888,7 +888,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (config.skipPermissions !== undefined) {
       settings.value.skipPermissions = config.skipPermissions
     }
-    if (config.includePartialMessages !== undefined) {
+    if (config.includePartialMessages !== undefined && config.includePartialMessages !== null) {
       settings.value.includePartialMessages = config.includePartialMessages
     }
     if (config.maxTurns !== undefined) {

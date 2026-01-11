@@ -227,7 +227,8 @@ import type {
   BackendType,
   ClaudeBackendConfig,
   CodexBackendConfig,
-  SandboxMode,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  SandboxMode as _SandboxMode,
 } from '@/types/backend'
 import {
   BackendTypes,

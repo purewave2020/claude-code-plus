@@ -44,9 +44,9 @@ export interface CreateTabOptions extends TabConnectOptions {
 }
 
 /**
- * 获取默认会话设置（动态获取，避免硬编码）
+ * 获取默认会话设置（动态获取，避免硬编码）- 保留以备将来使用
  */
-function getDefaultSessionSettings() {
+function _getDefaultSessionSettings() {
   const defaultModelId = getDefaultModelId()
   const defaultModelCapability = getModelCapability(defaultModelId)
   return {
@@ -66,7 +66,7 @@ function getConnectOptionsForBackend(backendType: BackendType, settingsStore: Re
   if (backendType === 'claude') {
     return {
       model: globalSettings.claudeModel || 'claude-opus-4-5-20251101',
-      thinkingLevel: globalSettings.claudeThinkingTokens,
+      thinkingLevel: globalSettings.claudeThinkingTokens ?? undefined,
       permissionMode: globalSettings.permissionMode as RpcPermissionMode,
       skipPermissions: globalSettings.skipPermissions,
     }
@@ -75,7 +75,7 @@ function getConnectOptionsForBackend(backendType: BackendType, settingsStore: Re
     return {
       model: globalSettings.codexModel || 'gpt-5.2-codex',
       thinkingLevel: undefined, // Codex 使用 effort level，不是 token budget
-      reasoningEffort: globalSettings.codexReasoningEffort,
+      reasoningEffort: globalSettings.codexReasoningEffort ?? undefined,
       permissionMode: globalSettings.permissionMode as RpcPermissionMode,
       skipPermissions: globalSettings.skipPermissions,
       sandboxMode: globalSettings.codexSandboxMode || 'workspace-write',
@@ -705,7 +705,6 @@ export const useSessionStore = defineStore('session', () => {
     tab.name.value = i18n.global.t('session.defaultName', { time: shortTime })
 
     // 5. 保留之前的设置，设置初始连接选项
-    const defaultSettings = getDefaultSessionSettings()
     const backendType = tab.backendType.value
     const connectOptions: TabConnectOptions = getConnectOptionsForBackend(backendType, settingsStore)
     tab.setInitialConnectOptions(connectOptions)
@@ -847,7 +846,7 @@ export const useSessionStore = defineStore('session', () => {
             (event) => {
               if (event.status === TerminalBackgroundStatus.SUCCESS) {
                 backgroundedIds.push(event.toolUseId)
-              } else if (event.status === TerminalBackgroundStatus.ERROR) {
+              } else if (event.status === TerminalBackgroundStatus.FAILED) {
                 hasError = true
                 errorMsg = event.error
               }

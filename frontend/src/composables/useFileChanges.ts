@@ -723,6 +723,7 @@ export type FileChangesInstance = {
   hasChanges: ComputedRef<boolean>
   changedFileCount: ComputedRef<number>
   totalEditCount: ComputedRef<number>
+  isRollingBackAll: Ref<boolean>
 
   // 回滚方法
   addFileEdit: (toolCall: ToolCall) => boolean
@@ -730,10 +731,12 @@ export type FileChangesInstance = {
   rollbackFile: (filePath: string) => Promise<RollbackResult>
   rollbackModification: (filePath: string, historyTs: number) => Promise<RollbackResult>
   rollbackByToolUseId: (toolUseId: string) => Promise<RollbackResult>
+  rollbackAll: () => Promise<{ success: boolean; failedCount: number }>
   getModificationByToolUseId: (toolUseId: string) => FileModification | null
   isRollingBack: (filePath: string) => boolean
+  isToolRollingBack: (toolUseId: string) => boolean
   clear: () => void
-  
+
   // 接受方法
   acceptModification: (filePath: string, historyTs: number) => void
   acceptFile: (filePath: string) => void

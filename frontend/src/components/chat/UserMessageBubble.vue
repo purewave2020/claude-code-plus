@@ -382,7 +382,7 @@ const orderedContentBlocks = computed<OrderedContentBlock[]>(() => {
 // 提取用户输入的文本内容 - 用于复制和折叠检测
 const messageText = computed(() => {
   return orderedContentBlocks.value
-    .filter(block => block.type === 'text')
+    .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
     .map(block => block.text)
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -407,15 +407,15 @@ const parsedCurrentOpenFile = computed((): ParsedCurrentOpenFile | undefined => 
   return undefined
 })
 
-// 渲染后的文本（带链接）
-const renderedText = computed(() => {
+// 渲染后的文本（带链接）- 保留以备将来使用
+const _renderedText = computed(() => {
   if (!messageText.value) return ''
   const result = linkifyText(messageText.value)
   return result.html
 })
 
-// 预览文本（折叠时显示，截取前 100 个字符）
-const previewText = computed(() => {
+// 预览文本（折叠时显示，截取前 100 个字符）- 保留以备将来使用
+const _previewText = computed(() => {
   const text = messageText.value
   if (!text) return ''
   if (text.length > 100) {
@@ -490,7 +490,7 @@ const currentOpenFileLineRange = computed(() => {
 })
 
 // 当前打开文件的显示文本（只显示文件名，悬停显示全路径）- 保留以兼容
-const currentOpenFileDisplayText = computed(() => {
+const _currentOpenFileDisplayText = computed(() => {
   const file = currentOpenFile.value
   if (!file) return ''
   const fileName = getFileName(file.path)
@@ -534,8 +534,8 @@ function handleOpenFileClick() {
   })
 }
 
-// 处理内容区域点击（统一的展开/折叠）
-function handleContentClick() {
+// 处理内容区域点击（统一的展开/折叠）- 保留以备将来使用
+function _handleContentClick() {
   if (isLongMessage.value) {
     toggleCollapse()
   }
@@ -563,7 +563,7 @@ function handleMessageClick(event: MouseEvent) {
 }
 
 // 提取用户输入的图片内容（内嵌图片，在 content 中的图片）- 保留用于兼容
-const imageBlocks = computed(() => {
+const _imageBlocks = computed(() => {
   const content = props.message.content
   if (!content || !Array.isArray(content)) {
     return []
@@ -645,8 +645,8 @@ const previewVisible = ref(false)
 const previewImageSrc = ref('')
 const previewImageAlt = ref('')
 
-// 打开图片预览
-function openImagePreview(image: ImageBlock) {
+// 打开图片预览 - 保留以备将来使用
+function _openImagePreview(image: ImageBlock) {
   const src = getImageSrc(image)
   if (src) {
     previewImageSrc.value = src

@@ -1200,7 +1200,8 @@ function mapStreamEventFromProtoAsClass(proto: any, provider: 'claude' | 'codex'
 }
 
 // 保留旧的函数用于兼容（返回普通对象）
-function mapStreamEventFromProto(proto: any, provider: 'claude' | 'codex'): any {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _mapStreamEventFromProto(proto: any, provider: 'claude' | 'codex'): any {
   const base = {
     type: 'stream_event' as const,
     provider,
@@ -1699,7 +1700,7 @@ function mapSettingsChangedFromProto(proto: IdeSettingsChangedNotify): SettingsC
       codexDefaultReasoningSummary: s?.codexDefaultReasoningSummary || undefined,
       codexDefaultSandboxMode: s?.codexDefaultSandboxMode || undefined,
       defaultThinkingLevel: s?.defaultThinkingLevel || 'ULTRA',
-      defaultThinkingTokens: s?.defaultThinkingTokens,
+      defaultThinkingTokens: s?.defaultThinkingTokens ?? 0,
       defaultThinkingLevelId: s?.defaultThinkingLevelId || 'ultra',
       thinkingLevels: s?.thinkingLevels && s.thinkingLevels.length > 0
         ? s.thinkingLevels.map((level: ProtoThinkingLevelConfig) => ({

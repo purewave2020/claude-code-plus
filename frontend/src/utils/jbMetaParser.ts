@@ -37,7 +37,7 @@ export function parseJbMeta(result: string): { meta: JbMeta; content: string } {
   const regex = new RegExp(JB_META_PATTERN)
 
   while ((match = regex.exec(result)) !== null) {
-    const [fullMatch, key, value] = match
+    const [, key, value] = match
     switch (key) {
       case 'historyTs':
         meta.historyTs = parseInt(value, 10)

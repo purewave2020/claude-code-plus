@@ -355,10 +355,10 @@ export class ClaudeSession extends BaseBackendSession implements BackendSession 
       permissionMode: this.config.permissionMode as any,
       // 始终为 false，让权限检查走前端 RequestPermission 处理器
       dangerouslySkipPermissions: false,
-      includePartialMessages: this.config.includePartialMessages,
+      includePartialMessages: this.config.includePartialMessages ?? undefined,
       continueConversation: options.continueConversation,
       resumeSessionId: options.resumeSessionId,
-      thinkingEnabled: this.config.thinkingEnabled,
+      thinkingEnabled: this.config.thinkingEnabled ?? undefined,
       metadata: options.projectPath ? { projectPath: options.projectPath } : undefined,
     }
 

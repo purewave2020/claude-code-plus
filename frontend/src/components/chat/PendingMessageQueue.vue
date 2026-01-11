@@ -16,7 +16,7 @@
         <span class="item-index">{{ index + 1 }}.</span>
         <!-- 按原始顺序渲染内容：contexts → 文本 → 图片 -->
         <div class="item-content">
-          <template v-for="(item, itemIndex) in getOrderedPreviewItems(msg)" :key="itemIndex">
+          <template v-for="(item, idx) in getOrderedPreviewItems(msg)" :key="`item-${idx}`">
             <!-- 图片缩略图 -->
             <img
               v-if="item.type === 'image'"

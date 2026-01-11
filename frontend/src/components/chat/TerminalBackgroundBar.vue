@@ -50,9 +50,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '@/composables/useI18n'
-import { jetbrainsRSocket, type BackgroundableTerminal } from '@/services/jetbrainsRSocket'
+import { jetbrainsRSocket, TerminalBackgroundStatus, type BackgroundableTerminal } from '@/services/jetbrainsRSocket'
 import { ideaBridge } from '@/services/ideaBridge'
 import { useToastStore } from '@/stores/toastStore'
 
@@ -86,15 +86,13 @@ function isBackgrounding(toolUseId: string): boolean {
 // 轮询获取可后台化的任务
 async function pollBackgroundableTasks() {
   if (!ideaBridge.isInIde()) return
-  
+
   try {
-    const response = await jetbrainsRSocket.getBackgroundableTerminals()
-    if (response.success && response.terminals) {
-      // 只显示超过阈值的任务
-      backgroundableTasks.value = response.terminals.filter(
-        task => task.elapsedMs >= DISPLAY_THRESHOLD
-      )
-    }
+    const terminals = await jetbrainsRSocket.getBackgroundableTerminals()
+    // 只显示超过阈值的任务
+    backgroundableTasks.value = terminals.filter(
+      task => task.elapsedMs >= DISPLAY_THRESHOLD
+    )
   } catch (err) {
     console.error('[TerminalBackgroundBar] 获取可后台化任务失败:', err)
   }
@@ -112,8 +110,8 @@ async function handleBackgroundTask(task: BackgroundableTerminal) {
         [{ sessionId: task.sessionId, toolUseId: task.toolUseId }],
         (event) => {
           console.log('[TerminalBackgroundBar] 后台化事件:', event)
-          if (event.status === 'SUCCESS' || event.status === 'FAILED') {
-            if (event.status === 'FAILED' && event.error) {
+          if (event.status === TerminalBackgroundStatus.SUCCESS || event.status === TerminalBackgroundStatus.FAILED) {
+            if (event.status === TerminalBackgroundStatus.FAILED && event.error) {
               toastStore.error(event.error)
             }
             // 从列表中移除该任务
@@ -155,11 +153,11 @@ async function handleBackgroundAll() {
         (event) => {
           console.log('[TerminalBackgroundBar] 批量后台化事件:', event)
           completedTasks.add(event.toolUseId)
-          
-          if (event.status === 'FAILED' && event.error) {
+
+          if (event.status === TerminalBackgroundStatus.FAILED && event.error) {
             toastStore.error(`${event.sessionId}: ${event.error}`)
           }
-          
+
           // 从列表中移除已处理的任务
           backgroundableTasks.value = backgroundableTasks.value.filter(
             t => !completedTasks.has(t.toolUseId)

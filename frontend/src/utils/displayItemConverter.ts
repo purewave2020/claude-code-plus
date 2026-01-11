@@ -49,7 +49,7 @@ function isReplayMessage(message: Message): message is UnifiedMessage & { isRepl
 import type { ThinkingContent as DisplayThinkingContent } from '@/types/display'
 import { isToolUseBlock, isTextBlock } from '@/utils/contentBlockUtils'
 import { parseUserMessage } from '@/utils/userMessageBuilder'
-import { parseLocalCommandTags, parseCurrentOpenFileTag, removeCurrentOpenFileTag, hasCurrentOpenFileTag } from '@/utils/xmlTagParser'
+import { parseLocalCommandTags } from '@/utils/xmlTagParser'
 
 /**
  * 粗略判断文本块是否是工具输入参数的“原样 dump”
@@ -514,6 +514,7 @@ export function convertToDisplayItems(
             id: message.id,
             uuid: (message as UnifiedMessage).uuid,
             contexts: contexts.length > 0 ? contexts : undefined,
+            orderedContent: parsed.userContent.length > 0 ? (parsed.userContent as any) : [],
             content: parsed.userContent.length > 0 ? (parsed.userContent as any) : [],
             timestamp: message.timestamp,
             isReplay: true,
@@ -545,6 +546,7 @@ export function convertToDisplayItems(
         displayType: 'userMessage',
         id: message.id,
         contexts: contexts.length > 0 ? contexts : undefined,
+        orderedContent: content.length > 0 ? (content as any) : [],
         content: content.length > 0 ? (content as any) : [],
         timestamp: message.timestamp,
         currentOpenFile: parsed.currentOpenFile,

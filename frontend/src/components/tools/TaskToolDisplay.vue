@@ -64,7 +64,6 @@
 import { ref, computed, inject, watch, type ComputedRef } from 'vue'
 import type { GenericToolCall, ToolCall } from '@/types/display'
 import type { AiAgentService } from '@/services/aiAgentService'
-import type { RpcMessage } from '@/types/rpc'
 import { mapRpcMessageToMessage } from '@/utils/rpcMappers'
 import { convertMessageToDisplayItems } from '@/utils/displayItemConverter'
 import CompactToolCard from './CompactToolCard.vue'

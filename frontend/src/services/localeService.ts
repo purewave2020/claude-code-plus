@@ -36,6 +36,7 @@ class LocaleService {
   getElementPlusLocale(): string {
     const localeMap: Record<SupportedLocale, string> = {
       'zh-CN': 'zh-cn',
+      'zh-TW': 'zh-tw',
       'en-US': 'en',
       'ko-KR': 'ko',
       'ja-JP': 'ja'
@@ -77,6 +78,7 @@ class LocaleService {
   getSupportedLocales(): Array<{ value: SupportedLocale; label: string }> {
     return [
       { value: 'zh-CN', label: '简体中文' },
+      { value: 'zh-TW', label: '繁體中文' },
       { value: 'en-US', label: 'English' },
       { value: 'ko-KR', label: '한국어' },
       { value: 'ja-JP', label: '日本語' }
