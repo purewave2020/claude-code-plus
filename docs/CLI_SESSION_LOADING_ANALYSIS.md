@@ -1,6 +1,6 @@
 # Claude CLI 历史会话加载机制分析
 
-> 本文档基于 claude-cli-2.0.73.js 源码分析，对比项目中的实现差异。
+> 本文档基于 claude-cli-2.1.4.js 源码分析，对比项目中的实现差异。
 
 ## 1. 概述
 
@@ -704,7 +704,7 @@ async function Nm(A) {
 
 ## 7. 参考文件
 
-- 官方 CLI：`claude-agent-sdk/cli-patches/claude-cli-2.0.73.js`
+- 官方 CLI：`claude-agent-sdk/cli-patches/claude-cli-2.1.4.js`
 - **消息树算法实现**：`ai-agent-server/src/main/kotlin/com/asakii/server/history/HistoryJsonlLoader.kt`
 - 会话扫描：`claude-agent-sdk/src/main/kotlin/com/asakii/claude/agent/sdk/utils/ClaudeSessionScanner.kt`
 - 参数传递：`claude-agent-sdk/src/main/kotlin/com/asakii/claude/agent/sdk/transport/SubprocessTransport.kt:470-478`

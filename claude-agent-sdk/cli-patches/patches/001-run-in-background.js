@@ -35,7 +35,7 @@ module.exports = {
   id: 'agent_run_to_background',
   description: 'Add agent_run_to_background control command for Task tool background execution (v6 for CLI 2.0.77+)',
   priority: 100,
-  required: true,
+  required: false,  // CLI 2.1.4+ changed internal structure, 007-run-to-background provides unified fallback
   disabled: false,
 
   apply(ast, t, traverse, context) {

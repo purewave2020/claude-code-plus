@@ -33,7 +33,7 @@ Claude Code 支持与 Google Chrome 浏览器集成，通过 Chrome 扩展（Cla
 
 此函数通过检查 Native Messaging Host 文件是否存在来判断扩展安装状态。
 
-**代码位置**: `claude-cli-2.0.73.js` 约 line 2759
+**代码位置**: `claude-cli-2.1.4.js` 约 line 2759
 
 ```javascript
 async function a4A() {

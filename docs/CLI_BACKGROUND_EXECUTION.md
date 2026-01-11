@@ -13,21 +13,23 @@ Claude Code CLI 支持两种后台执行方式：
 | `&` 前缀 | 任务启动前 | 在消息开头加 `&` | 从一开始就以后台模式启动任务 |
 | Ctrl+B | 任务运行中 | 按下 Ctrl+B | 将正在运行的任务移到后台 |
 
-### ⚠️ 重要：后台执行机制架构变更 (v5)
+### ⚠️ 重要：后台执行机制架构变更 (v7)
 
-**v5 补丁重大变更**: 移除 Bash 后台支持，只保留 Agent (Task tool) 后台功能。
+**v7 补丁变更**: 恢复 Bash 后台支持，现在 Agent 和 Bash 都支持后台执行。
 
 | 工具类型 | 后台支持 | 控制命令 | 说明 |
 |----------|----------|----------|------|
 | **子代理 (Task tool)** | ✅ SDK 支持 | `agent_run_to_background` | 通过 Map 存储 resolver，支持按 agentId 指定 |
-| **Bash 命令** | ❌ 已移除 | - | 将通过 JetBrains MCP 自定义 Bash 工具实现 |
+| **Bash 命令** | ✅ SDK 支持 | `bash_run_to_background` | 通过注入全局对象，支持按 tool_use_id 指定 |
 
-**为什么移除 Bash 后台支持？**
+**v7 如何实现 Bash 后台？**
 
-技术分析发现 CLI 中 `tool_use_id` 存在参数传递断层（详见 9.5.1 节），无法实现按 ID 精确控制。因此决定：
-1. 移除补丁中的 Bash 后台代码，简化补丁复杂度
-2. 未来通过 JetBrains MCP 实现自定义 Bash 工具，完全控制后台逻辑
-3. Windows 使用 Git Bash，其他平台使用系统 bash
+通过最小侵入性的补丁设计：
+1. 注入全局对象 `global.__claudePlusBash` 管理运行中的 Bash 命令
+2. 修改 `se5` 函数调用传入 `tool_use_id`
+3. 创建 `shellCommand` 后注册到全局 Map
+4. 添加 `bash_run_to_background` 控制命令
+5. 触发 `shellCommand.status = "backgrounded"` 实现后台切换
 
 ---
 
@@ -35,7 +37,7 @@ Claude Code CLI 支持两种后台执行方式：
 
 ### 1.1 `rk()` 函数 - 命令类型识别
 
-**代码位置**: `claude-cli-2.0.69.js` 索引 `3964791`
+**代码位置**: `claude-cli-2.1.4.js` 索引 `3964791`
 
 ```javascript
 function rk(A) {
@@ -1212,7 +1214,7 @@ claude-agent-sdk/cli-patches/
 │   ├── 001-run-in-background.js   # 主补丁文件
 │   └── index.js                    # 补丁注册表
 ├── patch-cli.js                    # 补丁应用脚本
-├── claude-cli-2.0.69.js           # 原始 CLI
+├── claude-cli-2.1.4.js           # 原始 CLI
 └── package.json                    # 依赖 (Babel)
 ```
 
@@ -1225,10 +1227,10 @@ cd claude-agent-sdk/cli-patches
 npm install
 
 # 验证补丁 (dry-run)
-node patch-cli.js --dry-run claude-cli-2.0.73.js
+node patch-cli.js --dry-run claude-cli-2.1.4.js
 
 # 应用补丁
-node patch-cli.js claude-cli-2.0.73.js ../src/main/resources/bundled/claude-cli-2.0.73-enhanced.js
+node patch-cli.js claude-cli-2.1.4.js ../src/main/resources/bundled/claude-cli-2.1.4-enhanced.mjs
 ```
 
 或使用 Gradle 任务：

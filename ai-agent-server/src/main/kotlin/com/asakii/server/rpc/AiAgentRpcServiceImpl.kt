@@ -322,6 +322,63 @@ class AiAgentRpcServiceImpl(
         return RpcStatusResult(status = RpcSessionStatus.CONNECTED)
     }
 
+    override suspend fun bashRunToBackground(taskId: String): RpcBashBackgroundResult {
+        sdkLog.info { "🔄 [SDK] 将 Bash 命令移到后台运行: taskId=$taskId" }
+        val activeClient = client ?: return RpcBashBackgroundResult(
+            success = false,
+            error = "AI Agent 尚未连接，请先调用 connect()"
+        )
+        return try {
+            val result = activeClient.bashRunToBackground(taskId)
+            sdkLog.info { "✅ [SDK] bashRunToBackground 成功: taskId=${result.taskId}, command=${result.command}" }
+            RpcBashBackgroundResult(
+                success = result.success,
+                taskId = result.taskId,
+                command = result.command
+            )
+        } catch (e: Exception) {
+            sdkLog.warn { "❌ [SDK] bashRunToBackground 失败: ${e.message}" }
+            RpcBashBackgroundResult(
+                success = false,
+                error = e.message ?: "Unknown error"
+            )
+        }
+    }
+
+    override suspend fun runToBackground(taskId: String?): RpcUnifiedBackgroundResult {
+        sdkLog.info { "🔄 [SDK] 统一后台运行: taskId=${taskId ?: "all"}" }
+        val activeClient = client ?: return RpcUnifiedBackgroundResult(
+            success = false,
+            error = "AI Agent 尚未连接，请先调用 connect()"
+        )
+        return try {
+            val result = activeClient.runToBackground(taskId)
+            if (taskId != null) {
+                val typeInfo = if (result.isBash == true) "Bash" else "Agent"
+                sdkLog.info { "✅ [SDK] runToBackground 成功: $typeInfo taskId=${result.taskId}" }
+            } else {
+                sdkLog.info { "✅ [SDK] runToBackground 批量成功: Bash=${result.bashCount}, Agent=${result.agentCount}" }
+            }
+            RpcUnifiedBackgroundResult(
+                success = result.success,
+                isBash = result.isBash,
+                taskId = result.taskId,
+                command = result.command,
+                bashCount = result.bashCount,
+                agentCount = result.agentCount,
+                backgroundedBashIds = result.backgroundedBashIds,
+                backgroundedAgentIds = result.backgroundedAgentIds,
+                error = result.error
+            )
+        } catch (e: Exception) {
+            sdkLog.warn { "❌ [SDK] runToBackground 失败: ${e.message}" }
+            RpcUnifiedBackgroundResult(
+                success = false,
+                error = e.message ?: "Unknown error"
+            )
+        }
+    }
+
     override suspend fun setMaxThinkingTokens(maxThinkingTokens: Int?): RpcSetMaxThinkingTokensResult {
         sdkLog.info { "🧠 [SDK] 设置思考 token 上限: $maxThinkingTokens" }
         val activeClient = client ?: error("AI Agent 尚未连接，请先调用 connect()")

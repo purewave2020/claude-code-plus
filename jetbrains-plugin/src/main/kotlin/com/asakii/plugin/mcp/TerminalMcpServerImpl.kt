@@ -4,6 +4,7 @@ import com.asakii.claude.agent.sdk.mcp.McpServer
 import com.asakii.claude.agent.sdk.mcp.McpServerBase
 import com.asakii.claude.agent.sdk.mcp.annotations.McpServerConfig
 import com.asakii.plugin.mcp.tools.terminal.*
+import com.asakii.server.mcp.TerminalBackgroundResult
 import com.asakii.server.mcp.TerminalMcpServerProvider
 import com.asakii.settings.AgentSettingsService
 import com.asakii.settings.McpDefaults
@@ -277,6 +278,49 @@ class TerminalMcpServerProviderImpl(private val project: Project) : TerminalMcpS
         if (aiSessionId == null) return
         servers.remove(aiSessionId)?.let { server ->
             Disposer.dispose(server)
+        }
+    }
+
+    override fun runToBackground(toolUseId: String?): TerminalBackgroundResult {
+        val backgroundedIds = mutableListOf<String>()
+
+        if (toolUseId != null) {
+            // Single task mode: background specific task
+            for ((_, server) in servers) {
+                if (server.sessionManager.markTaskAsBackground(toolUseId)) {
+                    backgroundedIds.add(toolUseId)
+                    logger.info { "⏸️ Terminal task moved to background: $toolUseId" }
+                    break
+                }
+            }
+            return if (backgroundedIds.isNotEmpty()) {
+                TerminalBackgroundResult(
+                    success = true,
+                    backgroundedIds = backgroundedIds,
+                    count = 1
+                )
+            } else {
+                TerminalBackgroundResult(
+                    success = false,
+                    error = "Task not found: $toolUseId"
+                )
+            }
+        } else {
+            // Batch mode: background all running tasks
+            for ((sessionId, server) in servers) {
+                val tasks = server.sessionManager.getBackgroundableTasks(0) // Get all running tasks
+                for (task in tasks) {
+                    if (server.sessionManager.markTaskAsBackground(task.toolUseId)) {
+                        backgroundedIds.add(task.toolUseId)
+                        logger.info { "⏸️ Terminal task moved to background: ${task.toolUseId} (session: $sessionId)" }
+                    }
+                }
+            }
+            return TerminalBackgroundResult(
+                success = true,
+                backgroundedIds = backgroundedIds,
+                count = backgroundedIds.size
+            )
         }
     }
 }

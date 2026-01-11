@@ -600,6 +600,246 @@ export const ProtoCodec = {
   decodeRpcMessage(data: Uint8Array): RpcMessage {
     const proto = fromBinary(RpcMessageSchema, data)
     return mapRpcMessageFromProto(proto)
+  },
+
+  /**
+   * 编码 BashRunToBackgroundRequest（手写轻量编码）
+   *
+   * Proto 定义:
+   * message BashRunToBackgroundRequest {
+   *   string task_id = 1;
+   * }
+   */
+  encodeBashRunToBackgroundRequest(taskId: string): Uint8Array {
+    // 手写 protobuf 编码: field 1, wire type 2 (length-delimited string)
+    const encoder = new TextEncoder()
+    const taskIdBytes = encoder.encode(taskId)
+    const buffer: number[] = []
+
+    // 写入 varint 辅助函数
+    const writeVarint = (value: number) => {
+      let v = value >>> 0
+      while (v > 0x7f) {
+        buffer.push((v & 0x7f) | 0x80)
+        v >>>= 7
+      }
+      buffer.push(v)
+    }
+
+    // Field 1, wire type 2 (length-delimited): tag = (1 << 3) | 2 = 10
+    buffer.push(10)
+    writeVarint(taskIdBytes.length)
+    for (const byte of taskIdBytes) {
+      buffer.push(byte)
+    }
+
+    return new Uint8Array(buffer)
+  },
+
+  /**
+   * 解码 BashBackgroundResult（手写轻量解码）
+   *
+   * Proto 定义:
+   * message BashBackgroundResult {
+   *   bool success = 1;
+   *   optional string task_id = 2;
+   *   optional string command = 3;
+   *   optional string error = 4;
+   * }
+   */
+  decodeBashBackgroundResult(data: Uint8Array): {
+    success: boolean
+    taskId?: string
+    command?: string
+    error?: string
+  } {
+    let success = false
+    let taskId: string | undefined
+    let command: string | undefined
+    let error: string | undefined
+
+    const decoder = new TextDecoder()
+    let offset = 0
+
+    while (offset < data.length) {
+      const tag = data[offset++]
+      const fieldNumber = tag >> 3
+      const wireType = tag & 0x07
+
+      if (wireType === 0) {
+        // varint
+        let value = 0
+        let shift = 0
+        while (offset < data.length) {
+          const byte = data[offset++]
+          value |= (byte & 0x7f) << shift
+          if ((byte & 0x80) === 0) break
+          shift += 7
+        }
+
+        if (fieldNumber === 1) {
+          success = value !== 0
+        }
+      } else if (wireType === 2) {
+        // length-delimited (string)
+        let length = 0
+        let shift = 0
+        while (offset < data.length) {
+          const byte = data[offset++]
+          length |= (byte & 0x7f) << shift
+          if ((byte & 0x80) === 0) break
+          shift += 7
+        }
+
+        const stringBytes = data.slice(offset, offset + length)
+        offset += length
+        const stringValue = decoder.decode(stringBytes)
+
+        if (fieldNumber === 2) {
+          taskId = stringValue
+        } else if (fieldNumber === 3) {
+          command = stringValue
+        } else if (fieldNumber === 4) {
+          error = stringValue
+        }
+      }
+    }
+
+    return { success, taskId, command, error }
+  },
+
+  /**
+   * 编码 RunToBackgroundRequest（统一后台运行请求）
+   *
+   * Proto 定义:
+   * message RunToBackgroundRequest {
+   *   optional string task_id = 1;
+   * }
+   */
+  encodeRunToBackgroundRequest(taskId?: string): Uint8Array {
+    if (!taskId) {
+      // 空消息
+      return new Uint8Array(0)
+    }
+
+    const encoder = new TextEncoder()
+    const taskIdBytes = encoder.encode(taskId)
+    const buffer: number[] = []
+
+    const writeVarint = (value: number) => {
+      let v = value >>> 0
+      while (v > 0x7f) {
+        buffer.push((v & 0x7f) | 0x80)
+        v >>>= 7
+      }
+      buffer.push(v)
+    }
+
+    // Field 1, wire type 2 (length-delimited): tag = (1 << 3) | 2 = 10
+    buffer.push(10)
+    writeVarint(taskIdBytes.length)
+    for (const byte of taskIdBytes) {
+      buffer.push(byte)
+    }
+
+    return new Uint8Array(buffer)
+  },
+
+  /**
+   * 解码 UnifiedBackgroundResult（统一后台运行结果）
+   *
+   * Proto 定义:
+   * message UnifiedBackgroundResult {
+   *   bool success = 1;
+   *   optional bool is_bash = 2;
+   *   optional string task_id = 3;
+   *   optional string command = 4;
+   *   int32 bash_count = 5;
+   *   int32 agent_count = 6;
+   *   repeated string backgrounded_bash_ids = 7;
+   *   repeated string backgrounded_agent_ids = 8;
+   *   optional string error = 9;
+   * }
+   */
+  decodeUnifiedBackgroundResult(data: Uint8Array): {
+    success: boolean
+    isBash?: boolean
+    taskId?: string
+    command?: string
+    bashCount: number
+    agentCount: number
+    backgroundedBashIds: string[]
+    backgroundedAgentIds: string[]
+    error?: string
+  } {
+    let success = false
+    let isBash: boolean | undefined
+    let taskId: string | undefined
+    let command: string | undefined
+    let bashCount = 0
+    let agentCount = 0
+    const backgroundedBashIds: string[] = []
+    const backgroundedAgentIds: string[] = []
+    let error: string | undefined
+
+    const decoder = new TextDecoder()
+    let offset = 0
+
+    while (offset < data.length) {
+      const tag = data[offset++]
+      const fieldNumber = tag >>> 3
+      const wireType = tag & 0x7
+
+      if (wireType === 0) {
+        // varint
+        let value = 0
+        let shift = 0
+        while (offset < data.length) {
+          const byte = data[offset++]
+          value |= (byte & 0x7f) << shift
+          if ((byte & 0x80) === 0) break
+          shift += 7
+        }
+
+        if (fieldNumber === 1) {
+          success = value !== 0
+        } else if (fieldNumber === 2) {
+          isBash = value !== 0
+        } else if (fieldNumber === 5) {
+          bashCount = value
+        } else if (fieldNumber === 6) {
+          agentCount = value
+        }
+      } else if (wireType === 2) {
+        // length-delimited (string)
+        let length = 0
+        let shift = 0
+        while (offset < data.length) {
+          const byte = data[offset++]
+          length |= (byte & 0x7f) << shift
+          if ((byte & 0x80) === 0) break
+          shift += 7
+        }
+
+        const stringBytes = data.slice(offset, offset + length)
+        offset += length
+        const stringValue = decoder.decode(stringBytes)
+
+        if (fieldNumber === 3) {
+          taskId = stringValue
+        } else if (fieldNumber === 4) {
+          command = stringValue
+        } else if (fieldNumber === 7) {
+          backgroundedBashIds.push(stringValue)
+        } else if (fieldNumber === 8) {
+          backgroundedAgentIds.push(stringValue)
+        } else if (fieldNumber === 9) {
+          error = stringValue
+        }
+      }
+    }
+
+    return { success, isBash, taskId, command, bashCount, agentCount, backgroundedBashIds, backgroundedAgentIds, error }
   }
 }
 

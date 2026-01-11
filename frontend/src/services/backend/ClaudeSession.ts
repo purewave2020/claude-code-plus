@@ -191,6 +191,44 @@ export class ClaudeSession extends BaseBackendSession implements BackendSession 
     this.setGenerating(false)
   }
 
+  async bashRunToBackground(taskId: string): Promise<{
+    success: boolean
+    taskId?: string
+    command?: string
+    error?: string
+  }> {
+    if (!this.rsocket?.isConnected) {
+      return { success: false, error: 'Not connected to Claude backend' }
+    }
+
+    return await this.rsocket.bashRunToBackground(taskId)
+  }
+
+  async runToBackground(taskId?: string): Promise<{
+    success: boolean
+    isBash?: boolean
+    taskId?: string
+    command?: string
+    bashCount: number
+    agentCount: number
+    backgroundedBashIds: string[]
+    backgroundedAgentIds: string[]
+    error?: string
+  }> {
+    if (!this.rsocket?.isConnected) {
+      return {
+        success: false,
+        bashCount: 0,
+        agentCount: 0,
+        backgroundedBashIds: [],
+        backgroundedAgentIds: [],
+        error: 'Not connected to Claude backend'
+      }
+    }
+
+    return await this.rsocket.runToBackground(taskId)
+  }
+
   // ==========================================================================
   // Approval Handling
   // ==========================================================================

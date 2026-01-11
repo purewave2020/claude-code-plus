@@ -656,27 +656,28 @@ class ControlProtocol(
      *   - null: Background the latest agent (compatibility mode)
      */
     suspend fun agentRunToBackground(targetId: String? = null) {
-        // 手动构建 JSON，避免 kotlinx.serialization 添加 type 字段
+        // 使用统一的 run_to_background 端点 (007补丁)
+        // CLI 2.1.4+ 不再支持旧的 agent_run_to_background 端点
         val request = buildJsonObject {
-            put("subtype", "agent_run_to_background")
-            targetId?.let { put("target_id", it) }
+            put("subtype", "run_to_background")
+            targetId?.let { put("task_id", it) }  // 007补丁使用 task_id 参数
         }
-        val targetInfo = targetId ?: "latest"
-        logger.info { "📤 [ControlProtocol] 发送 agent_run_to_background 请求 (target: $targetInfo)" }
+        val targetInfo = targetId ?: "all"
+        logger.info { "📤 [ControlProtocol] 发送 run_to_background 请求 (target: $targetInfo)" }
 
         val response = sendControlRequestInternal(request)
-        logger.info { "📥 [ControlProtocol] 收到 agent_run_to_background 响应: subtype=${response.subtype}, error=${response.error}" }
+        logger.info { "📥 [ControlProtocol] 收到 run_to_background 响应: subtype=${response.subtype}, error=${response.error}" }
 
         if (response.subtype == "error") {
-            throw ControlProtocolException("Agent run to background failed: ${response.error}")
+            throw ControlProtocolException("Run to background failed: ${response.error}")
         }
 
-        logger.info { "✅ [ControlProtocol] Agent 已切换到后台运行 (target: $targetInfo)" }
+        logger.info { "✅ [ControlProtocol] 任务已切换到后台运行 (target: $targetInfo)" }
     }
 
     /**
-     * Send agents_run_all_to_background request to CLI.
-     * This will background ALL currently running Task tools (subagents) at once.
+     * Send run_to_background request to CLI in batch mode.
+     * This will background ALL currently running tasks (bash + agents) at once.
      *
      * This is equivalent to the unified Ctrl+B feature in CLI 2.1.0+, which
      * moves all foreground tasks to background simultaneously.
@@ -684,28 +685,196 @@ class ControlProtocol(
      * @return AgentsBackgroundResult containing count and list of backgrounded agent IDs
      */
     suspend fun agentsRunAllToBackground(): AgentsBackgroundResult {
+        // 使用统一的 run_to_background 端点 (007补丁)
+        // 不传 task_id 即为批量模式
         val request = buildJsonObject {
-            put("subtype", "agents_run_all_to_background")
+            put("subtype", "run_to_background")
+            // 不传 task_id，批量后台化所有任务
         }
-        logger.info { "📤 [ControlProtocol] 发送 agents_run_all_to_background 请求 (批量后台)" }
+        logger.info { "📤 [ControlProtocol] 发送 run_to_background 请求 (批量后台)" }
 
         val response = sendControlRequestInternal(request)
-        logger.info { "📥 [ControlProtocol] 收到 agents_run_all_to_background 响应: subtype=${response.subtype}" }
+        logger.info { "📥 [ControlProtocol] 收到 run_to_background 响应: subtype=${response.subtype}" }
 
         if (response.subtype == "error") {
-            throw ControlProtocolException("Agents run all to background failed: ${response.error}")
+            throw ControlProtocolException("Run all to background failed: ${response.error}")
+        }
+
+        // 解析响应 - 007补丁返回 { success: true, mode: "all" }
+        val responseData = response.response?.jsonObject
+        val mode = responseData?.get("mode")?.jsonPrimitive?.contentOrNull ?: "all"
+
+        logger.info { "✅ [ControlProtocol] 批量后台完成 (mode: $mode)" }
+
+        // 兼容旧接口，返回空列表（007补丁不返回详细ID列表）
+        return AgentsBackgroundResult(0, emptyList())
+    }
+
+    /**
+     * Send run_to_background request to CLI for a specific Bash task.
+     * This allows a running Bash command to continue running in the background
+     * without blocking for output.
+     *
+     * Note: Uses the unified run_to_background endpoint (007 patch) which
+     * automatically detects task type and calls the appropriate internal function.
+     *
+     * @param taskId The tool_use_id of the Bash command to background
+     * @return BashBackgroundResult containing success status and taskId
+     */
+    suspend fun bashRunToBackground(taskId: String): BashBackgroundResult {
+        // 使用统一的 run_to_background 端点 (007补丁)
+        // CLI 会自动判断任务类型并调用对应的内部函数
+        val request = buildJsonObject {
+            put("subtype", "run_to_background")
+            put("task_id", taskId)
+        }
+        logger.info { "📤 [ControlProtocol] 发送 run_to_background 请求 (task_id: $taskId)" }
+
+        val response = sendControlRequestInternal(request)
+        logger.info { "📥 [ControlProtocol] 收到 run_to_background 响应: subtype=${response.subtype}, error=${response.error}" }
+
+        if (response.subtype == "error") {
+            throw ControlProtocolException("Run to background failed: ${response.error}")
+        }
+
+        // 解析响应 - 007补丁返回 { success: true, type: "bash", task_id: xxx }
+        val responseData = response.response?.jsonObject
+        val backgroundTaskId = responseData?.get("task_id")?.jsonPrimitive?.contentOrNull
+
+        logger.info { "✅ [ControlProtocol] Bash 已切换到后台运行 (task_id: $backgroundTaskId)" }
+
+        return BashBackgroundResult(
+            success = true,
+            taskId = backgroundTaskId,
+            command = null  // 007补丁不返回 command 字段
+        )
+    }
+
+    /**
+     * Unified run_to_background request to CLI.
+     *
+     * This method calls the CLI's internal functions directly:
+     * - iV1: Background all tasks (Bash + Agent)
+     * - Me5: Background single Bash task
+     * - R42: Background single Agent task
+     *
+     * The CLI automatically detects task type (Bash/Agent) and calls the appropriate function.
+     *
+     * Behavior:
+     * - If taskId is provided: Background that specific task (auto-detect type)
+     * - If taskId is null: Background ALL foreground tasks (Bash + Agents)
+     *
+     * @param taskId Optional task ID to background a specific task
+     * @return UnifiedBackgroundResult with details of what was backgrounded
+     */
+    suspend fun runToBackground(taskId: String? = null): UnifiedBackgroundResult {
+        val request = buildJsonObject {
+            put("subtype", "run_to_background")
+            taskId?.let { put("task_id", it) }
+        }
+        logger.info { "📤 [ControlProtocol] 发送 run_to_background 请求 (task_id: ${taskId ?: "null - batch mode"})" }
+
+        val response = sendControlRequestInternal(request)
+        logger.info { "📥 [ControlProtocol] 收到 run_to_background 响应: subtype=${response.subtype}" }
+
+        if (response.subtype == "error") {
+            return UnifiedBackgroundResult(
+                success = false,
+                error = response.error ?: "Unknown error"
+            )
+        }
+
+        val responseData = response.response?.jsonObject
+
+        // Check response mode
+        val mode = responseData?.get("mode")?.jsonPrimitive?.contentOrNull
+        val type = responseData?.get("type")?.jsonPrimitive?.contentOrNull
+        val returnedTaskId = responseData?.get("task_id")?.jsonPrimitive?.contentOrNull
+
+        // Handle batch mode (mode == "all")
+        if (mode == "all") {
+            logger.info { "✅ [ControlProtocol] 批量后台完成 (iV1 called)" }
+            return UnifiedBackgroundResult(
+                success = true
+                // Note: The new CLI patch calls iV1 which handles both Bash and Agent
+            )
+        }
+
+        // Handle single task mode
+        if (taskId != null) {
+            when (type) {
+                "bash" -> {
+                    logger.info { "✅ [ControlProtocol] Bash 已后台化: task_id=$returnedTaskId" }
+                    return UnifiedBackgroundResult(
+                        success = true,
+                        isBash = true,
+                        taskId = returnedTaskId,
+                        bashCount = 1,
+                        backgroundedBashIds = listOfNotNull(returnedTaskId)
+                    )
+                }
+                "agent" -> {
+                    logger.info { "✅ [ControlProtocol] Agent 已后台化: task_id=$returnedTaskId" }
+                    return UnifiedBackgroundResult(
+                        success = true,
+                        isBash = false,
+                        taskId = returnedTaskId,
+                        agentCount = 1,
+                        backgroundedAgentIds = listOfNotNull(returnedTaskId)
+                    )
+                }
+                else -> {
+                    val error = responseData?.get("error")?.jsonPrimitive?.contentOrNull
+                    logger.warn { "⚠️ [ControlProtocol] 未知任务类型: type=$type, error=$error" }
+                    return UnifiedBackgroundResult(
+                        success = false,
+                        taskId = taskId,
+                        error = error ?: "Unknown task type"
+                    )
+                }
+            }
+        }
+
+        // Default success case
+        logger.info { "✅ [ControlProtocol] run_to_background 完成" }
+        return UnifiedBackgroundResult(
+            success = responseData?.get("success")?.jsonPrimitive?.booleanOrNull ?: true
+        )
+    }
+
+    /**
+     * Query CLI capabilities.
+     *
+     * Returns runtime capability flags indicating which features are enabled.
+     * Currently returns:
+     * - backgroundTasksEnabled: Whether background tasks are enabled
+     *   (false when CLAUDE_CODE_DISABLE_BACKGROUND_TASKS is set)
+     *
+     * @return CliCapabilities containing feature flags
+     */
+    suspend fun getCapabilities(): CliCapabilities {
+        val request = buildJsonObject {
+            put("subtype", "get_capabilities")
+        }
+        logger.info { "📤 [ControlProtocol] 发送 get_capabilities 请求" }
+
+        val response = sendControlRequestInternal(request)
+        logger.info { "📥 [ControlProtocol] 收到 get_capabilities 响应: subtype=${response.subtype}" }
+
+        if (response.subtype == "error") {
+            throw ControlProtocolException("Get capabilities failed: ${response.error}")
         }
 
         // 解析响应
-        val responseData = response.response
-        val count = responseData?.get("count")?.jsonPrimitive?.intOrNull ?: 0
-        val backgroundedIds = responseData?.get("backgrounded_ids")?.jsonArray
-            ?.mapNotNull { it.jsonPrimitive.contentOrNull }
-            ?: emptyList()
+        val responseData = response.response?.jsonObject
+        val capabilities = responseData?.get("capabilities")?.jsonObject
+        val backgroundTasksEnabled = capabilities?.get("background_tasks_enabled")?.jsonPrimitive?.booleanOrNull ?: true
 
-        logger.info { "✅ [ControlProtocol] 批量后台完成: $count 个 agents 已后台化 (IDs: $backgroundedIds)" }
+        logger.info { "✅ [ControlProtocol] 获取能力: backgroundTasksEnabled=$backgroundTasksEnabled" }
 
-        return AgentsBackgroundResult(count, backgroundedIds)
+        return CliCapabilities(
+            backgroundTasksEnabled = backgroundTasksEnabled
+        )
     }
 
     /**
@@ -1226,5 +1395,58 @@ data class AgentsBackgroundResult(
     val backgroundedIds: List<String>
 )
 
+/**
+ * Result of bash_run_to_background operation.
+ *
+ * @property success Whether the operation succeeded
+ * @property taskId The background task ID (for tracking)
+ * @property command The command that was backgrounded
+ */
+data class BashBackgroundResult(
+    val success: Boolean,
+    val taskId: String?,
+    val command: String?
+)
 
+/**
+ * Result of unified run_to_background operation.
+ *
+ * This represents the result of backgrounding tasks, handling both Bash and Agent types.
+ *
+ * When backgrounding a specific task (taskId provided):
+ * - isBash: Whether the task was a Bash command (true) or Agent (false)
+ * - success: Whether the operation succeeded
+ * - taskId: The ID of the backgrounded task
+ * - command: The Bash command (only for Bash tasks)
+ *
+ * When backgrounding all tasks (taskId not provided):
+ * - bashCount: Number of Bash commands backgrounded
+ * - agentCount: Number of Agents backgrounded
+ * - backgroundedBashIds: List of Bash task IDs that were backgrounded
+ * - backgroundedAgentIds: List of Agent IDs that were backgrounded
+ */
+data class UnifiedBackgroundResult(
+    val success: Boolean,
+    val isBash: Boolean? = null,         // For single task: whether it was Bash
+    val taskId: String? = null,           // For single task: the task ID
+    val command: String? = null,          // For single Bash task: the command
+    val bashCount: Int = 0,               // For batch: number of Bash backgrounded
+    val agentCount: Int = 0,              // For batch: number of Agents backgrounded
+    val backgroundedBashIds: List<String> = emptyList(),   // For batch: Bash IDs
+    val backgroundedAgentIds: List<String> = emptyList(),  // For batch: Agent IDs
+    val error: String? = null             // Error message if failed
+)
+
+/**
+ * CLI capabilities result.
+ *
+ * Contains runtime capability flags queried from the CLI.
+ * Use this to check if certain features are enabled/disabled.
+ *
+ * @property backgroundTasksEnabled Whether background tasks are enabled.
+ *           False when CLAUDE_CODE_DISABLE_BACKGROUND_TASKS env var is set to 'true' or '1'.
+ */
+data class CliCapabilities(
+    val backgroundTasksEnabled: Boolean
+)
 

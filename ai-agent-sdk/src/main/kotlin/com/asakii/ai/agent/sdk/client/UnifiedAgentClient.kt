@@ -6,6 +6,8 @@ import com.asakii.ai.agent.sdk.capabilities.AiPermissionMode
 import com.asakii.ai.agent.sdk.connect.AiAgentConnectOptions
 import com.asakii.ai.agent.sdk.model.UiStreamEvent
 import com.asakii.ai.agent.sdk.model.UnifiedContentBlock
+import com.asakii.claude.agent.sdk.protocol.BashBackgroundResult
+import com.asakii.claude.agent.sdk.protocol.UnifiedBackgroundResult
 import com.asakii.codex.agent.sdk.SandboxMode
 import kotlinx.coroutines.flow.Flow
 
@@ -71,6 +73,39 @@ interface UnifiedAgentClient {
      * @throws UnsupportedOperationException if !capabilities.canRunInBackground
      */
     suspend fun runInBackground()
+
+    /**
+     * 将指定的 Bash 命令移到后台运行（仅 Claude 支持）。
+     *
+     * 类似于官方 CLI 的 Ctrl+B 功能，但针对单个 Bash 命令。
+     * 需要 CLI 应用 007-bash-background.js 补丁。
+     *
+     * @param taskId Bash 命令的 tool_use_id
+     * @return 后台运行结果
+     */
+    suspend fun bashRunToBackground(taskId: String): BashBackgroundResult {
+        throw UnsupportedOperationException(
+            "bashRunToBackground is not supported by ${provider.name}"
+        )
+    }
+
+    /**
+     * 统一的后台运行方法，自动检测任务类型（Bash 或 Agent）。
+     *
+     * 这是推荐的后台化方法，模拟 CLI 的 Ctrl+B 行为。
+     *
+     * 行为：
+     * - 传入 taskId：后台化指定任务（自动检测类型）
+     * - 不传 taskId：后台化所有前台任务（Bash + Agent）
+     *
+     * @param taskId 可选的任务 ID，不传则后台化所有任务
+     * @return 后台运行结果
+     */
+    suspend fun runToBackground(taskId: String? = null): UnifiedBackgroundResult {
+        throw UnsupportedOperationException(
+            "runToBackground is not supported by ${provider.name}"
+        )
+    }
 
     /**
      * 动态切换模型（不重连）。

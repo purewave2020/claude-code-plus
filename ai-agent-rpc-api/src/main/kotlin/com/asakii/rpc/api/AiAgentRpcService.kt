@@ -42,9 +42,33 @@ interface AiAgentRpcService {
     suspend fun interrupt(): RpcStatusResult
 
     /**
-     * 将当前任务移到后台运行
+     * 将当前任务移到后台运行（Agent/Task）
      */
     suspend fun runInBackground(): RpcStatusResult
+
+    /**
+     * 将指定的 Bash 命令移到后台运行
+     *
+     * 类似于官方 CLI 的 Ctrl+B 功能，但针对单个 Bash 命令。
+     * 需要 CLI 应用 007-bash-background.js 补丁。
+     *
+     * @param taskId Bash 命令的 tool_use_id
+     * @return 后台运行结果
+     */
+    suspend fun bashRunToBackground(taskId: String): RpcBashBackgroundResult
+
+    /**
+     * 统一的后台运行方法
+     *
+     * 自动检测任务类型（Bash 或 Agent）并执行后台化。
+     * 这是推荐的后台化方法，模拟 CLI 的 Ctrl+B 行为。
+     *
+     * @param taskId 可选的任务 ID：
+     *   - 传入 taskId: 后台化指定任务（自动检测类型）
+     *   - 不传 taskId: 后台化所有前台任务（Bash + Agent）
+     * @return 统一后台运行结果
+     */
+    suspend fun runToBackground(taskId: String? = null): RpcUnifiedBackgroundResult
 
     /**
      * 动态设置思考 token 上限（无需重连）

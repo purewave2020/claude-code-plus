@@ -1708,6 +1708,90 @@ export function useSessionTab(initialOrder: number = 0) {
     }
 
     /**
+     * 将指定的 Bash 命令切换到后台运行
+     *
+     * 类似于官方 CLI 的 Ctrl+B 功能，但针对单个 Bash 命令。
+     * 需要 CLI 应用 007-bash-background.js 补丁。
+     *
+     * @param taskId Bash 命令的 tool_use_id
+     * @returns 后台运行结果
+     */
+    async function bashRunToBackground(taskId: string): Promise<{
+        success: boolean
+        taskId?: string
+        command?: string
+        error?: string
+    }> {
+        if (!rsocketSession.value) {
+            return { success: false, error: '会话未连接' }
+        }
+
+        try {
+            const result = await rsocketSession.value.bashRunToBackground(taskId)
+            log.info(`[Tab ${tabId}] Bash 后台运行结果: success=${result.success}, taskId=${result.taskId}`)
+            return result
+        } catch (err) {
+            log.error(`[Tab ${tabId}] Bash 后台运行请求失败:`, err)
+            return { success: false, error: String(err) }
+        }
+    }
+
+    /**
+     * 统一的后台运行方法
+     *
+     * 自动检测任务类型（Bash 或 Agent）并执行后台化。
+     * 这是推荐的后台化方法，模拟 CLI 的 Ctrl+B 行为。
+     *
+     * @param taskId 可选的任务 ID：
+     *   - 传入 taskId: 后台化指定任务（自动检测类型）
+     *   - 不传 taskId: 后台化所有前台任务（Bash + Agent）
+     * @returns 统一后台运行结果
+     */
+    async function runToBackground(taskId?: string): Promise<{
+        success: boolean
+        isBash?: boolean
+        taskId?: string
+        command?: string
+        bashCount: number
+        agentCount: number
+        backgroundedBashIds: string[]
+        backgroundedAgentIds: string[]
+        error?: string
+    }> {
+        if (!rsocketSession.value) {
+            return {
+                success: false,
+                bashCount: 0,
+                agentCount: 0,
+                backgroundedBashIds: [],
+                backgroundedAgentIds: [],
+                error: '会话未连接'
+            }
+        }
+
+        try {
+            const result = await rsocketSession.value.runToBackground(taskId)
+            if (taskId) {
+                const typeInfo = result.isBash ? 'Bash' : 'Agent'
+                log.info(`[Tab ${tabId}] ${typeInfo} 后台运行结果: success=${result.success}, taskId=${result.taskId}`)
+            } else {
+                log.info(`[Tab ${tabId}] 批量后台运行结果: success=${result.success}, bash=${result.bashCount}, agent=${result.agentCount}`)
+            }
+            return result
+        } catch (err) {
+            log.error(`[Tab ${tabId}] 后台运行请求失败:`, err)
+            return {
+                success: false,
+                bashCount: 0,
+                agentCount: 0,
+                backgroundedBashIds: [],
+                backgroundedAgentIds: [],
+                error: String(err)
+            }
+        }
+    }
+
+    /**
      * 强制发送消息（打断当前生成并在打断完成后自动发送）
      *
      * 与普通 sendMessage 的区别：
@@ -2476,6 +2560,8 @@ export function useSessionTab(initialOrder: number = 0) {
         forceSendMessage,
         interrupt,
         runInBackground,
+        bashRunToBackground,
+        runToBackground,
         editAndResendMessage,
 
         // 队列管理

@@ -15,6 +15,8 @@ import com.asakii.ai.agent.sdk.model.UiError
 import com.asakii.ai.agent.sdk.model.UiStreamEvent
 import com.asakii.ai.agent.sdk.model.UnifiedContentBlock
 import com.asakii.claude.agent.sdk.ClaudeCodeSdkClient
+import com.asakii.claude.agent.sdk.protocol.BashBackgroundResult
+import com.asakii.claude.agent.sdk.protocol.UnifiedBackgroundResult
 import com.asakii.claude.agent.sdk.types.ImageInput
 import com.asakii.claude.agent.sdk.types.TextInput
 import com.asakii.claude.agent.sdk.types.UserInputContent
@@ -189,6 +191,23 @@ class ClaudeAgentClientImpl(
     override suspend fun runInBackground() {
         checkCapability(getCapabilities().canRunInBackground, "runInBackground")
         client?.runInBackground()
+    }
+
+    override suspend fun bashRunToBackground(taskId: String): BashBackgroundResult {
+        val activeClient = client ?: return BashBackgroundResult(
+            success = false,
+            taskId = null,
+            command = null
+        )
+        return activeClient.bashRunToBackground(taskId)
+    }
+
+    override suspend fun runToBackground(taskId: String?): UnifiedBackgroundResult {
+        val activeClient = client ?: return UnifiedBackgroundResult(
+            success = false,
+            error = "Client not connected"
+        )
+        return activeClient.runToBackground(taskId)
     }
 
     override suspend fun disconnect() {

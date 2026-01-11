@@ -48,6 +48,7 @@ Response format:
 | `rewind_files` | Built-in | Not Implemented | File checkpoint/rewind feature |
 | `agent_run_to_background` | Patched | Implemented | ControlProtocol.agentRunToBackground() |
 | `agents_run_all_to_background` | Patched | Implemented | ControlProtocol.agentsRunAllToBackground() |
+| `bash_run_to_background` | Patched | Implemented | ControlProtocol.bashRunToBackground() |
 | `get_chrome_status` | Patched | Implemented | ControlProtocol.getChromeStatus() |
 | `mcp_reconnect` | Patched | Implemented | ControlProtocol.reconnectMcp() |
 | `mcp_tools` | Patched | Implemented | ControlProtocol.getMcpTools() |
@@ -372,6 +373,46 @@ println("IDs: ${result.backgroundedIds}")
 ```
 
 **Patch File:** `cli-patches/patches/001-run-in-background.js`
+
+---
+
+### 10.6. bash_run_to_background (Patch 007)
+
+Moves a running Bash command to background execution.
+
+**Request:**
+```json
+{
+  "subtype": "bash_run_to_background",
+  "task_id": "toolu_01ABC123..."
+}
+```
+
+**Response:**
+```json
+{
+  "subtype": "success",
+  "response": {
+    "task_id": "background-task-id",
+    "command": "npm run build"
+  }
+}
+```
+
+**SDK Usage:**
+```kotlin
+// Background a specific Bash command by its tool_use_id
+val result = client.bashRunToBackground("toolu_01ABC123...")
+println("Bash command backgrounded: ${result.command}")
+```
+
+**Implementation:**
+- Injects `global.__claudePlusBash` global object for tracking running Bash commands
+- Modifies `se5` function to pass `tool_use_id` and register `shellCommand`
+- Sets `shellCommand.status = "backgrounded"` to trigger background transition
+- Calls `H09` function to create background task
+
+**Patch File:** `cli-patches/patches/007-bash-background.js`
 
 ---
 

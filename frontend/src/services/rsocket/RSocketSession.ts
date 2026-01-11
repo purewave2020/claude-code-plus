@@ -268,6 +268,84 @@ export class RSocketSession {
     }
 
     /**
+     * 将指定的 Bash 命令切换到后台运行
+     *
+     * 类似于官方 CLI 的 Ctrl+B 功能，但针对单个 Bash 命令。
+     * 需要 CLI 应用 007-bash-background.js 补丁。
+     *
+     * @param taskId Bash 命令的 tool_use_id
+     * @returns 后台运行结果
+     */
+    async bashRunToBackground(taskId: string): Promise<{
+        success: boolean
+        taskId?: string
+        command?: string
+        error?: string
+    }> {
+        if (!this._isConnected || !this.client) {
+            throw new Error('Session not connected')
+        }
+
+        log.info(`[RSocketSession] Bash 后台运行请求: taskId=${taskId}`)
+
+        try {
+            const data = ProtoCodec.encodeBashRunToBackgroundRequest(taskId)
+            const responseData = await this.client.requestResponse('agent.bashRunToBackground', data)
+            const result = ProtoCodec.decodeBashBackgroundResult(responseData)
+            log.info(`[RSocketSession] Bash 后台运行结果: success=${result.success}, taskId=${result.taskId}`)
+            return result
+        } catch (err) {
+            log.warn('[RSocketSession] Bash run to background request failed:', err)
+            throw err
+        }
+    }
+
+    /**
+     * 统一的后台运行方法
+     *
+     * 自动检测任务类型（Bash 或 Agent）并执行后台化。
+     * 这是推荐的后台化方法，模拟 CLI 的 Ctrl+B 行为。
+     *
+     * @param taskId 可选的任务 ID：
+     *   - 传入 taskId: 后台化指定任务（自动检测类型）
+     *   - 不传 taskId: 后台化所有前台任务（Bash + Agent）
+     * @returns 统一后台运行结果
+     */
+    async runToBackground(taskId?: string): Promise<{
+        success: boolean
+        isBash?: boolean
+        taskId?: string
+        command?: string
+        bashCount: number
+        agentCount: number
+        backgroundedBashIds: string[]
+        backgroundedAgentIds: string[]
+        error?: string
+    }> {
+        if (!this._isConnected || !this.client) {
+            throw new Error('Session not connected')
+        }
+
+        log.info(`[RSocketSession] 统一后台运行请求: taskId=${taskId || 'all'}`)
+
+        try {
+            const data = ProtoCodec.encodeRunToBackgroundRequest(taskId)
+            const responseData = await this.client.requestResponse('agent.runToBackground', data)
+            const result = ProtoCodec.decodeUnifiedBackgroundResult(responseData)
+            if (taskId) {
+                const typeInfo = result.isBash ? 'Bash' : 'Agent'
+                log.info(`[RSocketSession] 后台运行结果: ${typeInfo} success=${result.success}, taskId=${result.taskId}`)
+            } else {
+                log.info(`[RSocketSession] 批量后台运行结果: success=${result.success}, bash=${result.bashCount}, agent=${result.agentCount}`)
+            }
+            return result
+        } catch (err) {
+            log.warn('[RSocketSession] Run to background request failed:', err)
+            throw err
+        }
+    }
+
+    /**
      * 动态设置思考 token 上限（无需重连）
      *
      * @param maxThinkingTokens 思考 token 上限：

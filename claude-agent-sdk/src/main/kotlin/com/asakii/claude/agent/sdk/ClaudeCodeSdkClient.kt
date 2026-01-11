@@ -2,7 +2,9 @@ package com.asakii.claude.agent.sdk
 
 import com.asakii.claude.agent.sdk.exceptions.ClientNotConnectedException
 import com.asakii.claude.agent.sdk.protocol.AgentsBackgroundResult
+import com.asakii.claude.agent.sdk.protocol.BashBackgroundResult
 import com.asakii.claude.agent.sdk.protocol.ControlProtocol
+import com.asakii.claude.agent.sdk.protocol.UnifiedBackgroundResult
 import com.asakii.claude.agent.sdk.transport.SubprocessTransport
 import com.asakii.claude.agent.sdk.transport.Transport
 import com.asakii.claude.agent.sdk.types.*
@@ -394,6 +396,83 @@ class ClaudeCodeSdkClient @JvmOverloads constructor(
             val result = controlProtocol!!.agentsRunAllToBackground()
 
             logger.info { "✅ ${result.count} 个任务已移到后台" }
+            result
+        }
+    }
+
+    /**
+     * Move a specific Bash command to background.
+     *
+     * This allows a running Bash command (identified by its tool_use_id) to continue
+     * running in the background without blocking.
+     *
+     * Note: This requires the bash_run_to_background patch to be applied to CLI.
+     *
+     * Example:
+     * ```kotlin
+     * // Background a specific Bash command
+     * val result = client.bashRunToBackground("toolu_01ABC123...")
+     * println("Bash backgrounded: ${result.command}")
+     * ```
+     *
+     * @param taskId The tool_use_id of the Bash command to background
+     * @return BashBackgroundResult containing success status and command info
+     */
+    suspend fun bashRunToBackground(taskId: String): BashBackgroundResult {
+        return runCommand {
+            ensureConnected()
+            logger.info { "⏸️  将 Bash 命令移到后台 (task_id: $taskId)" }
+
+            val result = controlProtocol!!.bashRunToBackground(taskId)
+
+            logger.info { "✅ Bash 命令已移到后台: ${result.command}" }
+            result
+        }
+    }
+
+    /**
+     * Unified method to move tasks to background.
+     *
+     * This method automatically detects the task type (Bash or Agent) and handles both.
+     * It's the recommended way to background tasks as it mirrors the CLI's Ctrl+B behavior.
+     *
+     * Behavior:
+     * - If taskId is provided: Background that specific task (auto-detect type)
+     * - If taskId is null: Background ALL foreground tasks (both Bash and Agents)
+     *
+     * Example:
+     * ```kotlin
+     * // Background a specific task (type auto-detected)
+     * val result = client.runToBackground("toolu_01ABC123...")
+     * println("Type: ${if (result.isBash == true) "Bash" else "Agent"}")
+     *
+     * // Background all tasks (Ctrl+B equivalent)
+     * val result = client.runToBackground()
+     * println("Backgrounded: ${result.bashCount} Bash, ${result.agentCount} Agents")
+     * ```
+     *
+     * @param taskId Optional task ID to background a specific task
+     * @return UnifiedBackgroundResult with details of what was backgrounded
+     */
+    suspend fun runToBackground(taskId: String? = null): UnifiedBackgroundResult {
+        return runCommand {
+            ensureConnected()
+            val targetInfo = taskId?.let { "task_id=$it" } ?: "all tasks"
+            logger.info { "⏸️  统一后台化: $targetInfo" }
+
+            val result = controlProtocol!!.runToBackground(taskId)
+
+            if (result.success) {
+                if (taskId != null) {
+                    val typeInfo = if (result.isBash == true) "Bash" else "Agent"
+                    logger.info { "✅ $typeInfo 已移到后台: ${result.taskId}" }
+                } else {
+                    logger.info { "✅ 批量后台完成: ${result.bashCount} Bash, ${result.agentCount} Agents" }
+                }
+            } else {
+                logger.warn { "⚠️ 后台化失败: ${result.error}" }
+            }
+
             result
         }
     }
