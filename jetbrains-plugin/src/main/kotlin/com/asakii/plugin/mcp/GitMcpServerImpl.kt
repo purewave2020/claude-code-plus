@@ -14,6 +14,7 @@ import com.asakii.plugin.mcp.git.SelectFilesTool
 import com.asakii.plugin.mcp.git.SetCommitMessageTool
 import com.asakii.server.mcp.GitMcpServerProvider
 import com.asakii.settings.AgentSettingsService
+import com.asakii.settings.McpBundle
 import com.asakii.settings.McpDefaults
 import com.intellij.openapi.project.Project
 import kotlinx.serialization.json.Json
@@ -55,7 +56,24 @@ class GitMcpServerImpl(private val project: Project) : McpServerBase() {
     private lateinit var commitChangesTool: CommitChangesTool
 
     override fun getSystemPromptAppendix(): String {
-        return AgentSettingsService.getInstance().effectiveGitInstructions
+        val settings = AgentSettingsService.getInstance()
+        val baseInstructions = settings.effectiveGitInstructions
+        val commitLang = settings.gitCommitLanguage
+        
+        // Language requirement at the very beginning (fixed, not user-editable)
+        // Uses internationalized messages from McpBundle
+        val title = McpBundle.message("mcp.git.commitLang.title")
+        val langMessage = when (commitLang) {
+            "zh_CN" -> McpBundle.message("mcp.git.commitLang.zh_CN")
+            "zh_TW" -> McpBundle.message("mcp.git.commitLang.zh_TW")
+            "ja" -> McpBundle.message("mcp.git.commitLang.ja")
+            "ko" -> McpBundle.message("mcp.git.commitLang.ko")
+            else -> McpBundle.message("mcp.git.commitLang.en")
+        }
+        val langRequirement = "$title\n\n$langMessage\n\n"
+        
+        // Language requirement first (fixed), then user-customizable instructions
+        return langRequirement + baseInstructions
     }
 
     override fun getAllowedTools(): List<String> = listOf(

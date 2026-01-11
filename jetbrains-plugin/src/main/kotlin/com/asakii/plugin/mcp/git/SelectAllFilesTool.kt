@@ -1,11 +1,8 @@
 package com.asakii.plugin.mcp.git
 
-import com.asakii.logging.*
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.Change
 import kotlinx.serialization.json.JsonObject
-
-private val logger = getLogger("SelectAllFilesTool")
 
 /**
  * 全选文件工具

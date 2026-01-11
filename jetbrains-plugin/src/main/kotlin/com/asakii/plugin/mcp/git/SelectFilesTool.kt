@@ -1,19 +1,11 @@
 package com.asakii.plugin.mcp.git
 
-import com.asakii.logging.*
 import com.asakii.plugin.mcp.getString
 import com.asakii.plugin.mcp.getStringList
 import com.asakii.plugin.util.toAbsolutePath
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.Change
-import com.intellij.openapi.vcs.changes.ChangeListManager
 import kotlinx.serialization.json.JsonObject
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
-
-private val logger = getLogger("SelectFilesTool")
 
 /**
  * 选择文件工具

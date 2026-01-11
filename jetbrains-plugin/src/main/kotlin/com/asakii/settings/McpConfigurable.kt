@@ -439,6 +439,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             context7Entry?.instructions != settings.context7Instructions ||
             terminalEntry?.instructions != settings.terminalInstructions ||
             gitEntry?.instructions != settings.gitInstructions ||
+            gitEntry?.gitCommitLanguage != settings.gitCommitLanguage ||
             terminalEntry?.terminalMaxOutputLines != settings.terminalMaxOutputLines ||
             terminalEntry?.terminalMaxOutputChars != settings.terminalMaxOutputChars ||
             terminalEntry?.terminalReadTimeout != settings.terminalReadTimeout ||
@@ -504,6 +505,7 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         settings.enableContext7Mcp = context7Entry?.enabled ?: false
         settings.enableGitMcp = gitEntry?.enabled ?: false
         settings.gitInstructions = gitEntry?.instructions ?: ""
+        settings.gitCommitLanguage = gitEntry?.gitCommitLanguage ?: "en"
         settings.enableTerminalMcp = terminalEntry?.enabled ?: false
         settings.setUserInteractionMcpBackendKeys(
             userInteractionEntry?.enabledBackends ?: setOf(AgentSettingsService.MCP_BACKEND_ALL)
@@ -701,7 +703,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             isBuiltIn = true,
             instructions = settings.gitInstructions,
             defaultInstructions = McpDefaults.GIT_INSTRUCTIONS,
-            toolTimeoutSec = settings.gitMcpTimeout
+            toolTimeoutSec = settings.gitMcpTimeout,
+            gitCommitLanguage = settings.gitCommitLanguage
         ))
 
         // 加载自定义服务器
@@ -981,7 +984,9 @@ data class McpServerEntry(
     /** JetBrains File MCP: 是否允许访问外部文件 */
     val fileAllowExternal: Boolean = true,
     /** JetBrains File MCP: 外部路径规则（JSON 序列化） */
-    val fileExternalRules: String = "[]"
+    val fileExternalRules: String = "[]",
+    /** Git MCP: Commit 消息语言 (en, zh, ja, ko, auto) */
+    val gitCommitLanguage: String = "en"
 )
 
 private class McpBackendSelection(initialKeys: Set<String>) {
@@ -1147,6 +1152,21 @@ class BuiltInMcpServerDialog(
     private val allShellTypes = AgentSettingsService.getInstance().detectInstalledShells()
     private val defaultShellCombo = ComboBox<String>()
     private val availableShellCheckboxes = mutableMapOf<String, JBCheckBox>()
+
+    // Git MCP Commit 语言配置
+    private val commitLanguageOptions = listOf(
+        "en" to "English",
+        "zh_CN" to "简体中文 (Simplified Chinese)",
+        "zh_TW" to "繁體中文 (Traditional Chinese)",
+        "ja" to "日本語 (Japanese)",
+        "ko" to "한국어 (Korean)"
+    )
+    private val commitLanguageCombo = ComboBox(commitLanguageOptions.map { it.second }.toTypedArray()).apply {
+        // 根据 entry 的值设置选中项
+        val currentLang = entry.gitCommitLanguage
+        val index = commitLanguageOptions.indexOfFirst { it.first == currentLang }
+        selectedIndex = if (index >= 0) index else 0
+    }
 
     /**
      * 更新 Default Shell 下拉框的选项
@@ -1549,6 +1569,18 @@ class BuiltInMcpServerDialog(
             topPanel.add(Box.createVerticalStrut(4))
         }
 
+        // Git MCP Commit 语言配置
+        if (entry.name == McpBundle.message("mcp.jetbrainsGit.name")) {
+            val commitLangPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(JBLabel("Commit Message Language:"))
+                add(commitLanguageCombo)
+                add(JBLabel("<html><font color='gray' size='-1'>(AI will generate commit messages in this language)</font></html>"))
+            }
+            topPanel.add(commitLangPanel)
+            topPanel.add(Box.createVerticalStrut(4))
+        }
+
         // 第二行：Tool Call Timeout
         val toolTimeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
@@ -1716,7 +1748,13 @@ class BuiltInMcpServerDialog(
             fileExternalRules = if (entry.name == "JetBrains File MCP") {
                 val rules = (0 until externalRulesListModel.size()).map { externalRulesListModel.getElementAt(it) }
                 Json.encodeToString(rules)
-            } else entry.fileExternalRules
+            } else entry.fileExternalRules,
+            gitCommitLanguage = if (entry.name == McpBundle.message("mcp.jetbrainsGit.name")) {
+                val selectedIndex = commitLanguageCombo.selectedIndex
+                if (selectedIndex >= 0 && selectedIndex < commitLanguageOptions.size) {
+                    commitLanguageOptions[selectedIndex].first
+                } else "en"
+            } else entry.gitCommitLanguage
         )
     }
 }

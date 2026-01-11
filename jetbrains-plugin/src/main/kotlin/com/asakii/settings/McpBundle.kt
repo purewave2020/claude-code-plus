@@ -1,7 +1,8 @@
 package com.asakii.settings
 
-import com.intellij.DynamicBundle
 import org.jetbrains.annotations.PropertyKey
+import java.util.Locale
+import java.util.ResourceBundle
 
 private const val BUNDLE = "messages.McpBundle"
 
@@ -10,7 +11,11 @@ private const val BUNDLE = "messages.McpBundle"
  *
  * 用于加载 UI 短文本（描述、警告等）
  */
-object McpBundle : DynamicBundle(BUNDLE) {
+object McpBundle {
+
+    private val bundle: ResourceBundle by lazy {
+        ResourceBundle.getBundle(BUNDLE, Locale.getDefault())
+    }
 
     /**
      * 获取本地化消息
@@ -21,19 +26,12 @@ object McpBundle : DynamicBundle(BUNDLE) {
      */
     @JvmStatic
     fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): String {
-        return getMessage(key, *params)
-    }
-
-    /**
-     * 获取本地化消息（可能为空）
-     *
-     * @param key 资源键
-     * @param params 参数
-     * @return 本地化字符串，如果不存在则返回 null
-     */
-    @JvmStatic
-    fun messageOrNull(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): String? {
-        return if (containsKey(key)) getMessage(key, *params) else null
+        return try {
+            val value = bundle.getString(key)
+            if (params.isEmpty()) value else String.format(value, *params)
+        } catch (e: Exception) {
+            key // fallback to key if not found
+        }
     }
 }
 
@@ -48,7 +46,7 @@ object McpInstructions {
      * 根据当前语言环境获取语言目录
      */
     private fun getLanguageDir(): String {
-        val locale = DynamicBundle.getLocale()
+        val locale = Locale.getDefault()
         return when (locale.language) {
             "zh" -> "zh_CN"
             "ja" -> "ja"

@@ -157,6 +157,8 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var context7Instructions: String = "",
         var terminalInstructions: String = "",
         var gitInstructions: String = "",
+        /** Git MCP Commit 语言 (en, zh, ja, ko, auto) */
+        var gitCommitLanguage: String = "en",
 
         // Git Generate 功能配置
         var gitGenerateSystemPrompt: String = "",     // Git Generate 系统提示词
@@ -707,6 +709,11 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     var gitInstructions: String
         get() = state.gitInstructions
         set(value) { state.gitInstructions = value }
+
+    /** Git MCP Commit 语言 (en, zh, ja, ko, auto) */
+    var gitCommitLanguage: String
+        get() = state.gitCommitLanguage
+        set(value) { state.gitCommitLanguage = value }
 
     var userInteractionMcpBackends: String
         get() = state.userInteractionMcpBackends

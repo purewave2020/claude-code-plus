@@ -792,19 +792,20 @@ function handleScrollCore() {
   // - browse 模式：向下滚动到底部 → 切换回 follow 模式
 
   if (scrollState.value.mode === 'follow') {
-    // follow 模式下：用户手动向上滚动才切换到 browse
+    // follow 模式下：用户触发的任何滚动都切换到 browse
     // - 滚轮向上：由 handleWheel 处理（响应更快）
-    // - 拖动滚动条向上：在这里处理
+    // - 拖动滚动条：在这里处理
     // 关键：通过 isProgrammaticScroll 区分用户滚动和程序滚动
-    if (!isProgrammaticScroll.value && isScrollingUp && significantScroll && !nearBottom) {
-      // 用户手动向上滚动，切换到 browse 模式
+    // 注意：不再判断滚动方向，因为无法准确区分用户滚动和内容增长导致的位置变化
+    if (!isProgrammaticScroll.value && significantScroll) {
+      // 用户手动滚动，切换到 browse 模式
       const anchor = computeScrollAnchor()
       scrollState.value = {
         mode: 'browse',
         anchor,
         newMessageCount: 0
       }
-      console.log('🔄 [Scroll] Switched to browse mode (user scrolled up)')
+      console.log('🔄 [Scroll] Switched to browse mode (user scroll detected)')
     }
   } else {
     // browse 模式下

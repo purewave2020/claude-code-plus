@@ -3,20 +3,16 @@ package com.asakii.plugin.mcp.git
 import com.asakii.logging.*
 import com.asakii.plugin.mcp.getBoolean
 import com.asakii.plugin.mcp.getString
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vcs.ProjectLevelVcsManager
-import com.intellij.openapi.vcs.VcsException
 import com.intellij.openapi.vcs.changes.Change
-import com.intellij.openapi.vcs.changes.CommitContext
+import com.intellij.openapi.vcs.FilePath
+import com.intellij.vcsUtil.VcsUtil
 import git4idea.GitVcs
 import git4idea.repo.GitRepositoryManager
 import git4idea.commands.Git
 import git4idea.commands.GitCommand
 import git4idea.commands.GitLineHandler
 import kotlinx.serialization.json.JsonObject
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
 
 private val logger = getLogger("CommitChangesTool")
 
@@ -62,28 +58,59 @@ class CommitChangesTool(private val project: Project) {
     ): String {
         return try {
             // 获取 Git VCS
-            val vcsManager = ProjectLevelVcsManager.getInstance(project)
             val gitVcs = GitVcs.getInstance(project)
             val checkinEnvironment = gitVcs.checkinEnvironment
                 ?: return "Error: Git checkin environment not available"
 
-            // 执行提交
-            val commitContext = CommitContext()
-            if (amend) {
-                // 设置 amend 标志
-                commitContext.putUserData(GitVcs.COMMIT_PARAMS_AMEND, true)
+            // 构建 git commit 命令参数
+            val repositoryManager = GitRepositoryManager.getInstance(project)
+            val repositories = repositoryManager.repositories
+            if (repositories.isEmpty()) {
+                return "Error: No Git repositories found"
             }
 
-            val exceptions = checkinEnvironment.commit(changes, message, commitContext, emptySet())
+            // 使用 Git 命令直接提交
+            val git = Git.getInstance()
+            val results = mutableListOf<String>()
+            var hasError = false
 
-            if (!exceptions.isNullOrEmpty()) {
-                return buildString {
-                    appendLine("# Commit Failed")
-                    appendLine()
-                    appendLine("## Errors")
-                    exceptions.forEach { e ->
-                        appendLine("- ${e.message}")
+            for (repo in repositories) {
+                // 获取该仓库中的变更
+                val repoChanges = changes.filter { change ->
+                    val path = getChangePath(change)
+                    path.startsWith(repo.root.path)
+                }
+
+                if (repoChanges.isEmpty()) continue
+
+                // 使用 git commit 命令
+                val handler = GitLineHandler(project, repo.root, GitCommand.COMMIT)
+                handler.addParameters("-m", message)
+                if (amend) {
+                    handler.addParameters("--amend")
+                }
+
+                // 添加文件路径
+                repoChanges.forEach { change ->
+                    change.virtualFile?.let { vf ->
+                        handler.addRelativePaths(VcsUtil.getFilePath(vf))
                     }
+                }
+
+                val result = git.runCommand(handler)
+                if (result.success()) {
+                    results.add("✓ Committed to ${repo.root.name}")
+                } else {
+                    hasError = true
+                    results.add("✗ Failed: ${result.errorOutputAsJoinedString}")
+                }
+            }
+
+            if (hasError) {
+                return buildString {
+                    appendLine("# Commit Partially Failed")
+                    appendLine()
+                    results.forEach { appendLine(it) }
                 }
             }
 
@@ -94,6 +121,9 @@ class CommitChangesTool(private val project: Project) {
                 appendLine("**Message**: $message")
                 appendLine("**Files**: ${changes.size}")
                 if (amend) appendLine("**Amend**: Yes")
+                appendLine()
+                appendLine("## Results")
+                results.forEach { appendLine(it) }
                 appendLine()
                 appendLine("## Committed Files")
                 changes.forEach { change ->

@@ -1,10 +1,7 @@
 package com.asakii.plugin.mcp.git
 
-import com.asakii.logging.*
 import com.intellij.openapi.project.Project
 import kotlinx.serialization.json.JsonObject
-
-private val logger = getLogger("DeselectAllFilesTool")
 
 /**
  * 取消全选工具

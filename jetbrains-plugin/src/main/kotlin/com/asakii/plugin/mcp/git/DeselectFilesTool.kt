@@ -1,13 +1,10 @@
 package com.asakii.plugin.mcp.git
 
-import com.asakii.logging.*
 import com.asakii.plugin.mcp.getStringList
 import com.asakii.plugin.util.toAbsolutePath
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.Change
 import kotlinx.serialization.json.JsonObject
-
-private val logger = getLogger("DeselectFilesTool")
 
 /**
  * 取消选择文件工具
