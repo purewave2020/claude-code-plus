@@ -573,7 +573,7 @@ IMPORTANT: When working with third-party libraries, ALWAYS query Context7 first 
 {
   "Terminal": {
     "type": "object",
-    "description": "Execute commands in IDEA's integrated terminal. By default returns immediately after sending the command (use TerminalRead to get output). Set wait=true to wait for completion and return output directly. If session_id is not provided, uses the default terminal for the current AI session. If the default terminal is busy (running a command), a new overflow terminal is created automatically; subsequent calls will prefer the default terminal when it becomes idle.",
+    "description": "Execute commands in IDEA's integrated terminal. By default waits for completion and returns output directly. Set wait=false to return immediately (use TerminalRead to get output). If session_id is not provided, uses the default terminal for the current AI session. If the default terminal is busy (running a command), a new overflow terminal is created automatically; subsequent calls will prefer the default terminal when it becomes idle.",
     "properties": {
       "command": {
         "type": "string",
@@ -593,8 +593,8 @@ IMPORTANT: When working with third-party libraries, ALWAYS query Context7 first 
       },
       "wait": {
         "type": "boolean",
-        "description": "If true, wait for command completion and return output directly. Default is false (return immediately, use TerminalRead to get output).",
-        "default": false
+        "description": "If true, wait for command completion and return output directly. Default is true (wait for completion and return output directly). Set wait=false to return immediately and use TerminalRead to get output.",
+        "default": true
       },
       "timeout": {
         "type": "integer",

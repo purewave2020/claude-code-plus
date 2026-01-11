@@ -14,7 +14,7 @@ private val logger = getLogger("TerminalTool")
  * Terminal 工具 - 执行命令
  *
  * 在 IDEA 内置终端中执行命令。
- * 默认立即返回，可通过 wait=true 等待命令完成并返回输出。
+ * 默认等待命令完成并返回输出，可通过 wait=false 立即返回。
  */
 class TerminalTool(private val sessionManager: TerminalSessionManager) {
 
@@ -26,7 +26,7 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
      *   - session_id: String? - 会话 ID，为空时使用当前 AI 会话的默认终端
      *   - session_name: String? - 新会话名称
      *   - shell_type: String? - Shell 类型（如 git-bash, powershell），不传则使用配置的默认终端
-     *   - wait: Boolean? - 是否等待命令完成并返回输出（默认 false）
+     *   - wait: Boolean? - 是否等待命令完成并返回输出（默认 true）
      *   - timeout: Long? - 等待超时时间（秒，默认 30，0 表示无限等待）
      */
     suspend fun execute(arguments: JsonObject): String {
@@ -42,7 +42,7 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
         val sessionId = arguments.getString("session_id")
         val sessionName = arguments.getString("session_name")
         val shellName = arguments.getString("shell_type")
-        val wait = arguments.getBoolean("wait") ?: false
+        val wait = arguments.getBoolean("wait") ?: true
         val settings = AgentSettingsService.getInstance()
         val defaultTimeoutSec = settings.terminalReadTimeoutMs / 1000
         val timeoutSec = arguments.getLong("timeout") ?: defaultTimeoutSec
