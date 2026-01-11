@@ -350,7 +350,7 @@ onUnmounted(() => {
 
 .task-elapsed {
   font-size: 11px;
-  color: var(--theme-warning-text, #b08800);
+  color: var(--theme-warning);
   font-weight: 500;
   flex-shrink: 0;
 }

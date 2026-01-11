@@ -503,7 +503,7 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 
 .rollback-tag-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--theme-warning) 20%, transparent);
-  color: var(--theme-warning);
+  color: color-mix(in srgb, var(--theme-warning) 60%, #000);
 }
 
 /* 展开状态：文件组 */
@@ -620,7 +620,7 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
   border: 1px solid color-mix(in srgb, var(--theme-warning) 40%, transparent);
   border-radius: 3px;
   background: transparent;
-  color: var(--theme-warning);
+  color: color-mix(in srgb, var(--theme-warning) 70%, #000);
   font-size: 10px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -628,6 +628,7 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 
 .rollback-all-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--theme-warning) 15%, transparent);
+  color: color-mix(in srgb, var(--theme-warning) 60%, #000);
 }
 
 .rollback-all-btn:disabled {
@@ -738,7 +739,7 @@ async function handleRollbackModification(filePath: string, historyTs: number) {
 
 .mod-action-btn.rollback-btn:hover {
   background: color-mix(in srgb, var(--theme-warning) 20%, transparent);
-  color: var(--theme-warning);
+  color: color-mix(in srgb, var(--theme-warning) 60%, #000);
 }
 
 /* 加载状态 */
