@@ -27,7 +27,7 @@ class TerminalReadTool(private val sessionManager: TerminalSessionManager) {
      *   - search: String? - 搜索模式（正则表达式）
      *   - context_lines: Int? - 搜索结果上下文行数（默认 2）
      *   - wait: Boolean? - 是否等待命令执行完成（默认 false）
-     *   - timeout: Int? - 等待超时时间（秒，默认 30，0 表示无限等待）
+     *   - timeout: Int? - 等待超时时间（秒，默认 30，0 等价于 wait=false 立即返回，-1 表示无限等待）
      */
     fun execute(arguments: JsonObject): String {
         // 如果未指定 session_id，使用默认终端
@@ -64,14 +64,13 @@ class TerminalReadTool(private val sessionManager: TerminalSessionManager) {
         val maxLines = arguments.getInt("max_lines") ?: 1000
         val search = arguments.getString("search")
         val contextLines = arguments.getInt("context_lines") ?: 2
-        // 默认不等待，可通过 wait=true 等待命令完成
-        val waitForIdle = arguments.getBoolean("wait") ?: false
         // 使用配置的默认超时时间（秒）
         val settings = AgentSettingsService.getInstance()
         val defaultTimeoutSec = settings.terminalReadTimeoutMs / 1000
         val timeoutSec = arguments.getLong("timeout") ?: defaultTimeoutSec
-        // 0 表示无限等待，使用一个很大的值；否则转换为毫秒
-        val timeoutMs = if (timeoutSec <= 0) Long.MAX_VALUE else timeoutSec * 1000
+        // timeout=0 等价于 wait=false；timeout<0 表示无限等待；timeout>0 等待指定秒数
+        val waitForIdle = if (timeoutSec == 0L) false else (arguments.getBoolean("wait") ?: false)
+        val timeoutMs = if (timeoutSec < 0) Long.MAX_VALUE else timeoutSec * 1000
 
         logger.info { "Reading output from session: $sessionId (maxLines: $maxLines, search: $search, waitForIdle: $waitForIdle)" }
 

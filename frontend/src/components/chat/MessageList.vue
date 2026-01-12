@@ -576,10 +576,15 @@ onUnmounted(() => {
   const el = scrollerRef.value?.$el as HTMLElement | undefined
   if (el) {
     el.removeEventListener('wheel', handleWheel)
+    el.removeEventListener('mousedown', handleMouseDown)
+    el.removeEventListener('touchstart', handleTouchStart)
+    el.removeEventListener('keydown', handleKeyDown)
   }
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   // 注销 Tab 切换前回调
   sessionStore.unregisterBeforeTabSwitch(handleBeforeTabSwitch)
+  // 清理计时器
+  if (userScrollIntentTimer) clearTimeout(userScrollIntentTimer)
 })
 
 // 监听 tab 切换，保存旧 tab 滚动位置并恢复新 tab 位置

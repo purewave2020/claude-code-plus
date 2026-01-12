@@ -554,9 +554,9 @@ object McpDefaults {
       },
       "timeout": {
         "type": "integer",
-        "description": "Timeout in seconds for waiting (only used when wait=true). 0 means wait indefinitely.",
+        "description": "Timeout in seconds for waiting (only used when wait=true). 0 means return immediately (equivalent to wait=false). -1 means wait indefinitely.",
         "default": 30,
-        "minimum": 0
+        "minimum": -1
       }
     },
     "required": ["command"]
@@ -593,9 +593,9 @@ object McpDefaults {
       },
       "timeout": {
         "type": "integer",
-        "description": "Timeout in seconds for waiting (only used when wait=true). 0 means wait indefinitely.",
+        "description": "Timeout in seconds for waiting (only used when wait=true). 0 means return immediately (equivalent to wait=false). -1 means wait indefinitely.",
         "default": 30,
-        "minimum": 0
+        "minimum": -1
       }
     },
     "required": []
