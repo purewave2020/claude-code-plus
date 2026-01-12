@@ -1335,7 +1335,7 @@ class BuiltInMcpServerDialog(
             disabledToolsList.forEach { addDisabledToolTag(it) }
 
             val toolsScrollPane = JBScrollPane(disabledToolsPanel).apply {
-                preferredSize = Dimension(550, 38)
+                preferredSize = Dimension(550, 64)  // 增加高度以显示多行标签
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 border = BorderFactory.createLineBorder(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground())
                 horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
@@ -1396,7 +1396,7 @@ class BuiltInMcpServerDialog(
             codexDisabledFeaturesList.forEach { addCodexDisabledFeatureTag(it) }
 
             val codexScrollPane = JBScrollPane(codexDisabledFeaturesPanel).apply {
-                preferredSize = Dimension(550, 38)
+                preferredSize = Dimension(550, 64)  // 增加高度以显示多行标签
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 border = BorderFactory.createLineBorder(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground())
                 horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
@@ -1458,7 +1458,7 @@ class BuiltInMcpServerDialog(
             autoApprovedToolsList.forEach { addAutoApprovedToolTag(it) }
 
             val autoApprovedScrollPane = JBScrollPane(autoApprovedToolsPanel).apply {
-                preferredSize = Dimension(550, 38)
+                preferredSize = Dimension(550, 64)  // 增加高度以显示多行标签
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 border = BorderFactory.createLineBorder(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground())
                 horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
