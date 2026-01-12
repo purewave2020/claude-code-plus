@@ -139,6 +139,16 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             // 创建 JetBrains RSocket Handler（传入 Terminal Provider 以支持后台执行功能）
             val jetbrainsRSocketHandler = JetBrainsRSocketHandler(jetbrainsApi, terminalMcpServerProvider)
 
+
+            // 注册终端任务更新监听器，通过 RSocket 推送给前端
+            terminalMcpServerProvider.getServerIfInitialized()?.let { server ->
+                (server as? com.asakii.plugin.mcp.TerminalMcpServerImpl)?.sessionManager?.setTaskUpdateListener { 
+                    toolUseId, sessionId, action, command, isBackground, startTime, elapsedMs ->
+                    jetbrainsRSocketHandler.pushTerminalTaskUpdate(
+                        toolUseId, sessionId, action, command, isBackground, startTime, elapsedMs
+                    )
+                }
+            }
             // 监听主题变化，通过 RSocket 推送给前端（非阻塞）
             jetbrainsApi.theme.addChangeListener { theme ->
                 scope.launch {
@@ -236,6 +246,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         context7McpBackends = context7Backends,
                         terminalMcpBackends = terminalBackends,
                         gitMcpBackends = gitBackends,
+                        userInteractionMcpTimeoutSec = settings.userInteractionMcpTimeout,
                         mcpServersConfig = loadMcpServersConfig(settings),
                         mcpInstructions = loadMcpInstructions(settings),
                         dangerouslySkipPermissions = settings.defaultBypassPermissions,

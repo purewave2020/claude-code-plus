@@ -787,6 +787,24 @@ message ActiveFileChangedNotify {
   optional string selected_content = 12;  // 选中的文本内容
 }
 
+// 终端任务动作类型
+enum TerminalTaskAction {
+  TERMINAL_TASK_STARTED = 0;      // 任务开始执行
+  TERMINAL_TASK_COMPLETED = 1;    // 任务完成
+  TERMINAL_TASK_BACKGROUNDED = 2; // 任务被后台化
+}
+
+// 终端任务更新通知（后端→前端推送）
+message TerminalTaskUpdateNotify {
+  string tool_use_id = 1;           // MCP 工具调用 ID
+  string session_id = 2;            // 终端会话 ID
+  TerminalTaskAction action = 3;    // 任务动作
+  string command = 4;               // 执行的命令
+  bool is_background = 5;           // 是否在后台执行
+  int64 start_time = 6;             // 开始时间戳（毫秒）
+  optional int64 elapsed_ms = 7;    // 已执行时长（毫秒）
+}
+
 // ========== 服务端调用客户端 ==========
 
 // 服务端调用客户端的通用请求（支持类型化参数）
@@ -802,6 +820,7 @@ message ServerCallRequest {
     ThemeChangedNotify theme_changed = 21;      // 主题变更通知
     IdeSettingsChangedNotify settings_changed = 22;  // IDE 设置变更通知
     ActiveFileChangedNotify active_file_changed = 23;  // 活跃文件变更通知
+    TerminalTaskUpdateNotify terminal_task_update = 24;  // 终端任务更新通知
   }
 }
 

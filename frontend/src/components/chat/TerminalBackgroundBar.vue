@@ -52,7 +52,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '@/composables/useI18n'
-import { jetbrainsRSocket, TerminalBackgroundStatus, type BackgroundableTerminal } from '@/services/jetbrainsRSocket'
+import { jetbrainsRSocket, TerminalBackgroundStatus, type BackgroundableTerminal, type TerminalTaskUpdate } from '@/services/jetbrainsRSocket'
 import { ideaBridge } from '@/services/ideaBridge'
 import { useToastStore } from '@/stores/toastStore'
 
@@ -66,12 +66,12 @@ const backgroundableTasks = ref<BackgroundableTerminal[]>([])
 const backgroundingTasks = ref<Set<string>>(new Set())
 const isBackgroundingAll = ref(false)
 
-// 轮询间隔（毫秒）
-const POLL_INTERVAL = 2000
+// 注：已改为事件驱动更新，不再使用轮询
 // 显示阈值（毫秒）- 超过 5 秒的任务才显示
 const DISPLAY_THRESHOLD = 5000
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
+let unsubscribeTaskUpdate: (() => void) | null = null
+let elapsedTimer: ReturnType<typeof setInterval> | null = null
 
 // 是否有可后台化的任务
 const hasBackgroundableTasks = computed(() => {
@@ -83,8 +83,42 @@ function isBackgrounding(toolUseId: string): boolean {
   return backgroundingTasks.value.has(toolUseId)
 }
 
-// 轮询获取可后台化的任务
-async function pollBackgroundableTasks() {
+// 处理终端任务更新事件
+function handleTerminalTaskUpdate(update: TerminalTaskUpdate) {
+  console.log('[TerminalBackgroundBar] 收到任务更新:', update.action, update.toolUseId)
+  
+  if (update.action === 'started' && !update.isBackground) {
+    // 新任务开始，添加到列表（如果不是后台任务）
+    const existingIndex = backgroundableTasks.value.findIndex(t => t.toolUseId === update.toolUseId)
+    if (existingIndex === -1) {
+      backgroundableTasks.value.push({
+        toolUseId: update.toolUseId,
+        sessionId: update.sessionId,
+        command: update.command,
+        elapsedMs: update.elapsedMs || 0,
+        startTime: update.startTime
+      })
+    }
+  } else if (update.action === 'completed' || update.action === 'backgrounded') {
+    // 任务完成或后台化，从列表中移除
+    backgroundableTasks.value = backgroundableTasks.value.filter(
+      t => t.toolUseId !== update.toolUseId
+    )
+  }
+}
+
+// 更新已运行时间（每秒更新一次）
+function updateElapsedTime() {
+  const now = Date.now()
+  backgroundableTasks.value.forEach(task => {
+    if (task.startTime) {
+      task.elapsedMs = now - task.startTime
+    }
+  })
+}
+
+// 初始获取可后台化的任务
+async function fetchInitialTasks() {
   if (!ideaBridge.isInIde()) return
 
   try {
@@ -94,7 +128,7 @@ async function pollBackgroundableTasks() {
       task => task.elapsedMs >= DISPLAY_THRESHOLD
     )
   } catch (err) {
-    console.error('[TerminalBackgroundBar] 获取可后台化任务失败:', err)
+    console.error('[TerminalBackgroundBar] 获取初始任务失败:', err)
   }
 }
 
@@ -204,26 +238,35 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
-  // 开始轮询
-  pollBackgroundableTasks()
-  pollTimer = setInterval(pollBackgroundableTasks, POLL_INTERVAL)
+  // 初始获取任务列表
+  fetchInitialTasks()
   
+  // 订阅终端任务更新事件
+  unsubscribeTaskUpdate = jetbrainsRSocket.onTerminalTaskUpdate(handleTerminalTaskUpdate)
+  
+  // 启动定时器更新已运行时间
+  elapsedTimer = setInterval(updateElapsedTime, 1000)
+
   // 在 capture 阶段监听全局快捷键，确保在 ChatInput 之前处理
   window.addEventListener('keydown', handleKeydown, true)
 })
 
 onUnmounted(() => {
-  // 停止轮询
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+  // 取消订阅终端任务更新事件
+  if (unsubscribeTaskUpdate) {
+    unsubscribeTaskUpdate()
+    unsubscribeTaskUpdate = null
   }
   
+  // 停止定时器
+  if (elapsedTimer) {
+    clearInterval(elapsedTimer)
+    elapsedTimer = null
+  }
+
   // 移除快捷键监听
   window.removeEventListener('keydown', handleKeydown, true)
 })
-</script>
-
 <style scoped>
 .terminal-background-bar {
   background: var(--theme-warning-background, #fff8e6);

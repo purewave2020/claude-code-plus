@@ -83,6 +83,7 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
 
         // 获取当前 toolUseId 用于后台任务追踪
         val toolUseId = currentToolUseId()
+        logger.info { "🔍 [TerminalTool] toolUseId from context: $toolUseId (command: ${command.take(30)})" }
 
         // 执行命令
         val execResult = sessionManager.executeCommandAsync(session.id, command)
@@ -100,7 +101,9 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
         // 记录任务开始（用于后台执行追踪）
         if (toolUseId != null) {
             sessionManager.recordTaskStart(session.id, toolUseId, command)
-            logger.debug { "Recorded task start: sessionId=${session.id}, toolUseId=$toolUseId" }
+            logger.info { "✅ [TerminalTool] Recorded task start: sessionId=${session.id}, toolUseId=$toolUseId, wait=$wait" }
+        } else {
+            logger.warn { "⚠️ [TerminalTool] toolUseId is NULL, task will NOT be tracked for background! command=${command.take(30)}" }
         }
 
         // 如果不等待，直接返回

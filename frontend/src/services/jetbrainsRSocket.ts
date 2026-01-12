@@ -830,6 +830,19 @@ export type SessionCommandHandler = (command: SessionCommand) => void
 export type SettingsChangeHandler = (settings: IdeSettings) => void
 export type ActiveFileChangeHandler = (activeFile: ActiveFileInfo | null) => void
 
+// 终端任务更新信息
+export interface TerminalTaskUpdate {
+  toolUseId: string       // MCP 工具调用 ID
+  sessionId: string       // 终端会话 ID
+  action: 'started' | 'completed' | 'backgrounded'  // 任务动作
+  command: string         // 执行的命令
+  isBackground: boolean   // 是否在后台执行
+  startTime: number       // 开始时间戳（毫秒）
+  elapsedMs?: number      // 已执行时长（毫秒）
+}
+
+export type TerminalTaskUpdateHandler = (update: TerminalTaskUpdate) => void
+
 // 当前活跃文件信息
 export interface ActiveFileInfo {
   path: string           // 文件绝对路径
@@ -906,6 +919,7 @@ class JetBrainsRSocketService {
   private sessionCommandHandlers: SessionCommandHandler[] = []
   private settingsChangeHandlers: SettingsChangeHandler[] = []
   private activeFileChangeHandlers: ActiveFileChangeHandler[] = []
+  private terminalTaskUpdateHandlers: TerminalTaskUpdateHandler[] = []
   private connected = false
 
   /**
@@ -1063,6 +1077,35 @@ class JetBrainsRSocketService {
           console.log('[JetBrainsRSocket] 无活跃文件')
         }
         this.activeFileChangeHandlers.forEach(h => h(activeFile))
+        return {} // 返回空响应
+      })
+
+      // 处理终端任务更新推送
+      this.client.registerHandler('onTerminalTaskUpdate', async (params: any) => {
+        console.log('[JetBrainsRSocket] 收到终端任务更新推送 (Protobuf)')
+        
+        // 将 action 枚举值转换为字符串
+        let actionStr: 'started' | 'completed' | 'backgrounded' = 'started'
+        if (params.action === 0 || params.action === 'TERMINAL_TASK_STARTED') {
+          actionStr = 'started'
+        } else if (params.action === 1 || params.action === 'TERMINAL_TASK_COMPLETED') {
+          actionStr = 'completed'
+        } else if (params.action === 2 || params.action === 'TERMINAL_TASK_BACKGROUNDED') {
+          actionStr = 'backgrounded'
+        }
+
+        const update: TerminalTaskUpdate = {
+          toolUseId: params.toolUseId || '',
+          sessionId: params.sessionId || '',
+          action: actionStr,
+          command: params.command || '',
+          isBackground: params.isBackground ?? false,
+          startTime: typeof params.startTime === 'number' ? params.startTime : 0,
+          elapsedMs: params.elapsedMs
+        }
+        
+        console.log('[JetBrainsRSocket] 终端任务更新:', update.action, update.toolUseId)
+        this.terminalTaskUpdateHandlers.forEach(h => h(update))
         return {} // 返回空响应
       })
 
@@ -1582,6 +1625,17 @@ class JetBrainsRSocketService {
     }
   }
 }
+
+  /**
+   * 添加终端任务更新监听器
+   */
+  onTerminalTaskUpdate(handler: TerminalTaskUpdateHandler): () => void {
+    this.terminalTaskUpdateHandlers.push(handler)
+    return () => {
+      const index = this.terminalTaskUpdateHandlers.indexOf(handler)
+      if (index >= 0) this.terminalTaskUpdateHandlers.splice(index, 1)
+    }
+  }
 
 // ========== 单例导出 ==========
 

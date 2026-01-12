@@ -145,8 +145,10 @@ private val mcpLogger = getLogger("UserInteractionMcpServer")
 )
 class UserInteractionMcpServer : McpServerBase() {
     private var clientCaller: ClientCaller? = null
+    private var timeoutMs: Long? = null
 
-    override val timeout: Long? = null
+    override val timeout: Long?
+        get() = timeoutMs
 
     override fun getAllowedTools(): List<String> = listOf("AskUserQuestion")
 
@@ -220,6 +222,10 @@ The user's response will be returned to you through the same tool.
     fun setClientCaller(caller: ClientCaller) {
         this.clientCaller = caller
         mcpLogger.info { "✅ [UserInteractionMcpServer] ClientCaller 已设置" }
+    }
+
+    fun setTimeoutMs(timeoutMs: Long?) {
+        this.timeoutMs = timeoutMs
     }
 
     override suspend fun callToolJson(toolName: String, arguments: JsonObject): ToolResult {

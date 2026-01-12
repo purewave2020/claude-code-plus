@@ -59,6 +59,8 @@ data class ClaudeDefaults(
     val context7McpBackends: Set<AiAgentProvider> = setOf(AiAgentProvider.CLAUDE, AiAgentProvider.CODEX),
     val terminalMcpBackends: Set<AiAgentProvider> = setOf(AiAgentProvider.CLAUDE, AiAgentProvider.CODEX),
     val gitMcpBackends: Set<AiAgentProvider> = setOf(AiAgentProvider.CLAUDE, AiAgentProvider.CODEX),
+    // User Interaction MCP 超时（秒）
+    val userInteractionMcpTimeoutSec: Int? = null,
     // MCP 服务器配置（从资源文件加载，由 plugin 模块传入）
     val mcpServersConfig: List<McpServerConfig> = emptyList(),
     // MCP 系统提示词（由 plugin 模块加载并传入）

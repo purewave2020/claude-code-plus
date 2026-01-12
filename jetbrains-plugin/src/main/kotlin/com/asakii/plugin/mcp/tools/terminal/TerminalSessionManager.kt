@@ -17,6 +17,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 
 private val logger = Logger.getInstance("com.asakii.plugin.mcp.tools.terminal.TerminalSessionManager")
 
@@ -182,6 +184,19 @@ object ShellResolver {
 }
 
 /**
+ * 终端任务更新监听器
+ */
+typealias TerminalTaskUpdateListener = suspend (
+    toolUseId: String,
+    sessionId: String,
+    action: String,  // "started", "completed", "backgrounded"
+    command: String,
+    isBackground: Boolean,
+    startTime: Long,
+    elapsedMs: Long?
+) -> Unit
+
+/**
  * Terminal 会话管理器
  *
  * 管理 IDEA 内置终端的会话，支持命令执行、输出读取、会话管理等功能。
@@ -199,6 +214,41 @@ class TerminalSessionManager(private val project: Project) {
 
     // 正在执行的后台任务追踪 (toolUseId -> TerminalBackgroundTask)
     private val runningTasks = ConcurrentHashMap<String, TerminalBackgroundTask>()
+
+    // 任务更新监听器
+    private var taskUpdateListener: TerminalTaskUpdateListener? = null
+
+    /**
+     * 设置任务更新监听器
+     * 用于通知前端任务状态变化
+     */
+    fun setTaskUpdateListener(listener: TerminalTaskUpdateListener?) {
+        this.taskUpdateListener = listener
+        logger.info { "🔔 Task update listener ${if (listener != null) "registered" else "unregistered"}" }
+    }
+
+    /**
+     * 通知任务更新（内部使用）
+     */
+    private fun notifyTaskUpdate(
+        toolUseId: String,
+        sessionId: String,
+        action: String,
+        command: String,
+        isBackground: Boolean,
+        startTime: Long,
+        elapsedMs: Long? = null
+    ) {
+        val listener = taskUpdateListener ?: return
+        // 使用协程在后台执行，避免阻塞调用线程
+        kotlinx.coroutines.GlobalScope.launch {
+            try {
+                listener(toolUseId, sessionId, action, command, isBackground, startTime, elapsedMs)
+            } catch (e: Exception) {
+                logger.warn { "⚠️ Failed to notify task update: ${e.message}" }
+            }
+        }
+    }
 
     // 当前 AI 会话 ID
     @Volatile
@@ -903,14 +953,25 @@ class TerminalSessionManager(private val project: Project) {
      * 在 MCP 工具调用开始时调用
      */
     fun recordTaskStart(sessionId: String, toolUseId: String, command: String) {
+        val startTime = System.currentTimeMillis()
         val task = TerminalBackgroundTask(
             sessionId = sessionId,
             toolUseId = toolUseId,
             command = command,
-            startTime = System.currentTimeMillis()
+            startTime = startTime
         )
         runningTasks[toolUseId] = task
         logger.info { "📝 Recorded task start: toolUseId=$toolUseId, sessionId=$sessionId, command=${command.take(50)}..." }
+        
+        // 通知前端任务已启动
+        notifyTaskUpdate(
+            toolUseId = toolUseId,
+            sessionId = sessionId,
+            action = "started",
+            command = command,
+            isBackground = false,
+            startTime = startTime
+        )
     }
 
     /**
@@ -918,7 +979,19 @@ class TerminalSessionManager(private val project: Project) {
      */
     fun recordTaskComplete(toolUseId: String) {
         runningTasks.remove(toolUseId)?.let { task ->
-            logger.info { "✅ Task completed: toolUseId=$toolUseId, elapsed=${task.getElapsedMs()}ms" }
+            val elapsedMs = task.getElapsedMs()
+            logger.info { "✅ Task completed: toolUseId=$toolUseId, elapsed=${elapsedMs}ms" }
+            
+            // 通知前端任务已完成
+            notifyTaskUpdate(
+                toolUseId = toolUseId,
+                sessionId = task.sessionId,
+                action = "completed",
+                command = task.command,
+                isBackground = task.isBackground,
+                startTime = task.startTime,
+                elapsedMs = elapsedMs
+            )
         }
     }
 
@@ -935,6 +1008,17 @@ class TerminalSessionManager(private val project: Project) {
         task.isBackground = true
         task.backgroundTime = System.currentTimeMillis()
         logger.info { "⏸️ Task moved to background: toolUseId=$toolUseId, sessionId=${task.sessionId}" }
+        
+        // 通知前端任务已后台化
+        notifyTaskUpdate(
+            toolUseId = toolUseId,
+            sessionId = task.sessionId,
+            action = "backgrounded",
+            command = task.command,
+            isBackground = true,
+            startTime = task.startTime,
+            elapsedMs = task.getElapsedMs()
+        )
         return true
     }
 
@@ -951,9 +1035,18 @@ class TerminalSessionManager(private val project: Project) {
      */
     fun getBackgroundableTasks(thresholdMs: Long = 5000): List<TerminalBackgroundTask> {
         val now = System.currentTimeMillis()
-        return runningTasks.values.filter { task ->
+        val allTasks = runningTasks.values.toList()
+        val result = allTasks.filter { task ->
             !task.isBackground && (now - task.startTime) >= thresholdMs
         }
+        logger.info { "📋 [getBackgroundableTasks] runningTasks=${allTasks.size}, filtered=${result.size}, threshold=${thresholdMs}ms" }
+        if (allTasks.isNotEmpty()) {
+            allTasks.forEach { task ->
+                val elapsed = now - task.startTime
+                logger.info { "  - toolUseId=${task.toolUseId}, elapsed=${elapsed}ms, isBackground=${task.isBackground}, qualifies=${!task.isBackground && elapsed >= thresholdMs}" }
+            }
+        }
+        return result
     }
 
     /**

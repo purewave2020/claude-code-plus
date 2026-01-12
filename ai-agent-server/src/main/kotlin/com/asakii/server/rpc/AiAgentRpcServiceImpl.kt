@@ -790,6 +790,12 @@ class AiAgentRpcServiceImpl(
         val globalServers = mutableMapOf<String, McpServer>()
         val claudeServers = mutableMapOf<String, McpServerSpec>()
 
+        val userInteractionTimeoutMs = defaults.userInteractionMcpTimeoutSec
+            ?.takeIf { it > 0 }
+            ?.toLong()
+            ?.times(1000)
+        userInteractionServer.setTimeoutMs(userInteractionTimeoutMs)
+
         if (defaults.enableUserInteractionMcp && isProviderAllowed(defaults.userInteractionMcpBackends)) {
             sessionServers["user_interaction"] = userInteractionServer
         }

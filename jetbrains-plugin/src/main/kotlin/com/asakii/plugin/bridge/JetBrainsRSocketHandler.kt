@@ -685,7 +685,7 @@ class JetBrainsRSocketHandler(
             }
 
             val tasks = terminalServer.sessionManager.getBackgroundableTasks()
-            logger.info { "📋 [JetBrains] getBackgroundableTerminals: ${tasks.size} tasks" }
+            logger.info { "📋 [JetBrains] getBackgroundableTerminals: returning ${tasks.size} tasks to frontend" }
 
             val response = JetBrainsGetBackgroundableTerminalsResponse.newBuilder()
                 .setSuccess(true)
@@ -969,6 +969,78 @@ class JetBrainsRSocketHandler(
             logger.info { "📤 [JetBrains RSocket] → pushSessionCommand: ${command.type} (to ${clients.size} clients)" }
         } catch (e: Exception) {
             logger.error { "❌ [JetBrains RSocket] pushSessionCommand failed: ${e.message}" }
+        }
+    }
+
+    /**
+     * 推送终端任务更新到前端（使用统一的 client.call 路由）
+     * 广播给所有连接的客户端
+     *
+     * @param toolUseId MCP 工具调用 ID
+     * @param sessionId 终端会话 ID
+     * @param action 任务动作：started, completed, backgrounded
+     * @param command 执行的命令
+     * @param isBackground 是否在后台执行
+     * @param startTime 开始时间戳（毫秒）
+     * @param elapsedMs 已执行时长（毫秒，可选）
+     */
+    suspend fun pushTerminalTaskUpdate(
+        toolUseId: String,
+        sessionId: String,
+        action: String,
+        command: String,
+        isBackground: Boolean,
+        startTime: Long,
+        elapsedMs: Long? = null
+    ) {
+        val clients = connectedClients.values.toList()
+        if (clients.isEmpty()) {
+            logger.debug { "⚠️ [JetBrains RSocket] 无客户端连接，跳过终端任务推送" }
+            return
+        }
+
+        try {
+            // 映射 action 到 TerminalTaskAction 枚举
+            val taskAction = when (action) {
+                "started" -> com.asakii.rpc.proto.TerminalTaskAction.TERMINAL_TASK_STARTED
+                "completed" -> com.asakii.rpc.proto.TerminalTaskAction.TERMINAL_TASK_COMPLETED
+                "backgrounded" -> com.asakii.rpc.proto.TerminalTaskAction.TERMINAL_TASK_BACKGROUNDED
+                else -> com.asakii.rpc.proto.TerminalTaskAction.TERMINAL_TASK_STARTED
+            }
+
+            // 构建 TerminalTaskUpdateNotify
+            val notifyBuilder = com.asakii.rpc.proto.TerminalTaskUpdateNotify.newBuilder()
+                .setToolUseId(toolUseId)
+                .setSessionId(sessionId)
+                .setAction(taskAction)
+                .setCommand(command)
+                .setIsBackground(isBackground)
+                .setStartTime(startTime)
+            
+            elapsedMs?.let { notifyBuilder.setElapsedMs(it) }
+
+            // 包装为 ServerCallRequest
+            val callId = "jb-${++callIdCounter}"
+            val serverCall = ServerCallRequest.newBuilder()
+                .setCallId(callId)
+                .setMethod("onTerminalTaskUpdate")
+                .setTerminalTaskUpdate(notifyBuilder.build())
+                .build()
+
+            val serverCallBytes = serverCall.toByteArray()
+
+            // 广播给所有连接的客户端
+            clients.forEach { requester ->
+                try {
+                    val payload = buildPayloadWithRoute("client.call", serverCallBytes)
+                    requester.fireAndForget(payload)
+                } catch (e: Exception) {
+                    logger.warn { "⚠️ [JetBrains RSocket] 推送终端任务给客户端失败: ${e.message}" }
+                }
+            }
+            logger.debug { "📤 [JetBrains RSocket] → pushTerminalTaskUpdate: $action (toolUseId=$toolUseId, to ${clients.size} clients)" }
+        } catch (e: Exception) {
+            logger.error { "❌ [JetBrains RSocket] pushTerminalTaskUpdate failed: ${e.message}" }
         }
     }
 
