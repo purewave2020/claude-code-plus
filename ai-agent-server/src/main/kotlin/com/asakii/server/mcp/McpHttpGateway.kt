@@ -216,13 +216,16 @@ object McpHttpGateway {
                 .build()
             val fullToolName = "mcp__${server.name}__${toolDef.name}"
 
-            val spec = McpServerFeatures.SyncToolSpecification(tool) { _, arguments ->
-                runBlocking {
-                    val jsonArgs = toJsonObject(arguments)
-                    checkPermission(permissionContext, fullToolName, jsonArgs)
-                        ?: server.callToolJson(toolDef.name, jsonArgs)
-                }.let(::toCallToolResult)
-            }
+            val spec = McpServerFeatures.SyncToolSpecification.builder()
+                .tool(tool)
+                .callHandler { _, request ->
+                    runBlocking {
+                        val jsonArgs = toJsonObject(request.arguments())
+                        checkPermission(permissionContext, fullToolName, jsonArgs)
+                            ?: server.callToolJson(toolDef.name, jsonArgs)
+                    }.let(::toCallToolResult)
+                }
+                .build()
             syncServer.addTool(spec)
         }
     }
@@ -278,7 +281,10 @@ object McpHttpGateway {
                 }
             }
         }
-        return McpSchema.CallToolResult(contents, result.isError)
+        return McpSchema.CallToolResult.builder()
+            .content(contents)
+            .isError(result.isError)
+            .build()
     }
 
     /**

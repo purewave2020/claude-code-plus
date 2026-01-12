@@ -1,4 +1,6 @@
-﻿package com.asakii.codex.agent.sdk.appserver
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+
+package com.asakii.codex.agent.sdk.appserver
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName

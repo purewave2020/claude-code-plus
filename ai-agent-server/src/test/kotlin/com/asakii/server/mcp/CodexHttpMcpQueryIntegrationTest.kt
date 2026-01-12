@@ -203,9 +203,15 @@ class CodexHttpMcpQueryIntegrationTest {
             .inputSchema(JsonTools.mcpJsonMapper, toolSchema)
             .build()
 
-        val spec = McpServerFeatures.SyncToolSpecification(tool) { _, _ ->
-            McpSchema.CallToolResult(listOf(McpSchema.TextContent("pong")), false)
-        }
+        val spec = McpServerFeatures.SyncToolSpecification.builder()
+            .tool(tool)
+            .callHandler { _, _ ->
+                McpSchema.CallToolResult.builder()
+                    .content(listOf(McpSchema.TextContent("pong")))
+                    .isError(false)
+                    .build()
+            }
+            .build()
         server.addTool(spec)
         return server
     }
