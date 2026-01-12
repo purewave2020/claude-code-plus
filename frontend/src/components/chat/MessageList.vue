@@ -336,6 +336,8 @@ function saveAnchorImmediately() {
 const lastScrollTop = ref(0)       // 上次滚动位置，用于检测滚动方向
 const isTabSwitching = ref(false)  // Tab 切换中，阻止其他滚动逻辑
 const isProgrammaticScroll = ref(false)  // 程序触发的滚动（用于区分用户手动滚动）
+const userScrollIntent = ref(false)  // 用户滚动意图（通过输入事件检测）
+let userScrollIntentTimer: number | null = null  // 用户滚动意图重置计时器
 const historyLoadInProgress = ref(false)
 const historyLoadRequested = ref(false)
 const historyScrollHeightBefore = ref(0)
@@ -461,11 +463,27 @@ watch(
   }
 )
 
+/**
+ * 标记用户滚动意图
+ * 用户输入事件（wheel, mousedown, touchstart, keydown）触发时调用
+ * 设置标志并在 200ms 后自动重置
+ */
+function markUserScrollIntent() {
+  userScrollIntent.value = true
+  if (userScrollIntentTimer) clearTimeout(userScrollIntentTimer)
+  userScrollIntentTimer = window.setTimeout(() => {
+    userScrollIntent.value = false
+  }, 200)  // 200ms 内的 scroll 事件被视为用户触发
+}
+
 // 监听用户滚轮事件 - 向上滚动切换到 browse 模式
 // 注意：handleScroll 也会处理模式切换，但 wheel 事件响应更快
 function handleWheel(e: WheelEvent) {
   // Tab 切换中，不处理滚轮事件
   if (isTabSwitching.value) return
+
+  // 标记用户滚动意图
+  markUserScrollIntent()
 
   // deltaY < 0 表示向上滚动，切换到 browse 模式
   if (e.deltaY < 0 && scrollState.value.mode === 'follow') {
@@ -479,15 +497,46 @@ function handleWheel(e: WheelEvent) {
   }
 }
 
-// 添加滚轮事件监听器（需要在 DynamicScroller 渲染后调用）
+// 监听鼠标按下事件（用于检测拖动滚动条）
+function handleMouseDown(e: MouseEvent) {
+  if (isTabSwitching.value) return
+  // 检测是否点击在滚动条区域（简化判断：点击在右侧 20px 内）
+  const el = scrollerRef.value?.$el as HTMLElement | undefined
+  if (el) {
+    const rect = el.getBoundingClientRect()
+    if (e.clientX > rect.right - 20) {
+      markUserScrollIntent()
+    }
+  }
+}
+
+// 监听触摸开始事件（移动端滚动）
+function handleTouchStart() {
+  if (isTabSwitching.value) return
+  markUserScrollIntent()
+}
+
+// 监听键盘事件（Page Up/Down, 方向键）
+function handleKeyDown(e: KeyboardEvent) {
+  if (isTabSwitching.value) return
+  const scrollKeys = ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']
+  if (scrollKeys.includes(e.key)) {
+    markUserScrollIntent()
+  }
+}
+
+// 添加用户输入事件监听器（需要在 DynamicScroller 渲染后调用）
 let scrollListenersAdded = false
 function addScrollListeners() {
   if (scrollListenersAdded) return
   const el = scrollerRef.value?.$el as HTMLElement | undefined
   if (el) {
     el.addEventListener('wheel', handleWheel, { passive: true })
+    el.addEventListener('mousedown', handleMouseDown, { passive: true })
+    el.addEventListener('touchstart', handleTouchStart, { passive: true })
+    el.addEventListener('keydown', handleKeyDown, { passive: true })
     scrollListenersAdded = true
-    console.log('🔄 [Scroll] Wheel listener added')
+    console.log('🔄 [Scroll] User input listeners added')
   }
 }
 
