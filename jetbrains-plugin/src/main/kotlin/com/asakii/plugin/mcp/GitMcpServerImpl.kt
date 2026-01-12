@@ -76,17 +76,8 @@ class GitMcpServerImpl(private val project: Project) : McpServerBase() {
         return langRequirement + baseInstructions
     }
 
-    override fun getAllowedTools(): List<String> = listOf(
-        "GetVcsChanges",
-        "GetCommitMessage",
-        "SetCommitMessage",
-        "GetVcsStatus",
-        "SelectFiles",
-        "DeselectFiles",
-        "SelectAllFiles",
-        "DeselectAllFiles"
-        // CommitChanges is NOT auto-allowed - requires user confirmation
-    )
+    override fun getAllowedTools(): List<String> = 
+        AgentSettingsService.getInstance().getGitAutoApprovedTools()
 
     companion object {
         val TOOL_SCHEMAS: Map<String, JsonObject> = loadAllSchemas()

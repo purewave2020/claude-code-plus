@@ -54,8 +54,10 @@ class JetBrainsFileMcpServerImpl(private val project: Project) : McpServerBase()
     /**
      * 获取需要自动允许的工具列表
      * 只有 ReadFile 自动允许，WriteFile 和 EditFile 需要用户授权
+     * 用户可以在设置中自定义
      */
-    override fun getAllowedTools(): List<String> = listOf("ReadFile")
+    override fun getAllowedTools(): List<String> = 
+        AgentSettingsService.getInstance().getJetbrainsFileAutoApprovedTools()
 
     companion object {
         /**

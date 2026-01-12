@@ -1118,3 +1118,70 @@ Use tools only - do not output the commit message as text.
         "mcp__jetbrains__FileProblems"
     )
 }
+
+/**
+ * Codex 模式下各 MCP Server 的默认自动批准工具
+ * 
+ * 这些工具在 Codex 模式下无需用户确认即可执行。
+ * 高风险操作（如写文件、执行命令、提交代码）需要用户确认。
+ */
+object McpAutoApprovedDefaults {
+    
+    /**
+     * JetBrains File MCP 默认自动批准工具
+     * - ReadFile: 只读操作，安全
+     * - WriteFile/EditFile: 写操作，需要确认
+     */
+    val JETBRAINS_FILE = listOf("ReadFile")
+    
+    /**
+     * JetBrains IDE MCP (LSP) 默认自动批准工具
+     * 所有工具都是只读查询或安全的重构操作
+     */
+    val JETBRAINS_LSP = listOf(
+        "DirectoryTree",
+        "FileProblems", 
+        "FileIndex",
+        "CodeSearch",
+        "FindUsages",
+        "Rename"  // IDE 安全重构，有预览和撤销
+    )
+    
+    /**
+     * JetBrains Terminal MCP 默认自动批准工具
+     * - Terminal: 执行命令，高风险，需要确认
+     * - 其他: 读取/管理终端会话，安全
+     */
+    val JETBRAINS_TERMINAL = listOf(
+        "TerminalRead",
+        "TerminalList",
+        "TerminalKill",
+        "TerminalTypes",
+        "TerminalRename",
+        "TerminalInterrupt"
+        // Terminal 不在列表中，需要用户确认
+    )
+    
+    /**
+     * JetBrains Git MCP 默认自动批准工具
+     * - CommitChanges: 提交代码，高风险，需要确认
+     * - 其他: 查询/准备提交，安全
+     */
+    val JETBRAINS_GIT = listOf(
+        "GetVcsChanges",
+        "GetCommitMessage",
+        "SetCommitMessage",
+        "GetVcsStatus",
+        "SelectFiles",
+        "DeselectFiles",
+        "SelectAllFiles",
+        "DeselectAllFiles"
+        // CommitChanges 不在列表中，需要用户确认
+    )
+    
+    /**
+     * User Interaction MCP 默认自动批准工具
+     * AskUserQuestion 本身就是用户交互，自动批准
+     */
+    val USER_INTERACTION = listOf("AskUserQuestion")
+}

@@ -554,6 +554,13 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         settings.terminalMcpTimeout = terminalEntry?.toolTimeoutSec ?: 60
         settings.gitMcpTimeout = gitEntry?.toolTimeoutSec ?: 60
 
+        // 保存 Codex 自动批准工具配置
+        settings.setUserInteractionAutoApprovedTools(userInteractionEntry?.codexAutoApprovedTools ?: emptyList())
+        settings.setJetbrainsLspAutoApprovedTools(jetbrainsEntry?.codexAutoApprovedTools ?: emptyList())
+        settings.setJetbrainsFileAutoApprovedTools(jetbrainsFileEntry?.codexAutoApprovedTools ?: emptyList())
+        settings.setTerminalAutoApprovedTools(terminalEntry?.codexAutoApprovedTools ?: emptyList())
+        settings.setGitAutoApprovedTools(gitEntry?.codexAutoApprovedTools ?: emptyList())
+
         // 保存自定义服务器配置
         val globalServers = customServers.filter { it.level == McpServerLevel.GLOBAL }
         val projectServers = customServers.filter { it.level == McpServerLevel.PROJECT }
@@ -633,7 +640,9 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             isBuiltIn = true,
             instructions = settings.userInteractionInstructions,
             defaultInstructions = McpDefaults.USER_INTERACTION_INSTRUCTIONS,
-            toolTimeoutSec = settings.userInteractionMcpTimeout
+            toolTimeoutSec = settings.userInteractionMcpTimeout,
+            defaultAutoApprovedTools = McpAutoApprovedDefaults.USER_INTERACTION,
+            codexAutoApprovedTools = settings.getUserInteractionAutoApprovedTools()
         ))
         builtInServers.add(McpServerEntry(
             name = McpBundle.message("mcp.jetbrainsIde.name"),
@@ -645,7 +654,9 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             instructions = settings.jetbrainsInstructions,
             defaultInstructions = McpDefaults.JETBRAINS_INSTRUCTIONS,
             disabledTools = listOf("Glob", "Grep"),
-            toolTimeoutSec = settings.jetbrainsMcpTimeout
+            toolTimeoutSec = settings.jetbrainsMcpTimeout,
+            defaultAutoApprovedTools = McpAutoApprovedDefaults.JETBRAINS_LSP,
+            codexAutoApprovedTools = settings.getJetbrainsLspAutoApprovedTools()
         ))
         builtInServers.add(McpServerEntry(
             name = McpBundle.message("mcp.jetbrainsFile.name"),
@@ -661,7 +672,9 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             hasDisableToolsToggle = true,
             toolTimeoutSec = settings.jetbrainsFileMcpTimeout,
             fileAllowExternal = settings.jetbrainsFileAllowExternal,
-            fileExternalRules = settings.jetbrainsFileExternalRules
+            fileExternalRules = settings.jetbrainsFileExternalRules,
+            defaultAutoApprovedTools = McpAutoApprovedDefaults.JETBRAINS_FILE,
+            codexAutoApprovedTools = settings.getJetbrainsFileAutoApprovedTools()
         ))
         builtInServers.add(McpServerEntry(
             name = McpBundle.message("mcp.context7.name"),
@@ -692,7 +705,9 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             terminalDefaultShell = settings.terminalDefaultShell,
             terminalAvailableShells = settings.terminalAvailableShells,
             terminalReadTimeout = settings.terminalReadTimeout,
-            toolTimeoutSec = settings.terminalMcpTimeout
+            toolTimeoutSec = settings.terminalMcpTimeout,
+            defaultAutoApprovedTools = McpAutoApprovedDefaults.JETBRAINS_TERMINAL,
+            codexAutoApprovedTools = settings.getTerminalAutoApprovedTools()
         ))
         builtInServers.add(McpServerEntry(
             name = McpBundle.message("mcp.jetbrainsGit.name"),
@@ -704,7 +719,9 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             instructions = settings.gitInstructions,
             defaultInstructions = McpDefaults.GIT_INSTRUCTIONS,
             toolTimeoutSec = settings.gitMcpTimeout,
-            gitCommitLanguage = settings.gitCommitLanguage
+            gitCommitLanguage = settings.gitCommitLanguage,
+            defaultAutoApprovedTools = McpAutoApprovedDefaults.JETBRAINS_GIT,
+            codexAutoApprovedTools = settings.getGitAutoApprovedTools()
         ))
 
         // 加载自定义服务器
@@ -986,7 +1003,11 @@ data class McpServerEntry(
     /** JetBrains File MCP: 外部路径规则（JSON 序列化） */
     val fileExternalRules: String = "[]",
     /** Git MCP: Commit 消息语言 (en, zh, ja, ko, auto) */
-    val gitCommitLanguage: String = "en"
+    val gitCommitLanguage: String = "en",
+    /** Codex 模式下自动批准的 MCP 工具（无需用户确认） */
+    val codexAutoApprovedTools: List<String> = emptyList(),
+    /** 默认自动批准的工具列表（内置 MCP 使用，只读） */
+    val defaultAutoApprovedTools: List<String> = emptyList()
 )
 
 private class McpBackendSelection(initialKeys: Set<String>) {
@@ -1107,6 +1128,12 @@ class BuiltInMcpServerDialog(
     private val codexDisabledFeaturesList = entry.codexDisabledFeatures.toMutableList()
     private var codexDisabledFeaturesPanel: JPanel? = null
     private val codexDisabledFeaturesInput = JBTextField(20)
+
+    // Codex 自动批准工具配置（标签选择）
+    private val defaultAutoApprovedTools = entry.defaultAutoApprovedTools.toList()
+    private val autoApprovedToolsList = entry.codexAutoApprovedTools.ifEmpty { entry.defaultAutoApprovedTools }.toMutableList()
+    private var autoApprovedToolsPanel: JPanel? = null
+    private val autoApprovedToolsInput = JBTextField(20)
 
     // JetBrains Terminal MCP 截断配置
     private val maxOutputLinesField = JBTextField(entry.terminalMaxOutputLines.toString(), 8)
@@ -1383,6 +1410,73 @@ class BuiltInMcpServerDialog(
                 if (featureName.isNotEmpty() && !codexDisabledFeaturesList.contains(featureName)) {
                     addCodexDisabledFeatureTag(featureName)
                     codexDisabledFeaturesInput.text = ""
+                }
+            }
+        }
+
+        // Codex 自动批准工具配置（紧凑布局）
+        if (defaultAutoApprovedTools.isNotEmpty()) {
+            // 标题行：标签 + 输入框 + 按钮 + Reset
+            val autoApprovedHeaderPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(JBLabel("Codex Auto-approved Tools:").apply {
+                    foreground = JBColor(0x7B1FA2, 0xBA68C8)  // 紫色，区分于其他配置
+                })
+                add(autoApprovedToolsInput.apply {
+                    toolTipText = "Type tool name, then click + or press Enter"
+                })
+                add(JButton("+").apply {
+                    preferredSize = Dimension(36, autoApprovedToolsInput.preferredSize.height)
+                    toolTipText = "Add tool to auto-approve list"
+                    addActionListener {
+                        val toolName = autoApprovedToolsInput.text.trim()
+                        if (toolName.isNotEmpty() && !autoApprovedToolsList.contains(toolName)) {
+                            addAutoApprovedToolTag(toolName)
+                            autoApprovedToolsInput.text = ""
+                        }
+                    }
+                })
+                add(JButton("Reset").apply {
+                    toolTipText = "Reset to default: ${defaultAutoApprovedTools.joinToString(", ").ifEmpty { "(none)" }}"
+                    addActionListener {
+                        autoApprovedToolsList.clear()
+                        autoApprovedToolsPanel?.removeAll()
+                        defaultAutoApprovedTools.forEach { addAutoApprovedToolTag(it) }
+                        autoApprovedToolsPanel?.revalidate()
+                        autoApprovedToolsPanel?.repaint()
+                    }
+                })
+            }
+            topPanel.add(autoApprovedHeaderPanel)
+            topPanel.add(Box.createVerticalStrut(2))
+
+            // 标签流式布局面板
+            autoApprovedToolsPanel = JPanel(WrapLayout(FlowLayout.LEFT, 4, 2)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+            }
+            autoApprovedToolsList.forEach { addAutoApprovedToolTag(it) }
+
+            val autoApprovedScrollPane = JBScrollPane(autoApprovedToolsPanel).apply {
+                preferredSize = Dimension(550, 38)
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                border = BorderFactory.createLineBorder(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground())
+                horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+            }
+            topPanel.add(autoApprovedScrollPane)
+            topPanel.add(Box.createVerticalStrut(2))
+
+            // 提示信息
+            topPanel.add(JBLabel("<html><font color='gray' size='-1'>ℹ️ Tools in this list are auto-approved in Codex mode without user confirmation</font></html>").apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+            })
+            topPanel.add(Box.createVerticalStrut(6))
+
+            // Enter 键支持
+            autoApprovedToolsInput.addActionListener {
+                val toolName = autoApprovedToolsInput.text.trim()
+                if (toolName.isNotEmpty() && !autoApprovedToolsList.contains(toolName)) {
+                    addAutoApprovedToolTag(toolName)
+                    autoApprovedToolsInput.text = ""
                 }
             }
         }
@@ -1700,6 +1794,48 @@ class BuiltInMcpServerDialog(
         codexDisabledFeaturesPanel?.repaint()
     }
 
+    /**
+     * 添加自动批准工具标签
+     */
+    private fun addAutoApprovedToolTag(toolName: String) {
+        if (!autoApprovedToolsList.contains(toolName)) {
+            autoApprovedToolsList.add(toolName)
+        }
+
+        val tagPanel = JPanel(FlowLayout(FlowLayout.LEFT, 2, 0)).apply {
+            border = BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(JBColor(0x7B1FA2, 0xBA68C8), 1, true),  // 紫色边框
+                JBUI.Borders.empty(2, 6, 2, 4)
+            )
+            background = JBColor(0xF3E5F5, 0x2D1B2E)  // 浅紫色背景
+            isOpaque = true
+        }
+
+        val label = JBLabel(toolName).apply {
+            font = font.deriveFont(11f)
+        }
+
+        val removeBtn = JBLabel("×").apply {
+            font = font.deriveFont(Font.BOLD, 12f)
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            toolTipText = "Remove"
+        }
+        removeBtn.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) {
+                autoApprovedToolsList.remove(toolName)
+                autoApprovedToolsPanel?.remove(tagPanel)
+                autoApprovedToolsPanel?.revalidate()
+                autoApprovedToolsPanel?.repaint()
+            }
+        })
+
+        tagPanel.add(label)
+        tagPanel.add(removeBtn)
+        autoApprovedToolsPanel?.add(tagPanel)
+        autoApprovedToolsPanel?.revalidate()
+        autoApprovedToolsPanel?.repaint()
+    }
+
     fun getServerEntry(): McpServerEntry {
         // 如果内容与默认值相同，存储空字符串（表示使用默认值）
         val customInstructions = if (instructionsArea.text.trim() == entry.defaultInstructions.trim()) {
@@ -1754,7 +1890,8 @@ class BuiltInMcpServerDialog(
                 if (selectedIndex >= 0 && selectedIndex < commitLanguageOptions.size) {
                     commitLanguageOptions[selectedIndex].first
                 } else "en"
-            } else entry.gitCommitLanguage
+            } else entry.gitCommitLanguage,
+            codexAutoApprovedTools = if (defaultAutoApprovedTools.isNotEmpty()) autoApprovedToolsList.toList() else entry.codexAutoApprovedTools
         )
     }
 }

@@ -160,6 +160,13 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         /** Git MCP Commit 语言 (en, zh, ja, ko, auto) */
         var gitCommitLanguage: String = "en",
 
+        // Codex 模式下各 MCP 自动批准的工具列表（逗号分隔，空字符串表示使用默认值）
+        var jetbrainsFileAutoApprovedTools: String = "",
+        var jetbrainsLspAutoApprovedTools: String = "",
+        var terminalAutoApprovedTools: String = "",
+        var gitAutoApprovedTools: String = "",
+        var userInteractionAutoApprovedTools: String = "",
+
         // Git Generate 功能配置
         var gitGenerateSystemPrompt: String = "",     // Git Generate 系统提示词
         var gitGenerateUserPrompt: String = "",       // Git Generate 用户提示词（运行时）
@@ -348,6 +355,89 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
      */
     fun setJetbrainsFileDisabledToolsList(tools: List<String>) {
         state.jetbrainsFileDisabledTools = tools.joinToString(",")
+    }
+
+    // ==================== Codex Auto-Approved Tools ====================
+
+    /**
+     * 获取 JetBrains File MCP 的自动批准工具列表
+     * 空字符串表示使用默认值
+     */
+    fun getJetbrainsFileAutoApprovedTools(): List<String> {
+        val custom = state.jetbrainsFileAutoApprovedTools
+        return if (custom.isBlank()) {
+            McpAutoApprovedDefaults.JETBRAINS_FILE
+        } else {
+            custom.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        }
+    }
+
+    fun setJetbrainsFileAutoApprovedTools(tools: List<String>) {
+        state.jetbrainsFileAutoApprovedTools = tools.joinToString(",")
+    }
+
+    /**
+     * 获取 JetBrains LSP MCP 的自动批准工具列表
+     */
+    fun getJetbrainsLspAutoApprovedTools(): List<String> {
+        val custom = state.jetbrainsLspAutoApprovedTools
+        return if (custom.isBlank()) {
+            McpAutoApprovedDefaults.JETBRAINS_LSP
+        } else {
+            custom.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        }
+    }
+
+    fun setJetbrainsLspAutoApprovedTools(tools: List<String>) {
+        state.jetbrainsLspAutoApprovedTools = tools.joinToString(",")
+    }
+
+    /**
+     * 获取 Terminal MCP 的自动批准工具列表
+     */
+    fun getTerminalAutoApprovedTools(): List<String> {
+        val custom = state.terminalAutoApprovedTools
+        return if (custom.isBlank()) {
+            McpAutoApprovedDefaults.JETBRAINS_TERMINAL
+        } else {
+            custom.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        }
+    }
+
+    fun setTerminalAutoApprovedTools(tools: List<String>) {
+        state.terminalAutoApprovedTools = tools.joinToString(",")
+    }
+
+    /**
+     * 获取 Git MCP 的自动批准工具列表
+     */
+    fun getGitAutoApprovedTools(): List<String> {
+        val custom = state.gitAutoApprovedTools
+        return if (custom.isBlank()) {
+            McpAutoApprovedDefaults.JETBRAINS_GIT
+        } else {
+            custom.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        }
+    }
+
+    fun setGitAutoApprovedTools(tools: List<String>) {
+        state.gitAutoApprovedTools = tools.joinToString(",")
+    }
+
+    /**
+     * 获取 User Interaction MCP 的自动批准工具列表
+     */
+    fun getUserInteractionAutoApprovedTools(): List<String> {
+        val custom = state.userInteractionAutoApprovedTools
+        return if (custom.isBlank()) {
+            McpAutoApprovedDefaults.USER_INTERACTION
+        } else {
+            custom.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        }
+    }
+
+    fun setUserInteractionAutoApprovedTools(tools: List<String>) {
+        state.userInteractionAutoApprovedTools = tools.joinToString(",")
     }
 
     // JetBrains File MCP 外部文件配置

@@ -79,15 +79,8 @@ class TerminalMcpServerImpl(private val project: Project) : McpServerBase(), Dis
         return baseInstructions + systemInfo
     }
 
-    override fun getAllowedTools(): List<String> = listOf(
-        "Terminal",
-        "TerminalRead",
-        "TerminalList",
-        "TerminalKill",
-        "TerminalTypes",
-        "TerminalRename",
-        "TerminalInterrupt"
-    )
+    override fun getAllowedTools(): List<String> = 
+        AgentSettingsService.getInstance().getTerminalAutoApprovedTools()
 
     fun getDisallowedBuiltinTools(): List<String> {
         val settings = AgentSettingsService.getInstance()

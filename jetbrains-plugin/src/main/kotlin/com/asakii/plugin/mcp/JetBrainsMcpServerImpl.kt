@@ -53,16 +53,11 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
 
     /**
      * 获取需要自动允许的工具列表
-     * JetBrains LSP MCP 的所有工具都是只读或安全的重构工具，自动允许
+     * JetBrains LSP MCP 的所有工具都是只读或安全的重构工具
+     * 用户可以在设置中自定义
      */
-    override fun getAllowedTools(): List<String> = listOf(
-        "DirectoryTree",
-        "FileProblems",
-        "FileIndex",
-        "CodeSearch",
-        "FindUsages",
-        "Rename"
-    )
+    override fun getAllowedTools(): List<String> = 
+        AgentSettingsService.getInstance().getJetbrainsLspAutoApprovedTools()
 
     companion object {
         /**
