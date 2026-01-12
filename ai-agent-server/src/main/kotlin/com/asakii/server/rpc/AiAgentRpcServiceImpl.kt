@@ -832,8 +832,9 @@ class AiAgentRpcServiceImpl(
         }
 
         // 注册 global 和 session MCP 服务器
+        // 注意：global servers 也需要使用当前 provider 注册，以便 Codex 模式下进行权限检查
         globalServers.forEach { (name, server) ->
-            registerMcpServer(name, server, GLOBAL_MCP_PROVIDER, GLOBAL_MCP_SESSION_ID, "global")
+            registerMcpServer(name, server, provider, GLOBAL_MCP_SESSION_ID, "global")
         }
         sessionServers.forEach { (name, server) ->
             registerMcpServer(name, server, provider, sessionId, "session")
