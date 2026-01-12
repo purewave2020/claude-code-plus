@@ -300,7 +300,9 @@ class CodexAppServerStreamAdapter(
             is ThreadItem.McpToolCall -> {
                 val isError = item.status == McpToolCallStatus.Failed || item.error != null
                 val content = if (isError) {
-                    JsonPrimitive(item.error?.message ?: "MCP tool failed")
+                    item.result.toResultJson()
+                        ?: item.error?.message?.let { JsonPrimitive(it) }
+                        ?: JsonPrimitive("MCP tool failed")
                 } else {
                     item.result.toResultJson()
                 }

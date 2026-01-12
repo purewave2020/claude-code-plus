@@ -162,6 +162,62 @@ class CodexMcpToolConversionTest {
     }
 
     @Test
+    fun `test MCP tool call conversion - failed should surface result content when error is null`() {
+        val mcpToolCallInProgress = ThreadItem.McpToolCall(
+            id = "call_err_001",
+            server = "jetbrains-file",
+            tool = "WriteFile",
+            status = McpToolCallStatus.InProgress,
+            arguments = buildJsonObject {
+                put("filePath", "demo.txt")
+                put("content", "demo")
+            }
+        )
+
+        val mcpToolCallFailed = ThreadItem.McpToolCall(
+            id = "call_err_001",
+            server = "jetbrains-file",
+            tool = "WriteFile",
+            status = McpToolCallStatus.Failed,
+            arguments = buildJsonObject {
+                put("filePath", "demo.txt")
+                put("content", "demo")
+            },
+            result = McpToolCallResult(
+                content = listOf(
+                    buildJsonObject {
+                        put("type", "text")
+                        put("text", "错误: Permission denied: test")
+                    }
+                )
+            )
+        )
+
+        val adapter = createAdapter()
+        adapter.convert(AppServerEvent.ItemStarted(
+            threadId = testThreadId,
+            turnId = testTurnId,
+            item = mcpToolCallInProgress
+        ))
+
+        val events = adapter.convert(AppServerEvent.ItemCompleted(
+            threadId = testThreadId,
+            turnId = testTurnId,
+            item = mcpToolCallFailed
+        ))
+
+        val contentCompleted = events.filterIsInstance<ContentCompletedEvent>().firstOrNull()
+        assertNotNull(contentCompleted, "应该产生 ContentCompletedEvent")
+        val toolResultContent = contentCompleted?.content as? ToolResultContent
+        assertNotNull(toolResultContent, "content 应该是 ToolResultContent")
+        assertTrue(toolResultContent?.isError ?: false, "应标记为错误")
+
+        val contentJson = toolResultContent?.content as? JsonObject
+        val text = contentJson?.get("text")?.jsonPrimitive?.content
+        assertEquals("错误: Permission denied: test", text, "应返回工具结果中的错误文本")
+    }
+
+    @Test
     fun `test complete MCP tool call flow - verify tool_use_id matching and AssistantMessageEvent content`() {
         val toolCallId = "call_xyz789"
 

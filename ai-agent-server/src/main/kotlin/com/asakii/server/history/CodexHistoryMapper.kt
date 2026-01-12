@@ -365,7 +365,9 @@ object CodexHistoryMapper {
 
         val isError = item.status == McpToolCallStatus.Failed || item.error != null
         val resultContent = if (isError) {
-            JsonPrimitive(item.error?.message ?: "MCP tool failed")
+            item.result.toResultJson()
+                ?: item.error?.message?.let { JsonPrimitive(it) }
+                ?: JsonPrimitive("MCP tool failed")
         } else {
             item.result.toResultJson()
         }
@@ -466,4 +468,3 @@ object CodexHistoryMapper {
         return oldLines.joinToString("\n") to newLines.joinToString("\n")
     }
 }
-
