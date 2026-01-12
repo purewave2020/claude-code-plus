@@ -220,7 +220,7 @@ object McpHttpGateway {
                 .tool(tool)
                 .callHandler { _, request ->
                     runBlocking {
-                        val jsonArgs = toJsonObject(request.arguments())
+                        val jsonArgs = toJsonObject(request.arguments() ?: emptyMap())
                         checkPermission(permissionContext, fullToolName, jsonArgs)
                             ?: server.callToolJson(toolDef.name, jsonArgs)
                     }.let(::toCallToolResult)
