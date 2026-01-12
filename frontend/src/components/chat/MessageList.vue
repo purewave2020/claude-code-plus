@@ -792,20 +792,19 @@ function handleScrollCore() {
   // - browse 模式：向下滚动到底部 → 切换回 follow 模式
 
   if (scrollState.value.mode === 'follow') {
-    // follow 模式下：用户触发的任何滚动都切换到 browse
-    // - 滚轮向上：由 handleWheel 处理（响应更快）
-    // - 拖动滚动条：在这里处理
-    // 关键：通过 isProgrammaticScroll 区分用户滚动和程序滚动
-    // 注意：不再判断滚动方向，因为无法准确区分用户滚动和内容增长导致的位置变化
-    if (!isProgrammaticScroll.value && significantScroll) {
-      // 用户手动滚动，切换到 browse 模式
+    // follow 模式下：检测用户向上滚动并切换到 browse
+    // 关键洞察：程序滚动只会向下滚动到底部，不会向上滚动
+    // 所以如果检测到向上滚动，那一定是用户操作（拖动滚动条或滚轮）
+    // 这样可以绕过 isProgrammaticScroll 的时序问题
+    if (isScrollingUp && significantScroll) {
+      // 用户向上滚动，切换到 browse 模式
       const anchor = computeScrollAnchor()
       scrollState.value = {
         mode: 'browse',
         anchor,
         newMessageCount: 0
       }
-      console.log('🔄 [Scroll] Switched to browse mode (user scroll detected)')
+      console.log('🔄 [Scroll] Switched to browse mode (scroll up detected)')
     }
   } else {
     // browse 模式下
@@ -824,16 +823,27 @@ function handleScrollCore() {
  * 程序调用的滚动到底部（follow 模式下使用）
  * 设置 isProgrammaticScroll 标志，避免触发模式切换
  */
+let programmaticScrollCount = 0  // 使用计数器替代布尔值，支持并发调用
 function scrollToBottomSilent() {
+  programmaticScrollCount++
   isProgrammaticScroll.value = true
   if (scrollerRef.value) {
     scrollerRef.value.scrollToBottom()
   } else if (wrapperRef.value) {
     wrapperRef.value.scrollTop = wrapperRef.value.scrollHeight
   }
-  // 延迟重置标志，确保 scroll 事件处理完成
+  // 延迟重置标志：等待多帧确保 DynamicScroller 的 scroll 事件处理完成
+  // 虚拟滚动可能需要多帧才能触发 scroll 事件
   requestAnimationFrame(() => {
-    isProgrammaticScroll.value = false
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        programmaticScrollCount--
+        if (programmaticScrollCount <= 0) {
+          programmaticScrollCount = 0
+          isProgrammaticScroll.value = false
+        }
+      })
+    })
   })
 }
 
@@ -857,12 +867,30 @@ function hasScrollbar(): boolean {
 }
 
 /**
- * 滚动到底部
+ * 滚动到底部（可靠版本，用于 tab 切换等关键场景）
  */
 async function scrollToBottomReliably(): Promise<void> {
   if (!scrollerRef.value) return
+  // 设置程序滚动标志，防止被误判为用户滚动
+  programmaticScrollCount++
+  isProgrammaticScroll.value = true
   scrollerRef.value.scrollToBottom()
   await nextTick()
+  // 延迟重置标志：等待多帧确保 scroll 事件处理完成
+  await new Promise<void>(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          programmaticScrollCount--
+          if (programmaticScrollCount <= 0) {
+            programmaticScrollCount = 0
+            isProgrammaticScroll.value = false
+          }
+          resolve()
+        })
+      })
+    })
+  })
 }
 
 /**
