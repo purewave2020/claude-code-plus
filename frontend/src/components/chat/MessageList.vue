@@ -335,9 +335,6 @@ function saveAnchorImmediately() {
 
 const lastScrollTop = ref(0)       // 上次滚动位置，用于检测滚动方向
 const isTabSwitching = ref(false)  // Tab 切换中，阻止其他滚动逻辑
-const isProgrammaticScroll = ref(false)  // 程序触发的滚动（用于区分用户手动滚动）
-const userScrollIntent = ref(false)  // 用户滚动意图（通过输入事件检测）
-let userScrollIntentTimer: number | null = null  // 用户滚动意图重置计时器
 const historyLoadInProgress = ref(false)
 const historyLoadRequested = ref(false)
 const historyScrollHeightBefore = ref(0)
@@ -464,26 +461,16 @@ watch(
 )
 
 /**
- * 标记用户滚动意图
- * 用户输入事件（wheel, mousedown, touchstart, keydown）触发时调用
- * 设置标志并在 200ms 后自动重置
+ * 监听用户滚轮事件 - 退出 follow 模式的【唯一入口】
+ * 
+ * 设计原理：
+ * - wheel 事件只有用户滚轮操作才会触发
+ * - 程序调用 scrollTop=xxx 或 scrollToBottom() 不会触发 wheel 事件
+ * - 因此可以 100% 准确区分用户滚动和程序滚动
  */
-function markUserScrollIntent() {
-  userScrollIntent.value = true
-  if (userScrollIntentTimer) clearTimeout(userScrollIntentTimer)
-  userScrollIntentTimer = window.setTimeout(() => {
-    userScrollIntent.value = false
-  }, 200)  // 200ms 内的 scroll 事件被视为用户触发
-}
-
-// 监听用户滚轮事件 - 向上滚动切换到 browse 模式
-// 注意：handleScroll 也会处理模式切换，但 wheel 事件响应更快
 function handleWheel(e: WheelEvent) {
   // Tab 切换中，不处理滚轮事件
   if (isTabSwitching.value) return
-
-  // 标记用户滚动意图
-  markUserScrollIntent()
 
   // deltaY < 0 表示向上滚动，切换到 browse 模式
   if (e.deltaY < 0 && scrollState.value.mode === 'follow') {
@@ -493,50 +480,19 @@ function handleWheel(e: WheelEvent) {
       anchor,
       newMessageCount: 0
     }
-    console.log('🔄 [Scroll] Switched to browse mode (wheel up)')
+    console.log('🔄 [Scroll] Switched to browse mode (user wheel up)')
   }
 }
 
-// 监听鼠标按下事件（用于检测拖动滚动条）
-function handleMouseDown(e: MouseEvent) {
-  if (isTabSwitching.value) return
-  // 检测是否点击在滚动条区域（简化判断：点击在右侧 20px 内）
-  const el = scrollerRef.value?.$el as HTMLElement | undefined
-  if (el) {
-    const rect = el.getBoundingClientRect()
-    if (e.clientX > rect.right - 20) {
-      markUserScrollIntent()
-    }
-  }
-}
-
-// 监听触摸开始事件（移动端滚动）
-function handleTouchStart() {
-  if (isTabSwitching.value) return
-  markUserScrollIntent()
-}
-
-// 监听键盘事件（Page Up/Down, 方向键）
-function handleKeyDown(e: KeyboardEvent) {
-  if (isTabSwitching.value) return
-  const scrollKeys = ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']
-  if (scrollKeys.includes(e.key)) {
-    markUserScrollIntent()
-  }
-}
-
-// 添加用户输入事件监听器（需要在 DynamicScroller 渲染后调用）
+// 添加滚轮事件监听器（需要在 DynamicScroller 渲染后调用）
 let scrollListenersAdded = false
 function addScrollListeners() {
   if (scrollListenersAdded) return
   const el = scrollerRef.value?.$el as HTMLElement | undefined
   if (el) {
     el.addEventListener('wheel', handleWheel, { passive: true })
-    el.addEventListener('mousedown', handleMouseDown, { passive: true })
-    el.addEventListener('touchstart', handleTouchStart, { passive: true })
-    el.addEventListener('keydown', handleKeyDown, { passive: true })
     scrollListenersAdded = true
-    console.log('🔄 [Scroll] User input listeners added')
+    console.log('🔄 [Scroll] Wheel listener added')
   }
 }
 
@@ -576,15 +532,10 @@ onUnmounted(() => {
   const el = scrollerRef.value?.$el as HTMLElement | undefined
   if (el) {
     el.removeEventListener('wheel', handleWheel)
-    el.removeEventListener('mousedown', handleMouseDown)
-    el.removeEventListener('touchstart', handleTouchStart)
-    el.removeEventListener('keydown', handleKeyDown)
   }
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   // 注销 Tab 切换前回调
   sessionStore.unregisterBeforeTabSwitch(handleBeforeTabSwitch)
-  // 清理计时器
-  if (userScrollIntentTimer) clearTimeout(userScrollIntentTimer)
 })
 
 // 监听 tab 切换，保存旧 tab 滚动位置并恢复新 tab 位置
@@ -833,35 +784,17 @@ function handleScrollCore() {
 
   // 判断是否在底部（允许 50px 的误差）
   const nearBottom = distanceFromBottom < 50
-  // 判断滚动方向（必须在更新 lastScrollTop 之前计算！）
+  // 判断滚动方向
   const isScrollingUp = scrollTop < lastScrollTop.value
-  // 判断是否有显著的滚动变化（避免微小抖动触发模式切换）
-  const significantScroll = Math.abs(scrollTop - lastScrollTop.value) > 5
 
   // 更新 lastScrollTop
   lastScrollTop.value = scrollTop
 
-  // 模式切换逻辑（基于位置判断）：
-  // - follow 模式：始终保持在底部，只有用户明确向上滚动才切换（由 handleWheel 处理）
-  // - browse 模式：向下滚动到底部 → 切换回 follow 模式
+  // 模式切换逻辑：
+  // - 退出 follow → browse：只通过 handleWheel 处理（用户滚轮向上）
+  // - 恢复 browse → follow：滚动到底部时自动恢复
 
-  if (scrollState.value.mode === 'follow') {
-    // follow 模式下：检测用户向上滚动并切换到 browse
-    // 必须同时满足：1) 非程序滚动 2) 向上滚动 3) 显著变化（>20px）
-    // 增加阈值到 20px 以避免虚拟列表内部调整时的误判
-    const isUserScrollUp = !isProgrammaticScroll.value && isScrollingUp && Math.abs(scrollTop - lastScrollTop.value) > 20
-    if (isUserScrollUp) {
-      // 用户向上滚动，切换到 browse 模式
-      const anchor = computeScrollAnchor()
-      scrollState.value = {
-        mode: 'browse',
-        anchor,
-        newMessageCount: 0
-      }
-      console.log('🔄 [Scroll] Switched to browse mode (user scroll up detected)')
-    }
-  } else {
-    // browse 模式下
+  if (scrollState.value.mode === 'browse') {
     if (nearBottom && !isScrollingUp) {
       // 向下滚动到底部，切换回 follow
       scrollState.value = { mode: 'follow', anchor: null, newMessageCount: 0 }
@@ -871,34 +804,19 @@ function handleScrollCore() {
       debouncedSaveAnchor()
     }
   }
+  // follow 模式：不在此处理退出逻辑，由 handleWheel 统一处理
 }
 
 /**
  * 程序调用的滚动到底部（follow 模式下使用）
- * 设置 isProgrammaticScroll 标志，避免触发模式切换
+ * 无需标志位，因为退出 follow 模式只通过 wheel 事件判断
  */
-let programmaticScrollCount = 0  // 使用计数器替代布尔值，支持并发调用
 function scrollToBottomSilent() {
-  programmaticScrollCount++
-  isProgrammaticScroll.value = true
   if (scrollerRef.value) {
     scrollerRef.value.scrollToBottom()
   } else if (wrapperRef.value) {
     wrapperRef.value.scrollTop = wrapperRef.value.scrollHeight
   }
-  // 延迟重置标志：等待多帧确保 DynamicScroller 的 scroll 事件处理完成
-  // 虚拟滚动可能需要多帧才能触发 scroll 事件
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        programmaticScrollCount--
-        if (programmaticScrollCount <= 0) {
-          programmaticScrollCount = 0
-          isProgrammaticScroll.value = false
-        }
-      })
-    })
-  })
 }
 
 /**
@@ -922,29 +840,12 @@ function hasScrollbar(): boolean {
 
 /**
  * 滚动到底部（可靠版本，用于 tab 切换等关键场景）
+ * 无需标志位，因为退出 follow 模式只通过 wheel 事件判断
  */
 async function scrollToBottomReliably(): Promise<void> {
   if (!scrollerRef.value) return
-  // 设置程序滚动标志，防止被误判为用户滚动
-  programmaticScrollCount++
-  isProgrammaticScroll.value = true
   scrollerRef.value.scrollToBottom()
   await nextTick()
-  // 延迟重置标志：等待多帧确保 scroll 事件处理完成
-  await new Promise<void>(resolve => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          programmaticScrollCount--
-          if (programmaticScrollCount <= 0) {
-            programmaticScrollCount = 0
-            isProgrammaticScroll.value = false
-          }
-          resolve()
-        })
-      })
-    })
-  })
 }
 
 /**
