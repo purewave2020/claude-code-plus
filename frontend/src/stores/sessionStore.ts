@@ -880,7 +880,7 @@ export const useSessionStore = defineStore('session', () => {
     }
 
     // Single task mode with Terminal MCP tool
-    if (taskId && toolType?.startsWith('mcp__terminal__')) {
+    if (taskId && toolType?.startsWith('mcp__jetbrains-terminal__')) {
       const terminalResult = await runTerminalBackground(taskId)
       return {
         success: terminalResult.success,

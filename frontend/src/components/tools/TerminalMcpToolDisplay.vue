@@ -3,6 +3,8 @@
     :display-info="displayInfo"
     :is-expanded="expanded"
     :has-details="hasDetails"
+    :supports-background="supportsBackground"
+    :tool-call="toolCallData"
     @click="expanded = !expanded"
   >
     <template #details>
@@ -46,6 +48,22 @@ const expanded = ref(false)
 const displayInfo = computed(() => extractToolDisplayInfo(props.toolCall as any, props.toolCall.result as any))
 
 const params = computed(() => props.toolCall.input || {})
+
+// 只有 Terminal 工具（执行命令）支持后台运行
+const supportsBackground = computed(() => {
+  const toolName = props.toolCall.toolName || ''
+  // mcp__jetbrains-terminal__Terminal 支持后台运行
+  // 排除 TerminalRead, TerminalList, TerminalKill 等
+  return toolName.endsWith('__Terminal') && !toolName.includes('Read') && !toolName.includes('List')
+})
+
+// 传递给 CompactToolCard 的工具调用数据
+const toolCallData = computed(() => ({
+  toolType: props.toolCall.toolName || '',
+  toolUseId: props.toolCall.toolUseId,
+  input: props.toolCall.input || {},
+  result: props.toolCall.result
+}))
 
 /**
  * 格式化参数值
