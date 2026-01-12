@@ -221,8 +221,12 @@ object McpHttpGateway {
                 .callHandler { _, request ->
                     runBlocking {
                         val jsonArgs = toJsonObject(request.arguments() ?: emptyMap())
+                        // 从 _meta.progressToken 获取 toolUseId，没有则生成 UUID
+                        val toolUseId = request.progressToken()?.toString()
+                            ?: java.util.UUID.randomUUID().toString()
+                        logger.debug { "[MCP] Tool call: ${toolDef.name}, toolUseId=$toolUseId" }
                         checkPermission(permissionContext, fullToolName, jsonArgs)
-                            ?: server.callToolJson(toolDef.name, jsonArgs)
+                            ?: server.callToolWithContext(toolDef.name, jsonArgs, toolUseId)
                     }.let(::toCallToolResult)
                 }
                 .build()
