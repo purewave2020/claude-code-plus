@@ -27,7 +27,7 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
      *   - session_name: String? - 新会话名称
      *   - shell_type: String? - Shell 类型（如 git-bash, powershell），不传则使用配置的默认终端
      *   - wait: Boolean? - 是否等待命令完成并返回输出（默认 true）
-     *   - timeout: Long? - 等待超时时间（秒，默认 30，0 表示无限等待）
+     *   - timeout: Long? - 等待超时时间（秒，默认 30，0 表价于 wait=false 立即返回，-1 表示无限等待）
      */
     suspend fun execute(arguments: JsonObject): String {
         val command = arguments.getString("command")
@@ -42,12 +42,12 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
         val sessionId = arguments.getString("session_id")
         val sessionName = arguments.getString("session_name")
         val shellName = arguments.getString("shell_type")
-        val wait = arguments.getBoolean("wait") ?: true
         val settings = AgentSettingsService.getInstance()
         val defaultTimeoutSec = settings.terminalReadTimeoutMs / 1000
         val timeoutSec = arguments.getLong("timeout") ?: defaultTimeoutSec
-        // 0 表示无限等待，转换为 null；否则转换为毫秒
-        val timeoutMs = if (timeoutSec <= 0) null else timeoutSec * 1000
+        // timeout=0 等价于 wait=false；timeout<0 表示无限等待；timeout>0 等待指定秒数
+        val wait = if (timeoutSec == 0L) false else (arguments.getBoolean("wait") ?: true)
+        val timeoutMs = if (timeoutSec < 0) null else timeoutSec * 1000
 
         logger.info { "Executing command: $command (session: $sessionId, shellName: $shellName, wait: $wait)" }
 
@@ -115,13 +115,14 @@ class TerminalTool(private val sessionManager: TerminalSessionManager) {
         }
 
         // 等待命令完成并返回输出
+        // timeoutMs: null 表示无限等待，>0 表示等待指定毫秒数
         val readResult = sessionManager.readOutput(
             sessionId = session.id,
             maxLines = 1000,
             search = null,
             contextLines = 2,
             waitForIdle = true,
-            timeoutMs = timeoutMs ?: 30_000L
+            timeoutMs = timeoutMs ?: Long.MAX_VALUE
         )
 
         // 命令完成，记录任务结束

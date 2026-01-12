@@ -1462,23 +1462,23 @@ class BuiltInMcpServerDialog(
             }
         }
 
-        // JetBrains File MCP 的外部文件配置
+        // JetBrains File MCP 的外部文件配置（可折叠）
         if (entry.name == "JetBrains File MCP") {
-            val externalFilesLabel = JBLabel("External Files Access:").apply {
+            // 外部路径规则内容面板
+            val externalContentPanel = JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
                 alignmentX = JPanel.LEFT_ALIGNMENT
             }
-            topPanel.add(externalFilesLabel)
-            topPanel.add(Box.createVerticalStrut(4))
 
             // 允许外部文件复选框
             val allowExternalPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 add(fileAllowExternalCheckbox)
             }
-            topPanel.add(allowExternalPanel)
-            topPanel.add(Box.createVerticalStrut(4))
+            externalContentPanel.add(allowExternalPanel)
+            externalContentPanel.add(Box.createVerticalStrut(4))
 
-            // 外部路径规则面板
+            // 路径规则面板
             val externalRulesPanel = JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
                 alignmentX = JPanel.LEFT_ALIGNMENT
@@ -1505,7 +1505,6 @@ class BuiltInMcpServerDialog(
             val buttonsPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
 
-                // + Include 按钮
                 add(JButton("+ Include").apply {
                     toolTipText = "Add a directory to the include list"
                     addActionListener {
@@ -1514,7 +1513,6 @@ class BuiltInMcpServerDialog(
                         val chosen = FileChooser.chooseFile(descriptor, null, null)
                         if (chosen != null) {
                             val rule = ExternalPathRule(chosen.path, ExternalPathRuleType.INCLUDE)
-                            // 检查是否已存在相同规则
                             val exists = (0 until externalRulesListModel.size()).any {
                                 val existing = externalRulesListModel.getElementAt(it)
                                 existing.path == rule.path && existing.type == rule.type
@@ -1526,7 +1524,6 @@ class BuiltInMcpServerDialog(
                     }
                 })
 
-                // + Exclude 按钮
                 add(JButton("+ Exclude").apply {
                     toolTipText = "Add a directory to the exclude list"
                     addActionListener {
@@ -1535,7 +1532,6 @@ class BuiltInMcpServerDialog(
                         val chosen = FileChooser.chooseFile(descriptor, null, null)
                         if (chosen != null) {
                             val rule = ExternalPathRule(chosen.path, ExternalPathRuleType.EXCLUDE)
-                            // 检查是否已存在相同规则
                             val exists = (0 until externalRulesListModel.size()).any {
                                 val existing = externalRulesListModel.getElementAt(it)
                                 existing.path == rule.path && existing.type == rule.type
@@ -1547,7 +1543,6 @@ class BuiltInMcpServerDialog(
                     }
                 })
 
-                // Remove 按钮
                 add(JButton("Remove").apply {
                     toolTipText = "Remove selected rule"
                     addActionListener {
@@ -1559,9 +1554,8 @@ class BuiltInMcpServerDialog(
                 })
             }
             externalRulesPanel.add(buttonsPanel)
-
-            topPanel.add(externalRulesPanel)
-            topPanel.add(Box.createVerticalStrut(4))
+            externalContentPanel.add(externalRulesPanel)
+            externalContentPanel.add(Box.createVerticalStrut(4))
 
             val externalHintLabel = JBLabel(
                 "<html><font color='#666666' size='2'>Empty rules = allow all external paths. " +
@@ -1569,7 +1563,18 @@ class BuiltInMcpServerDialog(
             ).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
             }
-            topPanel.add(externalHintLabel)
+            externalContentPanel.add(externalHintLabel)
+
+            // 创建可折叠区域
+            val hasRules = externalRulesListModel.size() > 0
+            val (headerPanel, contentWrapper) = createCollapsibleSection(
+                title = "External Files Access:",
+                contentPanel = externalContentPanel,
+                initiallyExpanded = hasRules || fileAllowExternalCheckbox.isSelected
+            )
+            topPanel.add(headerPanel)
+            topPanel.add(Box.createVerticalStrut(2))
+            topPanel.add(contentWrapper)
             topPanel.add(Box.createVerticalStrut(8))
 
             // 根据复选框状态启用/禁用规则面板
@@ -1779,6 +1784,84 @@ class BuiltInMcpServerDialog(
                 toolTipText = resetTooltip
                 addActionListener { onReset() }
             })
+        }
+
+        return Pair(headerPanel, contentWrapper)
+    }
+
+    /**
+     * 创建通用可折叠区域
+     * @param title 标题文本
+     * @param titleColor 标题颜色（可选）
+     * @param contentPanel 内容面板
+     * @param initiallyExpanded 初始是否展开
+     * @param extraHeaderComponents 额外的标题栏组件（如 Reset 按钮）
+     * @return Pair<HeaderPanel, ContentWrapper>
+     */
+    private fun createCollapsibleSection(
+        title: String,
+        titleColor: Color? = null,
+        contentPanel: JComponent,
+        initiallyExpanded: Boolean = true,
+        extraHeaderComponents: List<JComponent> = emptyList()
+    ): Pair<JPanel, JPanel> {
+        var isExpanded = initiallyExpanded
+
+        // 内容包装面板
+        val contentWrapper = JPanel(BorderLayout()).apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+            add(contentPanel, BorderLayout.CENTER)
+            isVisible = isExpanded
+        }
+
+        // 折叠按钮
+        val collapseButton = JBLabel().apply {
+            icon = if (isExpanded) AllIcons.General.ArrowDown else AllIcons.General.ArrowRight
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            toolTipText = if (isExpanded) "Collapse" else "Expand"
+        }
+
+        // 标题标签
+        val titleLabel = JBLabel(title).apply {
+            titleColor?.let { foreground = it }
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        }
+
+        // 切换展开状态
+        val toggleAction = {
+            isExpanded = !isExpanded
+            contentWrapper.isVisible = isExpanded
+            collapseButton.icon = if (isExpanded) AllIcons.General.ArrowDown else AllIcons.General.ArrowRight
+            collapseButton.toolTipText = if (isExpanded) "Collapse" else "Expand"
+            contentWrapper.parent?.revalidate()
+            contentWrapper.parent?.repaint()
+        }
+
+        collapseButton.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) { toggleAction() }
+        })
+        titleLabel.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) { toggleAction() }
+        })
+
+        // 标题行面板
+        val headerPanel = JPanel(BorderLayout()).apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+            
+            // 左侧：折叠按钮 + 标题
+            val leftPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+                add(collapseButton)
+                add(titleLabel)
+            }
+            add(leftPanel, BorderLayout.WEST)
+            
+            // 右侧：额外组件
+            if (extraHeaderComponents.isNotEmpty()) {
+                val rightPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
+                    extraHeaderComponents.forEach { add(it) }
+                }
+                add(rightPanel, BorderLayout.EAST)
+            }
         }
 
         return Pair(headerPanel, contentWrapper)

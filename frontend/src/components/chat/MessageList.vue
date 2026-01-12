@@ -793,10 +793,10 @@ function handleScrollCore() {
 
   if (scrollState.value.mode === 'follow') {
     // follow 模式下：检测用户向上滚动并切换到 browse
-    // 关键洞察：程序滚动只会向下滚动到底部，不会向上滚动
-    // 所以如果检测到向上滚动，那一定是用户操作（拖动滚动条或滚轮）
-    // 这样可以绕过 isProgrammaticScroll 的时序问题
-    if (isScrollingUp && significantScroll) {
+    // 必须同时满足：1) 非程序滚动 2) 向上滚动 3) 显著变化（>20px）
+    // 增加阈值到 20px 以避免虚拟列表内部调整时的误判
+    const isUserScrollUp = !isProgrammaticScroll.value && isScrollingUp && Math.abs(scrollTop - lastScrollTop.value) > 20
+    if (isUserScrollUp) {
       // 用户向上滚动，切换到 browse 模式
       const anchor = computeScrollAnchor()
       scrollState.value = {
@@ -804,7 +804,7 @@ function handleScrollCore() {
         anchor,
         newMessageCount: 0
       }
-      console.log('🔄 [Scroll] Switched to browse mode (scroll up detected)')
+      console.log('🔄 [Scroll] Switched to browse mode (user scroll up detected)')
     }
   } else {
     // browse 模式下
