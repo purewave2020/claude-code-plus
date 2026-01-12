@@ -1,105 +1,219 @@
 /**
- * 快捷键管理 Composable
+ * Keyboard Shortcuts Composable
+ * Manages keyboard event handling for ChatInput component
  */
-
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, nextTick, type Ref, type ComputedRef } from 'vue'
+import { useSessionStore } from '@/stores/sessionStore'
+import type { BackendType } from '@/types/backend'
 
 /**
- * 快捷键配置
+ * RichTextInput instance interface (minimal required methods)
  */
-export interface ShortcutConfig {
-  key: string
-  ctrl?: boolean
-  shift?: boolean
-  alt?: boolean
-  meta?: boolean
-  handler: (event: KeyboardEvent) => void
-  preventDefault?: boolean
-  description?: string
+export interface RichTextInputRef {
+  insertNewLine: () => void
+  deleteToLineStart: () => void
 }
 
 /**
- * 预定义的快捷键
+ * Options for useKeyboardShortcuts composable
  */
-export const SHORTCUTS = {
-  SEND_MESSAGE: { key: 'Enter', ctrl: true, description: '发送消息' },
-  OPEN_SETTINGS: { key: 'k', ctrl: true, description: '打开设置' },
-  TOGGLE_SESSION_LIST: { key: '/', ctrl: true, description: '切换会话列表' },
-  NEW_SESSION: { key: 'n', ctrl: true, description: '新建会话' },
-  CLOSE_DIALOG: { key: 'Escape', description: '关闭对话框' }
+export interface KeyboardShortcutsOptions {
+  // Props (reactive)
+  isGenerating: ComputedRef<boolean>
+  enabled: ComputedRef<boolean>
+  inline: ComputedRef<boolean>
+  backendType: ComputedRef<BackendType>
+  
+  // Refs
+  richTextInputRef: Ref<RichTextInputRef | undefined>
+  showThinkingConfig: Ref<boolean>
+  
+  // Composable functions - @ symbol
+  checkAtSymbol: () => void
+  
+  // Composable functions - permission modes
+  cyclePermissionMode: () => void
+  cycleCodexSandboxMode: () => void
+  
+  // Composable functions - thinking
+  toggleThinkingEnabled: (source: 'keyboard' | 'click') => Promise<void>
+  cycleCodexReasoningEffort: () => void
+  
+  // Composable functions - send
+  handleForceSend: () => void
+  
+  // Emits
+  onStop: () => void
+  onCancel: () => void
 }
 
 /**
- * 快捷键管理 Hook
+ * Composable for handling keyboard shortcuts in ChatInput
  */
-export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]) {
-  const handleKeyDown = (event: KeyboardEvent) => {
-    for (const shortcut of shortcuts) {
-      // 检查修饰键
-      const ctrlMatch = shortcut.ctrl === undefined || event.ctrlKey === shortcut.ctrl
-      const shiftMatch = shortcut.shift === undefined || event.shiftKey === shortcut.shift
-      const altMatch = shortcut.alt === undefined || event.altKey === shortcut.alt
-      const metaMatch = shortcut.meta === undefined || event.metaKey === shortcut.meta
+export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
+  const sessionStore = useSessionStore()
+  
+  const {
+    isGenerating,
+    enabled,
+    inline,
+    backendType,
+    richTextInputRef,
+    showThinkingConfig,
+    checkAtSymbol,
+    cyclePermissionMode,
+    cycleCodexSandboxMode,
+    toggleThinkingEnabled,
+    cycleCodexReasoningEffort,
+    handleForceSend,
+    onStop,
+    onCancel
+  } = options
 
-      // 检查按键（不区分大小写）
-      const keyMatch = event.key.toLowerCase() === shortcut.key.toLowerCase()
+  /**
+   * Handle Ctrl+B to run current task in background
+   */
+  async function handleRunInBackground() {
+    if (!isGenerating.value) {
+      return  // No active task, ignore
+    }
 
-      // 如果所有条件都匹配
-      if (ctrlMatch && shiftMatch && altMatch && metaMatch && keyMatch) {
-        if (shortcut.preventDefault !== false) {
-          event.preventDefault()
-        }
-        shortcut.handler(event)
-        break
-      }
+    try {
+      await sessionStore.runInBackground()
+      console.log('✅ [KeyboardShortcuts] Background run request sent')
+    } catch (err) {
+      console.error('[KeyboardShortcuts] Background run request failed:', err)
     }
   }
 
+  /**
+   * Main keydown handler for input element
+   * Handles all keyboard shortcuts: ESC, Tab, Shift+Tab, Ctrl+Enter, Ctrl+B, Ctrl+J, Ctrl+U, Shift+Enter
+   */
+  async function handleKeydown(event: KeyboardEvent) {
+    // Arrow keys - trigger @ symbol check
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+      nextTick(() => checkAtSymbol())
+    }
+
+    // ESC key handling
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation() // Prevent global listener from re-triggering
+      
+      // If thinking config panel is open, close it first
+      if (showThinkingConfig.value) {
+        showThinkingConfig.value = false
+        return
+      }
+      
+      // If generating, stop generation
+      if (isGenerating.value) {
+        onStop()
+        return
+      }
+      
+      // If inline mode, cancel edit
+      if (inline.value) {
+        onCancel()
+        return
+      }
+    }
+
+    // Shift + Tab - cycle permission/sandbox mode
+    if (
+      event.key === 'Tab' &&
+      event.shiftKey &&
+      !event.ctrlKey &&
+      !event.metaKey
+    ) {
+      event.preventDefault()
+      if (backendType.value === 'claude') {
+        cyclePermissionMode()
+      } else if (backendType.value === 'codex') {
+        cycleCodexSandboxMode()
+      }
+      return
+    }
+
+    // Tab - toggle thinking (Claude) / cycle reasoning effort (Codex)
+    if (
+      event.key === 'Tab' &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.metaKey
+    ) {
+      event.preventDefault()
+      if (backendType.value === 'claude') {
+        await toggleThinkingEnabled('keyboard')
+      } else if (backendType.value === 'codex') {
+        cycleCodexReasoningEffort()
+      }
+      return
+    }
+
+    // Ctrl+Enter - force send (interrupt current generation and send)
+    if (event.key === 'Enter' && event.ctrlKey && !event.shiftKey && !event.altKey) {
+      event.preventDefault()
+      handleForceSend()
+      return
+    }
+
+    // Ctrl+B - run task in background
+    if (event.key === 'b' && event.ctrlKey && !event.shiftKey && !event.altKey) {
+      event.preventDefault()
+      handleRunInBackground()
+      return
+    }
+
+    // Shift+Enter - insert newline (default behavior)
+    if (event.key === 'Enter' && event.shiftKey) {
+      // Default behavior already inserts newline, no extra handling needed
+      return
+    }
+
+    // Ctrl+J - insert newline (browser default is not newline)
+    if (event.key === 'j' && event.ctrlKey && !event.shiftKey && !event.altKey) {
+      event.preventDefault()
+      richTextInputRef.value?.insertNewLine()
+      return
+    }
+
+    // Ctrl+U - delete from cursor to line start
+    if (event.key === 'u' && event.ctrlKey && !event.shiftKey && !event.altKey) {
+      event.preventDefault()
+      richTextInputRef.value?.deleteToLineStart()
+      return
+    }
+
+    // Enter key is handled by RichTextInput's @submit event, not here
+  }
+
+  /**
+   * Global keydown handler (listens on document)
+   * Used to ensure ESC can stop generation regardless of focus state
+   */
+  function handleGlobalKeydown(event: KeyboardEvent) {
+    // ESC to stop generation (global listener ensures response from any focus state)
+    if (event.key === 'Escape' && isGenerating.value) {
+      event.preventDefault()
+      event.stopPropagation()
+      console.log('🛑 [GlobalKeydown] ESC pressed, stopping generation')
+      onStop()
+    }
+  }
+
+  // Lifecycle - mount/unmount global listeners
   onMounted(() => {
-    window.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('keydown', handleGlobalKeydown)
   })
 
   onUnmounted(() => {
-    window.removeEventListener('keydown', handleKeyDown)
+    document.removeEventListener('keydown', handleGlobalKeydown)
   })
 
   return {
-    handleKeyDown
+    handleKeydown,
+    handleRunInBackground
   }
-}
-
-/**
- * 创建快捷键配置
- */
-export function createShortcut(
-  key: string,
-  handler: (event: KeyboardEvent) => void,
-  options: Partial<ShortcutConfig> = {}
-): ShortcutConfig {
-  return {
-    key,
-    handler,
-    ...options
-  }
-}
-
-/**
- * 格式化快捷键显示
- */
-export function formatShortcut(shortcut: Partial<ShortcutConfig>): string {
-  const parts: string[] = []
-
-  if (shortcut.ctrl) parts.push('Ctrl')
-  if (shortcut.shift) parts.push('Shift')
-  if (shortcut.alt) parts.push('Alt')
-  if (shortcut.meta) parts.push('Meta')
-  if (shortcut.key) {
-    // 特殊键名处理
-    const keyName = shortcut.key === 'Escape' ? 'Esc' :
-      shortcut.key === 'Enter' ? '↵' :
-      shortcut.key.toUpperCase()
-    parts.push(keyName)
-  }
-
-  return parts.join('+')
 }

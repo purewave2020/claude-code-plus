@@ -708,7 +708,7 @@ class AiAgentRpcServiceImpl(
         }
 
         sdkLog.info { "✅ [SDK] 会话已销毁: sessionId=$sessionId" }
-        return RpcStatusResult(success = true)
+        return RpcStatusResult(status = RpcSessionStatus.DISCONNECTED)
     }
 
     private fun buildPermissionRequester(): PermissionRequester? {

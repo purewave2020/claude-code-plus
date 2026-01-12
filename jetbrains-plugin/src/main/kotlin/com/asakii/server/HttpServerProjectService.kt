@@ -141,13 +141,11 @@ class HttpServerProjectService(private val project: Project) : Disposable {
 
 
             // 注册终端任务更新监听器，通过 RSocket 推送给前端
-            terminalMcpServerProvider.getServerIfInitialized()?.let { server ->
-                (server as? com.asakii.plugin.mcp.TerminalMcpServerImpl)?.sessionManager?.setTaskUpdateListener { 
-                    toolUseId, sessionId, action, command, isBackground, startTime, elapsedMs ->
-                    jetbrainsRSocketHandler.pushTerminalTaskUpdate(
-                        toolUseId, sessionId, action, command, isBackground, startTime, elapsedMs
-                    )
-                }
+            (terminalMcpServerProvider.getServer() as? com.asakii.plugin.mcp.TerminalMcpServerImpl)?.sessionManager?.setTaskUpdateListener { 
+                toolUseId, sessionId, action, command, isBackground, startTime, elapsedMs ->
+                jetbrainsRSocketHandler.pushTerminalTaskUpdate(
+                    toolUseId, sessionId, action, command, isBackground, startTime, elapsedMs
+                )
             }
             // 监听主题变化，通过 RSocket 推送给前端（非阻塞）
             jetbrainsApi.theme.addChangeListener { theme ->

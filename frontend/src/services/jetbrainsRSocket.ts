@@ -9,32 +9,6 @@
 
 import { RSocketClient } from './rsocket/RSocketClient'
 import { resolveServerHttpUrl } from '@/utils/serverUrl'
-import { create, toBinary, fromBinary } from '@bufbuild/protobuf'
-import {
-  JetBrainsOpenFileRequestSchema,
-  JetBrainsShowDiffRequestSchema,
-  JetBrainsShowMultiEditDiffRequestSchema,
-  JetBrainsShowEditPreviewRequestSchema,
-  JetBrainsShowEditFullDiffRequestSchema,
-  JetBrainsShowMarkdownRequestSchema,
-  JetBrainsEditOperationSchema,
-  JetBrainsOperationResponseSchema,
-  JetBrainsGetThemeResponseSchema,
-  JetBrainsGetLocaleResponseSchema,
-  JetBrainsGetProjectPathResponseSchema,
-  JetBrainsSetLocaleRequestSchema,
-  JetBrainsSessionStateSchema,
-  JetBrainsSessionSummarySchema,
-  JetBrainsGetOriginalContentResponseSchema,
-  JetBrainsGetFileHistoryContentRequestSchema,
-  JetBrainsGetFileHistoryContentResponseSchema,
-  JetBrainsRollbackFileRequestSchema,
-  JetBrainsRollbackFileResponseSchema
-} from '@/proto/jetbrains_api_pb'
-import {
-  GetIdeSettingsResponseSchema,
-  ActiveFileChangedNotifySchema
-} from '@/proto/ai_agent_rpc_pb'
 import type {
   OpenFileRequest,
   ShowDiffRequest,
@@ -44,753 +18,79 @@ import type {
   ShowMarkdownRequest
 } from './jetbrainsApi'
 
-// ========== Protobuf 编解码（使用官方库）==========
+// 从 jetbrainsTypes.ts 导入类型
+export {
+  RollbackStatus,
+  TerminalBackgroundStatus,
+  type BatchRollbackItem,
+  type BatchRollbackEvent,
+  type TerminalBackgroundItem,
+  type TerminalBackgroundEvent,
+  type BackgroundableTerminal,
+  type IdeTheme,
+  type SessionCommand,
+  type SessionSummary,
+  type SessionState,
+  type TerminalTaskUpdate,
+  type ActiveFileInfo,
+  type IdeSettings,
+  type ThinkingLevelConfig,
+  type OptionConfig,
+  type ThemeChangeHandler,
+  type SessionCommandHandler,
+  type SettingsChangeHandler,
+  type ActiveFileChangeHandler,
+  type TerminalTaskUpdateHandler
+} from './jetbrainsTypes'
 
-/**
- * 编码 JetBrainsOpenFileRequest
- */
-function encodeOpenFileRequest(request: OpenFileRequest): Uint8Array {
-  const proto = create(JetBrainsOpenFileRequestSchema, {
-    filePath: request.filePath,
-    line: request.line,
-    column: request.column,
-    startOffset: request.startOffset,
-    endOffset: request.endOffset
-  })
-  return toBinary(JetBrainsOpenFileRequestSchema, proto)
-}
+import {
+  RollbackStatus,
+  TerminalBackgroundStatus,
+  type IdeTheme,
+  type SessionCommand,
+  type SessionState,
+  type TerminalTaskUpdate,
+  type ActiveFileInfo,
+  type IdeSettings,
+  type BatchRollbackItem,
+  type BatchRollbackEvent,
+  type TerminalBackgroundItem,
+  type TerminalBackgroundEvent,
+  type BackgroundableTerminal,
+  type ThemeChangeHandler,
+  type SessionCommandHandler,
+  type SettingsChangeHandler,
+  type ActiveFileChangeHandler,
+  type TerminalTaskUpdateHandler
+} from './jetbrainsTypes'
 
-/**
- * 编码 JetBrainsShowDiffRequest
- */
-function encodeShowDiffRequest(request: ShowDiffRequest): Uint8Array {
-  const proto = create(JetBrainsShowDiffRequestSchema, {
-    filePath: request.filePath,
-    oldContent: request.oldContent,
-    newContent: request.newContent,
-    title: request.title
-  })
-  return toBinary(JetBrainsShowDiffRequestSchema, proto)
-}
-
-/**
- * 编码 JetBrainsShowMultiEditDiffRequest
- */
-function encodeShowMultiEditDiffRequest(request: ShowMultiEditDiffRequest): Uint8Array {
-  const proto = create(JetBrainsShowMultiEditDiffRequestSchema, {
-    filePath: request.filePath,
-    edits: request.edits.map(edit => create(JetBrainsEditOperationSchema, {
-      oldString: edit.oldString,
-      newString: edit.newString,
-      replaceAll: edit.replaceAll
-    })),
-    currentContent: request.currentContent
-  })
-  return toBinary(JetBrainsShowMultiEditDiffRequestSchema, proto)
-}
-
-/**
- * 编码 JetBrainsShowEditPreviewRequest
- */
-function encodeShowEditPreviewRequest(request: ShowEditPreviewRequest): Uint8Array {
-  const proto = create(JetBrainsShowEditPreviewRequestSchema, {
-    filePath: request.filePath,
-    edits: request.edits.map(edit => create(JetBrainsEditOperationSchema, {
-      oldString: edit.oldString,
-      newString: edit.newString,
-      replaceAll: edit.replaceAll
-    })),
-    title: request.title
-  })
-  return toBinary(JetBrainsShowEditPreviewRequestSchema, proto)
-}
-
-/**
- * 编码 JetBrainsShowMarkdownRequest
- */
-function encodeShowMarkdownRequest(request: ShowMarkdownRequest): Uint8Array {
-  const proto = create(JetBrainsShowMarkdownRequestSchema, {
-    content: request.content,
-    title: request.title
-  })
-  return toBinary(JetBrainsShowMarkdownRequestSchema, proto)
-}
-
-/**
- * 编码 JetBrainsShowEditFullDiffRequest
- */
-function encodeShowEditFullDiffRequest(request: ShowEditFullDiffRequest): Uint8Array {
-  const proto = create(JetBrainsShowEditFullDiffRequestSchema, {
-    filePath: request.filePath,
-    oldString: request.oldString,
-    newString: request.newString,
-    replaceAll: request.replaceAll,
-    title: request.title
-  })
-  return toBinary(JetBrainsShowEditFullDiffRequestSchema, proto)
-}
-
-/**
- * 编码 JetBrainsSetLocaleRequest
- */
-function encodeSetLocaleRequest(locale: string): Uint8Array {
-  const proto = create(JetBrainsSetLocaleRequestSchema, { locale })
-  return toBinary(JetBrainsSetLocaleRequestSchema, proto)
-}
-
-/**
- * 解码 JetBrainsOperationResponse
- */
-function decodeOperationResponse(data: Uint8Array): { success: boolean; error?: string } {
-  const proto = fromBinary(JetBrainsOperationResponseSchema, data)
-  return { success: proto.success, error: proto.error || undefined }
-}
-
-/**
- * 解码 JetBrainsGetThemeResponse -> IdeTheme
- */
-function decodeThemeResponse(data: Uint8Array): IdeTheme | null {
-  const proto = fromBinary(JetBrainsGetThemeResponseSchema, data)
-  if (!proto.theme) return null
-
-  const theme = proto.theme
-  return {
-    background: theme.background,
-    foreground: theme.foreground,
-    borderColor: theme.borderColor,
-    panelBackground: theme.panelBackground,
-    textFieldBackground: theme.textFieldBackground,
-    selectionBackground: theme.selectionBackground,
-    selectionForeground: theme.selectionForeground,
-    linkColor: theme.linkColor,
-    errorColor: theme.errorColor,
-    warningColor: theme.warningColor,
-    successColor: theme.successColor,
-    separatorColor: theme.separatorColor,
-    hoverBackground: theme.hoverBackground,
-    accentColor: theme.accentColor,
-    infoBackground: theme.infoBackground,
-    codeBackground: theme.codeBackground,
-    secondaryForeground: theme.secondaryForeground,
-    fontFamily: theme.fontFamily,
-    fontSize: theme.fontSize,
-    editorFontFamily: theme.editorFontFamily,
-    editorFontSize: theme.editorFontSize
-  }
-}
-
-/**
- * 解码 JetBrainsGetLocaleResponse
- */
-function decodeLocaleResponse(data: Uint8Array): string {
-  const proto = fromBinary(JetBrainsGetLocaleResponseSchema, data)
-  return proto.locale || 'en-US'
-}
-
-/**
- * 解码 JetBrainsGetProjectPathResponse
- */
-function decodeProjectPathResponse(data: Uint8Array): string {
-  const proto = fromBinary(JetBrainsGetProjectPathResponseSchema, data)
-  return proto.projectPath || ''
-}
-
-/**
- * 解码 JetBrainsGetOriginalContentResponse
- */
-function decodeGetOriginalContentResponse(data: Uint8Array): { success: boolean; found: boolean; content?: string; error?: string } {
-  const proto = fromBinary(JetBrainsGetOriginalContentResponseSchema, data)
-  return {
-    success: proto.success,
-    found: proto.found,
-    content: proto.content || undefined,
-    error: proto.error || undefined
-  }
-}
-
-/**
- * 编码 JetBrainsGetFileHistoryContentRequest
- */
-function encodeGetFileHistoryContentRequest(filePath: string, beforeTimestamp: number): Uint8Array {
-  const proto = create(JetBrainsGetFileHistoryContentRequestSchema, {
-    filePath,
-    beforeTimestamp: BigInt(beforeTimestamp)
-  })
-  return toBinary(JetBrainsGetFileHistoryContentRequestSchema, proto)
-}
-
-/**
- * 解码 JetBrainsGetFileHistoryContentResponse
- */
-function decodeGetFileHistoryContentResponse(data: Uint8Array): { success: boolean; found: boolean; content?: string; error?: string } {
-  const proto = fromBinary(JetBrainsGetFileHistoryContentResponseSchema, data)
-  return {
-    success: proto.success,
-    found: proto.found,
-    content: proto.content || undefined,
-    error: proto.error || undefined
-  }
-}
-
-/**
- * 编码 JetBrainsRollbackFileRequest
- */
-function encodeRollbackFileRequest(filePath: string, beforeTimestamp: number): Uint8Array {
-  const proto = create(JetBrainsRollbackFileRequestSchema, {
-    filePath,
-    beforeTimestamp: BigInt(beforeTimestamp)
-  })
-  return toBinary(JetBrainsRollbackFileRequestSchema, proto)
-}
-
-/**
- * 解码 JetBrainsRollbackFileResponse
- */
-function decodeRollbackFileResponse(data: Uint8Array): { success: boolean; error?: string } {
-  const proto = fromBinary(JetBrainsRollbackFileResponseSchema, data)
-  return {
-    success: proto.success,
-    error: proto.error || undefined
-  }
-}
-
-// ========== 批量回滚相关（手动实现 Protobuf 编解码）==========
-
-/**
- * 回滚状态枚举
- */
-export enum RollbackStatus {
-  STARTED = 0,
-  SUCCESS = 1,
-  FAILED = 2
-}
-
-/**
- * 批量回滚项
- */
-export interface BatchRollbackItem {
-  filePath: string
-  beforeTimestamp: number
-  toolUseId: string
-}
-
-/**
- * 批量回滚事件
- */
-export interface BatchRollbackEvent {
-  filePath: string
-  toolUseId: string
-  status: RollbackStatus
-  error?: string
-}
-
-// ========== Terminal 后台执行 ==========
-
-/**
- * 终端后台状态枚举
- */
-export enum TerminalBackgroundStatus {
-  STARTED = 0,
-  SUCCESS = 1,
-  FAILED = 2
-}
-
-/**
- * 终端后台项
- */
-export interface TerminalBackgroundItem {
-  sessionId: string
-  toolUseId: string
-}
-
-/**
- * 终端后台事件
- */
-export interface TerminalBackgroundEvent {
-  sessionId: string
-  toolUseId: string
-  status: TerminalBackgroundStatus
-  error?: string
-}
-
-/**
- * 可后台的终端任务
- */
-export interface BackgroundableTerminal {
-  sessionId: string
-  toolUseId: string
-  command: string
-  startTime: number
-  elapsedMs: number
-}
-
-/**
- * 手动编码 BatchRollbackRequest (简单 Protobuf 编码)
- * message JetBrainsBatchRollbackRequest { repeated JetBrainsBatchRollbackItem items = 1; }
- * message JetBrainsBatchRollbackItem { string file_path=1; int64 before_timestamp=2; string tool_use_id=3; }
- */
-function encodeBatchRollbackRequest(items: BatchRollbackItem[]): Uint8Array {
-  const parts: Uint8Array[] = []
-  
-  for (const item of items) {
-    // 编码单个 item
-    const itemParts: Uint8Array[] = []
-    
-    // field 1: file_path (string)
-    const filePathBytes = new TextEncoder().encode(item.filePath)
-    itemParts.push(encodeField(1, 2, filePathBytes)) // wire type 2 = length-delimited
-    
-    // field 2: before_timestamp (int64 as varint)
-    itemParts.push(encodeVarintField(2, item.beforeTimestamp))
-    
-    // field 3: tool_use_id (string)
-    const toolUseIdBytes = new TextEncoder().encode(item.toolUseId)
-    itemParts.push(encodeField(3, 2, toolUseIdBytes))
-    
-    // 合并 item 字节
-    const itemBytes = concatUint8Arrays(itemParts)
-    
-    // 将 item 作为嵌套消息添加到 items (field 1)
-    parts.push(encodeField(1, 2, itemBytes))
-  }
-  
-  return concatUint8Arrays(parts)
-}
-
-/**
- * 编码字段（带 wire type）
- */
-function encodeField(fieldNum: number, wireType: number, data: Uint8Array): Uint8Array {
-  const tag = (fieldNum << 3) | wireType
-  const tagBytes = encodeVarint(tag)
-  const lenBytes = encodeVarint(data.length)
-  return concatUint8Arrays([tagBytes, lenBytes, data])
-}
-
-/**
- * 编码 varint 字段
- */
-function encodeVarintField(fieldNum: number, value: number): Uint8Array {
-  const tag = (fieldNum << 3) | 0 // wire type 0 = varint
-  const tagBytes = encodeVarint(tag)
-  const valueBytes = encodeVarint(value)
-  return concatUint8Arrays([tagBytes, valueBytes])
-}
-
-/**
- * 编码 varint
- */
-function encodeVarint(value: number): Uint8Array {
-  const bytes: number[] = []
-  while (value > 127) {
-    bytes.push((value & 0x7f) | 0x80)
-    value = Math.floor(value / 128)
-  }
-  bytes.push(value & 0x7f)
-  return new Uint8Array(bytes)
-}
-
-/**
- * 合并 Uint8Array 数组
- */
-function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
-  const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0)
-  const result = new Uint8Array(totalLength)
-  let offset = 0
-  for (const arr of arrays) {
-    result.set(arr, offset)
-    offset += arr.length
-  }
-  return result
-}
-
-/**
- * 手动解码 BatchRollbackEvent
- * message JetBrainsBatchRollbackEvent { string file_path=1; string tool_use_id=2; RollbackStatus status=3; optional string error=4; }
- */
-function decodeBatchRollbackEvent(data: Uint8Array): BatchRollbackEvent {
-  const result: BatchRollbackEvent = {
-    filePath: '',
-    toolUseId: '',
-    status: RollbackStatus.STARTED
-  }
-  
-  let offset = 0
-  while (offset < data.length) {
-    const tag = data[offset++]
-    const fieldNum = tag >> 3
-    const wireType = tag & 0x7
-    
-    if (wireType === 2) {
-      // length-delimited (string)
-      let len = 0
-      let shift = 0
-      while (offset < data.length) {
-        const b = data[offset++]
-        len |= (b & 0x7f) << shift
-        if (!(b & 0x80)) break
-        shift += 7
-      }
-      const strBytes = data.slice(offset, offset + len)
-      offset += len
-      const str = new TextDecoder().decode(strBytes)
-      
-      if (fieldNum === 1) result.filePath = str
-      else if (fieldNum === 2) result.toolUseId = str
-      else if (fieldNum === 4) result.error = str
-    } else if (wireType === 0) {
-      // varint
-      let value = 0
-      let shift = 0
-      while (offset < data.length) {
-        const b = data[offset++]
-        value |= (b & 0x7f) << shift
-        if (!(b & 0x80)) break
-        shift += 7
-      }
-      
-      if (fieldNum === 3) result.status = value as RollbackStatus
-    }
-  }
-  
-  return result
-}
-
-// ========== Terminal 后台执行编解码 ==========
-
-/**
- * 编码 TerminalBackgroundRequest
- * message JetBrainsTerminalBackgroundRequest { repeated JetBrainsTerminalBackgroundItem items = 1; }
- * message JetBrainsTerminalBackgroundItem { string session_id=1; string tool_use_id=2; }
- */
-function encodeTerminalBackgroundRequest(items: TerminalBackgroundItem[]): Uint8Array {
-  const parts: Uint8Array[] = []
-  
-  for (const item of items) {
-    const itemParts: Uint8Array[] = []
-    
-    // field 1: session_id (string)
-    const sessionIdBytes = new TextEncoder().encode(item.sessionId)
-    itemParts.push(encodeField(1, 2, sessionIdBytes))
-    
-    // field 2: tool_use_id (string)
-    const toolUseIdBytes = new TextEncoder().encode(item.toolUseId)
-    itemParts.push(encodeField(2, 2, toolUseIdBytes))
-    
-    const itemBytes = concatUint8Arrays(itemParts)
-    parts.push(encodeField(1, 2, itemBytes))
-  }
-  
-  return concatUint8Arrays(parts)
-}
-
-/**
- * 解码 TerminalBackgroundEvent
- * message JetBrainsTerminalBackgroundEvent { string session_id=1; string tool_use_id=2; TerminalBackgroundStatus status=3; optional string error=4; }
- */
-function decodeTerminalBackgroundEvent(data: Uint8Array): TerminalBackgroundEvent {
-  const result: TerminalBackgroundEvent = {
-    sessionId: '',
-    toolUseId: '',
-    status: TerminalBackgroundStatus.STARTED
-  }
-  
-  let offset = 0
-  while (offset < data.length) {
-    const tag = data[offset++]
-    const fieldNum = tag >> 3
-    const wireType = tag & 0x7
-    
-    if (wireType === 2) {
-      // length-delimited (string)
-      let len = 0
-      let shift = 0
-      while (offset < data.length) {
-        const b = data[offset++]
-        len |= (b & 0x7f) << shift
-        if (!(b & 0x80)) break
-        shift += 7
-      }
-      const strBytes = data.slice(offset, offset + len)
-      offset += len
-      const str = new TextDecoder().decode(strBytes)
-      
-      if (fieldNum === 1) result.sessionId = str
-      else if (fieldNum === 2) result.toolUseId = str
-      else if (fieldNum === 4) result.error = str
-    } else if (wireType === 0) {
-      // varint
-      let value = 0
-      let shift = 0
-      while (offset < data.length) {
-        const b = data[offset++]
-        value |= (b & 0x7f) << shift
-        if (!(b & 0x80)) break
-        shift += 7
-      }
-      
-      if (fieldNum === 3) result.status = value as TerminalBackgroundStatus
-    }
-  }
-  
-  return result
-}
-
-/**
- * 解码 GetBackgroundableTerminalsResponse
- * message JetBrainsGetBackgroundableTerminalsResponse { bool success=1; repeated JetBrainsBackgroundableTerminal terminals=2; optional string error=3; }
- * message JetBrainsBackgroundableTerminal { string session_id=1; string tool_use_id=2; string command=3; int64 start_time=4; int64 elapsed_ms=5; }
- */
-function decodeGetBackgroundableTerminalsResponse(data: Uint8Array): BackgroundableTerminal[] {
-  const terminals: BackgroundableTerminal[] = []
-  
-  let offset = 0
-  while (offset < data.length) {
-    const tag = data[offset++]
-    const fieldNum = tag >> 3
-    const wireType = tag & 0x7
-    
-    if (wireType === 2 && fieldNum === 2) {
-      // terminals (repeated message)
-      let len = 0
-      let shift = 0
-      while (offset < data.length) {
-        const b = data[offset++]
-        len |= (b & 0x7f) << shift
-        if (!(b & 0x80)) break
-        shift += 7
-      }
-      const terminalBytes = data.slice(offset, offset + len)
-      offset += len
-      
-      // 解码单个 terminal
-      const terminal = decodeBackgroundableTerminal(terminalBytes)
-      terminals.push(terminal)
-    } else if (wireType === 2) {
-      // skip other length-delimited fields
-      let len = 0
-      let shift = 0
-      while (offset < data.length) {
-        const b = data[offset++]
-        len |= (b & 0x7f) << shift
-        if (!(b & 0x80)) break
-        shift += 7
-      }
-      offset += len
-    } else if (wireType === 0) {
-      // skip varint
-      while (offset < data.length && (data[offset++] & 0x80)) {}
-    }
-  }
-  
-  return terminals
-}
-
-/**
- * 解码单个 BackgroundableTerminal
- */
-function decodeBackgroundableTerminal(data: Uint8Array): BackgroundableTerminal {
-  const result: BackgroundableTerminal = {
-    sessionId: '',
-    toolUseId: '',
-    command: '',
-    startTime: 0,
-    elapsedMs: 0
-  }
-  
-  let offset = 0
-  while (offset < data.length) {
-    const tag = data[offset++]
-    const fieldNum = tag >> 3
-    const wireType = tag & 0x7
-    
-    if (wireType === 2) {
-      // length-delimited (string)
-      let len = 0
-      let shift = 0
-      while (offset < data.length) {
-        const b = data[offset++]
-        len |= (b & 0x7f) << shift
-        if (!(b & 0x80)) break
-        shift += 7
-      }
-      const strBytes = data.slice(offset, offset + len)
-      offset += len
-      const str = new TextDecoder().decode(strBytes)
-      
-      if (fieldNum === 1) result.sessionId = str
-      else if (fieldNum === 2) result.toolUseId = str
-      else if (fieldNum === 3) result.command = str
-    } else if (wireType === 0) {
-      // varint
-      let value = 0
-      let shift = 0
-      while (offset < data.length) {
-        const b = data[offset++]
-        value |= (b & 0x7f) << shift
-        if (!(b & 0x80)) break
-        shift += 7
-      }
-      
-      if (fieldNum === 4) result.startTime = value
-      else if (fieldNum === 5) result.elapsedMs = value
-    }
-  }
-  
-  return result
-}
-
-/**
- * 解码 ActiveFileChangedNotify（用于 getActiveFile 响应）
- */
-function decodeActiveFileResponse(data: Uint8Array): ActiveFileInfo | null {
-  const proto = fromBinary(ActiveFileChangedNotifySchema, data)
-
-  if (!proto.hasActiveFile) {
-    return null
-  }
-
-  return {
-    path: proto.path || '',
-    relativePath: proto.relativePath || '',
-    name: proto.name || '',
-    line: proto.line || undefined,
-    column: proto.column || undefined,
-    hasSelection: proto.hasSelection,
-    startLine: proto.startLine || undefined,
-    startColumn: proto.startColumn || undefined,
-    endLine: proto.endLine || undefined,
-    endColumn: proto.endColumn || undefined,
-    selectedContent: proto.selectedContent || undefined
-  }
-}
-
-/**
- * 解码 GetIdeSettingsResponse
- */
-function decodeSettingsResponse(data: Uint8Array): IdeSettings | null {
-  // 默认思考级别列表
-  const defaultThinkingLevels: ThinkingLevelConfig[] = [
-    { id: 'off', name: 'Off', tokens: 0, isCustom: false },
-    { id: 'think', name: 'Think', tokens: 2048, isCustom: false },
-    { id: 'ultra', name: 'Ultra', tokens: 8096, isCustom: false }
-  ]
-
-  const proto = fromBinary(GetIdeSettingsResponseSchema, data)
-  const s = proto.settings
-
-    if (!s) {
-      return {
-        defaultModelId: '',
-        defaultModelName: '',
-        defaultBypassPermissions: false,
-        claudeDefaultAutoCleanupContexts: true,
-        codexDefaultAutoCleanupContexts: true,
-        enableUserInteractionMcp: true,
-        enableJetbrainsMcp: true,
-        includePartialMessages: true,
-      codexDefaultReasoningEffort: 'medium',
-      codexDefaultReasoningSummary: 'auto',
-      codexDefaultSandboxMode: 'workspace-write',
-      defaultThinkingLevel: 'ULTRA',
-      defaultThinkingTokens: 8096,
-      defaultThinkingLevelId: 'ultra',
-      thinkingLevels: defaultThinkingLevels,
-      permissionMode: 'default'
-    }
-  }
-
-  // 辅助函数：映射 OptionConfig
-  const mapOptionConfig = (opt: any): OptionConfig => ({
-    id: opt.id || '',
-    label: opt.label || '',
-    description: opt.description || '',
-    isDefault: opt.isDefault ?? false
-  })
-
-  return {
-    defaultModelId: s.defaultModelId || '',
-    defaultModelName: s.defaultModelName || '',
-    defaultBypassPermissions: s.defaultBypassPermissions,
-    claudeDefaultAutoCleanupContexts: s.claudeDefaultAutoCleanupContexts,
-    codexDefaultAutoCleanupContexts: s.codexDefaultAutoCleanupContexts,
-    enableUserInteractionMcp: s.enableUserInteractionMcp,
-    enableJetbrainsMcp: s.enableJetbrainsMcp,
-    includePartialMessages: s.includePartialMessages,
-    codexDefaultModelId: s.codexDefaultModelId || undefined,
-    codexDefaultReasoningEffort: s.codexDefaultReasoningEffort || undefined,
-    codexDefaultReasoningSummary: s.codexDefaultReasoningSummary || undefined,
-    codexDefaultSandboxMode: s.codexDefaultSandboxMode || undefined,
-    defaultThinkingLevel: s.defaultThinkingLevel || 'ULTRA',
-    defaultThinkingTokens: s.defaultThinkingTokens || 8096,
-    defaultThinkingLevelId: s.defaultThinkingLevelId || 'ultra',
-    thinkingLevels: s.thinkingLevels.length > 0
-      ? s.thinkingLevels.map(level => ({
-          id: level.id,
-          name: level.name,
-          tokens: level.tokens,
-          isCustom: level.isCustom
-        }))
-      : defaultThinkingLevels,
-    permissionMode: s.permissionMode || 'default',
-    // 配置选项列表
-    codexReasoningEffortOptions: s.codexReasoningEffortOptions?.map(mapOptionConfig) || [],
-    codexReasoningSummaryOptions: s.codexReasoningSummaryOptions?.map(mapOptionConfig) || [],
-    codexSandboxModeOptions: s.codexSandboxModeOptions?.map(mapOptionConfig) || [],
-    permissionModeOptions: s.permissionModeOptions?.map(mapOptionConfig) || []
-  }
-}
-
-/**
- * 编码 JetBrainsSessionState
- */
-function encodeSessionState(state: SessionState): Uint8Array {
-  const proto = create(JetBrainsSessionStateSchema, {
-    sessions: state.sessions.map(session => create(JetBrainsSessionSummarySchema, {
-      id: session.id,
-      title: session.title,
-      sessionId: session.sessionId || undefined,
-      isGenerating: session.isGenerating,
-      isConnected: session.isConnected,
-      isConnecting: session.isConnecting
-    })),
-    activeSessionId: state.activeSessionId || undefined
-  })
-  return toBinary(JetBrainsSessionStateSchema, proto)
-}
-
-// ========== 类型定义 ==========
-
-export interface IdeTheme {
-  background: string
-  foreground: string
-  borderColor: string
-  panelBackground: string
-  textFieldBackground: string
-  selectionBackground: string
-  selectionForeground: string
-  linkColor: string
-  errorColor: string
-  warningColor: string
-  successColor: string
-  separatorColor: string
-  hoverBackground: string
-  accentColor: string
-  infoBackground: string
-  codeBackground: string
-  secondaryForeground: string
-  fontFamily: string
-  fontSize: number
-  editorFontFamily: string
-  editorFontSize: number
-}
-
-export interface SessionCommand {
-  type: 'switch' | 'create' | 'close' | 'rename' | 'toggleHistory' | 'setLocale' | 'delete' | 'reset'
-  sessionId?: string
-  newName?: string
-  locale?: string
-}
+// 从 jetbrainsProtoCodec.ts 导入编解码函数
+import {
+  encodeOpenFileRequest,
+  encodeShowDiffRequest,
+  encodeShowMultiEditDiffRequest,
+  encodeShowEditPreviewRequest,
+  encodeShowMarkdownRequest,
+  encodeShowEditFullDiffRequest,
+  encodeSetLocaleRequest,
+  encodeGetFileHistoryContentRequest,
+  encodeRollbackFileRequest,
+  encodeSessionState,
+  encodeBatchRollbackRequest,
+  encodeTerminalBackgroundRequest,
+  decodeOperationResponse,
+  decodeThemeResponse,
+  decodeLocaleResponse,
+  decodeProjectPathResponse,
+  decodeGetOriginalContentResponse,
+  decodeGetFileHistoryContentResponse,
+  decodeRollbackFileResponse,
+  decodeActiveFileResponse,
+  decodeSettingsResponse,
+  decodeBatchRollbackEvent,
+  decodeTerminalBackgroundEvent,
+  decodeGetBackgroundableTerminalsResponse
+} from './jetbrainsProtoCodec'
 
 /**
  * 映射 protoCodec 的 SessionCommandParams.type 到 SessionCommand.type
@@ -809,106 +109,6 @@ function mapSessionCommandType(type: string): SessionCommand['type'] {
       console.warn(`[JetBrainsRSocket] Unknown session command type: ${type}`)
       return type as SessionCommand['type'] // 保持原值，避免错误转换
   }
-}
-
-export interface SessionSummary {
-  id: string
-  title: string
-  sessionId?: string | null
-  isGenerating: boolean
-  isConnected: boolean
-  isConnecting: boolean
-}
-
-export interface SessionState {
-  sessions: SessionSummary[]
-  activeSessionId?: string | null
-}
-
-export type ThemeChangeHandler = (theme: IdeTheme) => void
-export type SessionCommandHandler = (command: SessionCommand) => void
-export type SettingsChangeHandler = (settings: IdeSettings) => void
-export type ActiveFileChangeHandler = (activeFile: ActiveFileInfo | null) => void
-
-// 终端任务更新信息
-export interface TerminalTaskUpdate {
-  toolUseId: string       // MCP 工具调用 ID
-  sessionId: string       // 终端会话 ID
-  action: 'started' | 'completed' | 'backgrounded'  // 任务动作
-  command: string         // 执行的命令
-  isBackground: boolean   // 是否在后台执行
-  startTime: number       // 开始时间戳（毫秒）
-  elapsedMs?: number      // 已执行时长（毫秒）
-}
-
-export type TerminalTaskUpdateHandler = (update: TerminalTaskUpdate) => void
-
-// 当前活跃文件信息
-export interface ActiveFileInfo {
-  path: string           // 文件绝对路径
-  relativePath: string   // 相对于项目根目录的路径
-  name: string           // 文件名
-  line?: number          // 当前光标所在行（1-based）
-  column?: number        // 当前光标所在列（1-based）
-  // 选区信息
-  hasSelection: boolean
-  startLine?: number     // 选区起始行（1-based）
-  startColumn?: number   // 选区起始列（1-based）
-  endLine?: number       // 选区结束行（1-based）
-  endColumn?: number     // 选区结束列（1-based）
-  selectedContent?: string // 选中的文本内容（可选）
-  // 文件类型相关字段
-  fileType?: string      // 文件类型: "text", "diff", "image", "binary"
-  // Diff 视图专用字段
-  diffOldContent?: string  // Diff 旧内容（左侧）
-  diffNewContent?: string  // Diff 新内容（右侧）
-  diffTitle?: string       // Diff 标题
-}
-
-// IDE 设置接口（所有属性可选，以支持扩展和部分更新）
-export interface IdeSettings {
-  defaultModelId?: string
-  defaultModelName?: string
-  defaultBypassPermissions?: boolean
-  claudeDefaultAutoCleanupContexts?: boolean
-  codexDefaultAutoCleanupContexts?: boolean
-  enableUserInteractionMcp?: boolean
-  enableJetbrainsMcp?: boolean
-  includePartialMessages?: boolean
-  codexDefaultModelId?: string
-  codexDefaultReasoningEffort?: string
-  codexDefaultReasoningSummary?: string
-  codexDefaultSandboxMode?: string
-  // 思考配置
-  defaultThinkingLevelId?: string  // 默认思考级别 ID（如 "off", "think", "ultra", "custom_xxx"）
-  defaultThinkingTokens?: number   // 默认思考 token 数量
-  thinkingLevels?: ThinkingLevelConfig[]  // 所有可用的思考级别
-  // 旧字段，保留向后兼容
-  defaultThinkingLevel?: string  // 思考等级枚举名称（如 "HIGH", "MEDIUM", "OFF"）
-  // 权限模式
-  permissionMode?: string  // 权限模式（default, acceptEdits, plan, bypassPermissions）
-
-  // 配置选项列表（由后端动态返回）
-  codexReasoningEffortOptions?: OptionConfig[]  // Codex 推理努力级别选项
-  codexReasoningSummaryOptions?: OptionConfig[] // Codex 推理总结模式选项
-  codexSandboxModeOptions?: OptionConfig[]      // Codex 沙盒模式选项
-  permissionModeOptions?: OptionConfig[]        // 权限模式选项
-}
-
-// 思考级别配置
-export interface ThinkingLevelConfig {
-  id: string        // 唯一标识：off, think, ultra, custom_xxx
-  name: string      // 显示名称
-  tokens: number    // token 数量
-  isCustom: boolean // 是否为自定义级别
-}
-
-// 通用选项配置（用于下拉列表）
-export interface OptionConfig {
-  id: string           // 唯一标识
-  label: string        // 显示名称
-  description?: string // 描述（可选）
-  isDefault?: boolean  // 是否为默认值
 }
 
 // ========== RSocket 服务 ==========
@@ -1476,7 +676,7 @@ class JetBrainsRSocketService {
       {
         onNext: (responseData: Uint8Array) => {
           try {
-            const event = decodeBatchRollbackEvent(responseData)
+            const event = decodeBatchRollbackEvent(responseData, RollbackStatus)
             console.log('[JetBrainsRSocket] Rollback event:', event.toolUseId, RollbackStatus[event.status])
             onEvent(event)
           } catch (e) {
@@ -1540,7 +740,7 @@ class JetBrainsRSocketService {
       {
         onNext: (responseData: Uint8Array) => {
           try {
-            const event = decodeTerminalBackgroundEvent(responseData)
+            const event = decodeTerminalBackgroundEvent(responseData, TerminalBackgroundStatus)
             console.log('[JetBrainsRSocket] Terminal background event:', event.toolUseId, TerminalBackgroundStatus[event.status])
             onEvent(event)
           } catch (e) {

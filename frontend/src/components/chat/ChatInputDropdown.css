@@ -1,0 +1,64 @@
+/* ChatInput.vue - Global Dropdown Styles (for teleported elements) */
+/* These styles are NOT scoped - they apply to teleported dropdowns */
+
+/* Mode dropdown selected item icon color */
+.mode-dropdown .el-select-dropdown__item.is-selected .mode-icon {
+  color: var(--theme-background, #ffffff);
+}
+
+/* Model dropdown base styles using theme variables */
+.chat-input-select-dropdown {
+  background-color: var(--theme-background, #ffffff) !important;
+  border: 1px solid var(--theme-border, #e1e4e8) !important;
+}
+
+.chat-input-select-dropdown .el-select-dropdown__item {
+  color: var(--theme-foreground, #24292e) !important;
+}
+
+.chat-input-select-dropdown .el-select-dropdown__item.hover,
+.chat-input-select-dropdown .el-select-dropdown__item:hover {
+  background-color: var(--theme-hover-background, #f6f8fa) !important;
+}
+
+/* Selected item highlight: accent background, background text color for contrast */
+.chat-input-select-dropdown .el-select-dropdown__item.is-selected {
+  background-color: var(--theme-accent, #0366d6) !important;
+  color: var(--theme-background, #ffffff) !important;
+}
+
+.chat-input-select-dropdown .el-select-dropdown__item.is-selected .model-option-label,
+.chat-input-select-dropdown .el-select-dropdown__item.is-selected .mode-option-label {
+  color: var(--theme-background, #ffffff) !important;
+}
+
+.chat-input-select-dropdown .model-option-label,
+.chat-input-select-dropdown .mode-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--theme-foreground, #24292e);
+}
+
+.chat-input-select-dropdown .model-brain-icon {
+  font-size: 14px;
+}
+
+/* Mode option icons */
+.chat-input-select-dropdown .mode-icon {
+  font-size: 14px;
+  margin-right: 4px;
+}
+
+/* Claude mode and model dropdown width */
+.claude-mode-dropdown,
+.claude-model-dropdown {
+  width: max-content !important;
+  min-width: max-content !important;
+  max-width: 80vw;
+}
+
+.claude-mode-dropdown .el-select-dropdown__item,
+.claude-model-dropdown .el-select-dropdown__item {
+  white-space: nowrap;
+}

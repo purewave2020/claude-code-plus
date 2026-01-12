@@ -1,0 +1,108 @@
+/* ChatInput.vue - Element Plus Selector Deep Styles */
+/* These styles use :deep() and must be in a scoped context */
+
+/* ========== Cursor Style Selectors - Auto Width ========== */
+.cursor-style-selectors :deep(.el-select.cursor-selector) {
+  font-size: 11px;
+  flex: 0 0 auto;
+  margin: 0;
+  --el-select-width: auto !important;
+  width: auto !important;
+  display: inline-block;
+}
+
+/* Mode selector with gray background */
+.cursor-style-selectors :deep(.el-select.mode-selector .el-select__wrapper) {
+  background: rgba(0, 0, 0, 0.08) !important;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+/* Inner wrapper - auto width */
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__wrapper) {
+  display: inline-flex !important;
+  width: auto !important;
+  min-width: unset !important;
+  padding: 2px 4px;
+  border: none !important;
+  border-radius: 4px;
+  background: transparent !important;
+  box-shadow: none !important;
+  min-height: 20px;
+  gap: 2px;
+}
+
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__wrapper:hover) {
+  background: var(--theme-hover-background, rgba(0, 0, 0, 0.05)) !important;
+}
+
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__wrapper.is-focused) {
+  background: var(--theme-hover-background, rgba(0, 0, 0, 0.05)) !important;
+  box-shadow: none !important;
+}
+
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__placeholder) {
+  color: var(--theme-secondary-foreground, #6a737d);
+  font-size: 11px;
+}
+
+/* Selected item text - no truncation, auto width */
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__selection) {
+  color: var(--theme-secondary-foreground, #6a737d);
+  font-size: 11px;
+  flex: 0 0 auto !important;
+  min-width: 0;
+  overflow: visible;
+}
+
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__selected-item) {
+  white-space: nowrap;
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+/* Hide placeholder absolute positioning */
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__placeholder) {
+  position: static !important;
+  width: auto !important;
+  transform: none !important;
+}
+
+/* Ensure input wrapper doesn't affect width */
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__input-wrapper) {
+  flex: 0 0 auto !important;
+  width: 0 !important;
+}
+
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__input-wrapper.is-hidden) {
+  display: none !important;
+}
+
+/* Dropdown arrow */
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__suffix) {
+  color: var(--theme-secondary-foreground, #9ca3af);
+  margin-left: 0;
+  flex-shrink: 0;
+}
+
+.cursor-style-selectors :deep(.el-select.cursor-selector .el-select__suffix .el-icon) {
+  font-size: 12px;
+}
+
+.cursor-style-selectors :deep(.el-select.cursor-selector.is-disabled .el-select__wrapper) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Model and mode selector suffix colors */
+.cursor-style-selectors :deep(.el-select.model-selector .el-select__suffix),
+.cursor-style-selectors :deep(.el-select.mode-selector .el-select__suffix) {
+  color: var(--theme-secondary-foreground, #6a737d);
+}
+
+.cursor-style-selectors :deep(.el-select.model-selector.is-disabled .el-select__wrapper),
+.cursor-style-selectors :deep(.el-select.mode-selector.is-disabled .el-select__wrapper) {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--theme-panel-background, #f6f8fa);
+}

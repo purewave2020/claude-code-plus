@@ -17,184 +17,13 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 private val logger = Logger.getInstance("com.asakii.plugin.mcp.tools.terminal.TerminalSessionManager")
-
-/**
- * Terminal 会话信息
- */
-data class TerminalSession(
-    val id: String,
-    val name: String,
-    val shellType: String,
-    val widgetWrapper: TerminalWidgetWrapper,
-    val createdAt: Long = System.currentTimeMillis(),
-    var lastCommandAt: Long = System.currentTimeMillis(),
-    var isBackground: Boolean = false
-) {
-    /**
-     * 检查是否有正在运行的命令
-     *
-     * @return true 表示有命令正在运行，false 表示没有，null 表示 API 不可用
-     */
-    fun hasRunningCommands(): Boolean? {
-        return try {
-            widgetWrapper.hasRunningCommands()
-        } catch (e: Exception) {
-            logger.warn { "Failed to check running commands for session $id: ${e.message}" }
-            null
-        }
-    }
-
-    /**
-     * 等待命令执行完成
-     *
-     * 使用兼容层的实现（依赖 Shell Integration）：
-     * - 2024.x ~ 2025.2: hasRunningCommands() API
-     * - 2025.3+: isCommandRunning() API
-     *
-     * 如果 API 不可用，返回 ApiUnavailable
-     *
-     * @param timeoutMs 超时时间
-     * @param initialDelayMs 初始等待时间
-     * @param pollIntervalMs 轮询间隔
-     * @return 等待结果
-     */
-    fun waitForCommandCompletion(
-        timeoutMs: Long = 300_000,
-        initialDelayMs: Long = 300,
-        pollIntervalMs: Long = 100
-    ): CommandWaitResult {
-        return widgetWrapper.waitForCommandCompletion(
-            timeoutMs = timeoutMs,
-            initialDelayMs = initialDelayMs,
-            pollIntervalMs = pollIntervalMs
-        )
-    }
-
-    /**
-     * 获取终端输出内容（使用 wrapper 的统一 API）
-     */
-    fun getOutput(maxLines: Int = 1000): String {
-        return try {
-            widgetWrapper.getOutput(maxLines)
-        } catch (e: Exception) {
-            logger.error("Failed to get output for session $id", e)
-            ""
-        }
-    }
-
-    /**
-     * 搜索输出内容
-     */
-    fun searchOutput(pattern: String, contextLines: Int = 2): List<SearchMatch> {
-        val output = getOutput()
-        val lines = output.split("\n")
-        val matches = mutableListOf<SearchMatch>()
-        val regex = try {
-            Regex(pattern)
-        } catch (e: Exception) {
-            Regex(Regex.escape(pattern))
-        }
-
-        lines.forEachIndexed { index, line ->
-            if (regex.containsMatchIn(line)) {
-                val startLine = maxOf(0, index - contextLines)
-                val endLine = minOf(lines.size - 1, index + contextLines)
-                val context = lines.subList(startLine, endLine + 1).joinToString("\n")
-                matches.add(SearchMatch(
-                    lineNumber = index + 1,
-                    line = line,
-                    context = context
-                ))
-            }
-        }
-        return matches
-    }
-}
-
-/**
- * 搜索匹配结果
- */
-data class SearchMatch(
-    val lineNumber: Int,
-    val line: String,
-    val context: String
-)
-
-/**
- * Shell 解析器
- *
- * 使用 IDEA 检测到的 shell 列表，通过名称查找对应路径。
- * 不再使用硬编码枚举。
- */
-object ShellResolver {
-    private val logger = Logger.getInstance("com.asakii.plugin.mcp.tools.terminal.ShellResolver")
-
-    /**
-     * 根据 shell 名称获取可执行路径
-     *
-     * @param shellName shell 名称（如 "git-bash", "powershell", "bash"）
-     * @return shell 路径，找不到时返回 null
-     */
-    fun getShellPath(shellName: String): String? {
-        val detectedShells = TerminalCompat.detectInstalledShells()
-
-        // 尝试精确匹配
-        val matched = detectedShells.find { shell ->
-            normalizeShellName(shell.name).equals(shellName, ignoreCase = true) ||
-            shell.name.equals(shellName, ignoreCase = true)
-        }
-
-        if (matched != null) {
-            logger.info { "Found shell '$shellName' at path: ${matched.path}" }
-            return matched.path
-        }
-
-        logger.warn { "Shell '$shellName' not found in detected shells: ${detectedShells.map { it.name }}" }
-        return null
-    }
-
-    /**
-     * 获取 shell 命令列表（用于 IDEA Terminal API）
-     */
-    fun getShellCommand(shellName: String): List<String>? {
-        val path = getShellPath(shellName) ?: return null
-        return listOf(path)
-    }
-
-    /**
-     * 标准化 shell 名称
-     */
-    private fun normalizeShellName(name: String): String {
-        val lowerName = name.lowercase()
-        return when {
-            lowerName.contains("git bash") -> "git-bash"
-            lowerName.contains("powershell") -> "powershell"
-            lowerName.contains("command prompt") || lowerName == "cmd" -> "cmd"
-            lowerName.contains("wsl") || lowerName.contains("ubuntu") || lowerName.contains("debian") -> "wsl"
-            lowerName.contains("zsh") -> "zsh"
-            lowerName.contains("fish") -> "fish"
-            lowerName.contains("bash") -> "bash"
-            else -> lowerName.replace(" ", "-")
-        }
-    }
-}
-
-/**
- * 终端任务更新监听器
- */
-typealias TerminalTaskUpdateListener = suspend (
-    toolUseId: String,
-    sessionId: String,
-    action: String,  // "started", "completed", "backgrounded"
-    command: String,
-    isBackground: Boolean,
-    startTime: Long,
-    elapsedMs: Long?
-) -> Unit
 
 /**
  * Terminal 会话管理器
@@ -202,6 +31,9 @@ typealias TerminalTaskUpdateListener = suspend (
  * 管理 IDEA 内置终端的会话，支持命令执行、输出读取、会话管理等功能。
  */
 class TerminalSessionManager(private val project: Project) {
+
+    // 用于异步任务的协程作用域，随项目生命周期管理
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val sessions = ConcurrentHashMap<String, TerminalSession>()
     private val sessionCounter = AtomicInteger(0)
@@ -241,7 +73,7 @@ class TerminalSessionManager(private val project: Project) {
     ) {
         val listener = taskUpdateListener ?: return
         // 使用协程在后台执行，避免阻塞调用线程
-        kotlinx.coroutines.GlobalScope.launch {
+        scope.launch {
             try {
                 listener(toolUseId, sessionId, action, command, isBackground, startTime, elapsedMs)
             } catch (e: Exception) {
@@ -1067,79 +899,9 @@ class TerminalSessionManager(private val project: Project) {
      * 清理所有会话
      */
     fun dispose() {
+        scope.cancel()
         sessions.keys.toList().forEach { killSession(it) }
         sessions.clear()
         runningTasks.clear()
     }
-}
-
-/**
- * 命令执行结果
- */
-data class ExecuteResult(
-    val success: Boolean,
-    val sessionId: String,
-    val sessionName: String? = null,
-    val background: Boolean = false,
-    val output: String? = null,
-    val truncated: Boolean = false,
-    val totalLines: Int? = null,
-    val totalChars: Int? = null,
-    val error: String? = null
-)
-
-/**
- * 命令中断结果
- */
-data class InterruptResult(
-    val success: Boolean,
-    val sessionId: String,
-    val signal: String? = null,  // 发送的信号类型
-    val wasRunning: Boolean? = null,  // null 表示无法确定
-    val isStillRunning: Boolean? = null,  // null 表示无法确定
-    val message: String? = null,
-    val error: String? = null
-)
-
-/**
- * 输出读取结果
- */
-data class ReadResult(
-    val success: Boolean,
-    val sessionId: String,
-    val output: String? = null,
-    val isRunning: Boolean? = null,  // null 表示无法确定
-    val lineCount: Int = 0,
-    val searchMatches: List<SearchMatch>? = null,
-    val error: String? = null,
-    val waitTimedOut: Boolean = false,  // 等待是否超时
-    val waitMessage: String? = null     // 等待相关的消息
-)
-
-/**
- * Shell 类型信息
- */
-data class ShellTypeInfo(
-    val name: String,
-    val displayName: String,
-    val command: String?,
-    val isDefault: Boolean
-)
-
-/**
- * 终端后台任务信息
- * 用于追踪正在执行的 MCP 工具调用
- */
-data class TerminalBackgroundTask(
-    val sessionId: String,           // 终端会话 ID
-    val toolUseId: String,           // MCP 工具调用 ID
-    val command: String,             // 执行的命令
-    val startTime: Long,             // 开始时间戳（毫秒）
-    var isBackground: Boolean = false,  // 是否已移到后台
-    var backgroundTime: Long? = null    // 移到后台的时间戳
-) {
-    /**
-     * 获取已执行时长（毫秒）
-     */
-    fun getElapsedMs(): Long = System.currentTimeMillis() - startTime
 }

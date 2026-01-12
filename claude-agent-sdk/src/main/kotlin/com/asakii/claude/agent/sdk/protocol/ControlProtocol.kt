@@ -51,6 +51,9 @@ class ControlProtocol(
     // Logger
     private val logger = getLogger("ControlProtocol")
     
+    // MCP message handler
+    private val mcpMessageHandler = McpMessageHandler()
+    
     /**
      * Start processing messages from transport.
      */
@@ -520,34 +523,20 @@ class ControlProtocol(
         
         // 检查新接口服务器是否存在
         val server = newMcpServers[serverName]
+        val id = message.jsonObject["id"]
         
         if (server == null) {
-            return buildJsonObject {
-                put("jsonrpc", "2.0")
-                message.jsonObject["id"]?.let { put("id", it) }
-                putJsonObject("error") {
-                    put("code", -32601)
-                    put("message", "Server '$serverName' not found")
-                }
-            }
+            return mcpMessageHandler.buildServerNotFoundError(serverName, id)
         }
         
         val method = message.jsonObject["method"]?.jsonPrimitive?.content
         val params = message.jsonObject["params"]?.jsonObject ?: buildJsonObject {}
-        val id = message.jsonObject["id"]
         
         try {
-            return handleNewMcpServerMethod(server, method, params, id)
+            return mcpMessageHandler.handleMethod(server, method, params, id)
         } catch (e: Exception) {
             logger.warn(e) { "❌ MCP消息处理失败: ${e.message}" }
-            return buildJsonObject {
-                put("jsonrpc", "2.0")
-                id?.let { put("id", it) }
-                putJsonObject("error") {
-                    put("code", -32603)
-                    put("message", e.message ?: "Internal error")
-                }
-            }
+            return mcpMessageHandler.buildInternalError(e.message ?: "Internal error", id)
         }
     }
     
@@ -1249,204 +1238,4 @@ class ControlProtocol(
         return protocolHooks
     }
     
-    /**
-     * Handle new McpServer interface methods
-     */
-    private suspend fun handleNewMcpServerMethod(
-        server: McpServer, 
-        method: String?, 
-        params: JsonObject, 
-        id: JsonElement?
-    ): JsonElement {
-        return when (method) {
-            "initialize" -> {
-                buildJsonObject {
-                    put("jsonrpc", "2.0")
-                    id?.let { put("id", it) }
-                    putJsonObject("result") {
-                        put("protocolVersion", "2024-11-05")
-                        putJsonObject("capabilities") {
-                            putJsonObject("tools") {}
-                        }
-                        putJsonObject("serverInfo") {
-                            put("name", server.name)
-                            put("version", server.version)
-                            put("description", server.description)
-                        }
-                    }
-                }
-            }
-            
-            "tools/list" -> {
-                val tools = server.listTools()
-                buildJsonObject {
-                    put("jsonrpc", "2.0")
-                    id?.let { put("id", it) }
-                    putJsonObject("result") {
-                        putJsonArray("tools") {
-                            tools.forEach { tool ->
-                                addJsonObject {
-                                    put("name", tool.name)
-                                    put("description", tool.description)
-                                    // 直接使用 JsonObject 作为 inputSchema
-                                    put("inputSchema", tool.inputSchema)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            "tools/call" -> {
-                val toolName = params["name"]?.jsonPrimitive?.content
-                    ?: return buildJsonObject {
-                        put("jsonrpc", "2.0")
-                        id?.let { put("id", it) }
-                        putJsonObject("error") {
-                            put("code", -32602)
-                            put("message", "Missing required parameter: name")
-                        }
-                    }
-                
-                // 直接传递 JsonObject，让工具自己反序列化为强类型
-                val argumentsJson = params["arguments"]?.jsonObject ?: buildJsonObject {}
-
-                logger.debug { "🛠️ 调用新接口工具: $toolName, args: $argumentsJson" }
-
-                val result = server.callToolJson(toolName, argumentsJson)
-                
-                when (result) {
-                    is ToolResult.Success -> {
-                        buildJsonObject {
-                            put("jsonrpc", "2.0")
-                            id?.let { put("id", it) }
-                            putJsonObject("result") {
-                                putJsonArray("content") {
-                                    result.content.forEach { contentItem ->
-                                        addJsonObject {
-                                            when (contentItem) {
-                                                is ContentItem.Text -> {
-                                                    put("type", "text")
-                                                    put("text", contentItem.text)
-                                                }
-                                                is ContentItem.Json -> {
-                                                    put("type", "text")
-                                                    put("text", contentItem.data.toString())
-                                                }
-                                                is ContentItem.Binary -> {
-                                                    put("type", "resource")
-                                                    put("mimeType", contentItem.mimeType)
-                                                    // Base64编码数据
-                                                    put("data", java.util.Base64.getEncoder().encodeToString(contentItem.data))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                if (result.metadata.isNotEmpty()) {
-                                    put("meta", Json.encodeToJsonElement(result.metadata))
-                                }
-                            }
-                        }
-                    }
-                    is ToolResult.Error -> {
-                        buildJsonObject {
-                            put("jsonrpc", "2.0")
-                            id?.let { put("id", it) }
-                            putJsonObject("error") {
-                                put("code", result.code)
-                                put("message", result.error)
-                            }
-                        }
-                    }
-                }
-            }
-            
-            "notifications/initialized" -> {
-                buildJsonObject {
-                    put("jsonrpc", "2.0")
-                    putJsonObject("result") {}
-                }
-            }
-            
-            else -> {
-                buildJsonObject {
-                    put("jsonrpc", "2.0")
-                    id?.let { put("id", it) }
-                    putJsonObject("error") {
-                        put("code", -32601)
-                        put("message", "Method '$method' not found")
-                    }
-                }
-            }
-        }
-    }
-
 }
-
-/**
- * Result of agents_run_all_to_background operation.
- *
- * @property count Number of agents that were backgrounded
- * @property backgroundedIds List of agent IDs that were backgrounded
- */
-data class AgentsBackgroundResult(
-    val count: Int,
-    val backgroundedIds: List<String>
-)
-
-/**
- * Result of bash_run_to_background operation.
- *
- * @property success Whether the operation succeeded
- * @property taskId The background task ID (for tracking)
- * @property command The command that was backgrounded
- */
-data class BashBackgroundResult(
-    val success: Boolean,
-    val taskId: String?,
-    val command: String?
-)
-
-/**
- * Result of unified run_to_background operation.
- *
- * This represents the result of backgrounding tasks, handling both Bash and Agent types.
- *
- * When backgrounding a specific task (taskId provided):
- * - isBash: Whether the task was a Bash command (true) or Agent (false)
- * - success: Whether the operation succeeded
- * - taskId: The ID of the backgrounded task
- * - command: The Bash command (only for Bash tasks)
- *
- * When backgrounding all tasks (taskId not provided):
- * - bashCount: Number of Bash commands backgrounded
- * - agentCount: Number of Agents backgrounded
- * - backgroundedBashIds: List of Bash task IDs that were backgrounded
- * - backgroundedAgentIds: List of Agent IDs that were backgrounded
- */
-data class UnifiedBackgroundResult(
-    val success: Boolean,
-    val isBash: Boolean? = null,         // For single task: whether it was Bash
-    val taskId: String? = null,           // For single task: the task ID
-    val command: String? = null,          // For single Bash task: the command
-    val bashCount: Int = 0,               // For batch: number of Bash backgrounded
-    val agentCount: Int = 0,              // For batch: number of Agents backgrounded
-    val backgroundedBashIds: List<String> = emptyList(),   // For batch: Bash IDs
-    val backgroundedAgentIds: List<String> = emptyList(),  // For batch: Agent IDs
-    val error: String? = null             // Error message if failed
-)
-
-/**
- * CLI capabilities result.
- *
- * Contains runtime capability flags queried from the CLI.
- * Use this to check if certain features are enabled/disabled.
- *
- * @property backgroundTasksEnabled Whether background tasks are enabled.
- *           False when CLAUDE_CODE_DISABLE_BACKGROUND_TASKS env var is set to 'true' or '1'.
- */
-data class CliCapabilities(
-    val backgroundTasksEnabled: Boolean
-)
-

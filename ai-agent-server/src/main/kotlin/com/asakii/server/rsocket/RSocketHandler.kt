@@ -233,7 +233,7 @@ class RSocketHandler(
     private suspend fun handleDisposeSession(rpcService: AiAgentRpcService): Payload {
         wsLog.info("🗑️ [RSocket] disposeSession request")
         val result = rpcService.disposeSession()
-        wsLog.info("📤 [RSocket] disposeSession result: success=${result.success}")
+        wsLog.info("📤 [RSocket] disposeSession result: status=${result.status}")
         return buildPayload { data(result.toProto().toByteArray()) }
     }
 

@@ -60,7 +60,7 @@ const supportsBackground = computed(() => {
 // 传递给 CompactToolCard 的工具调用数据
 const toolCallData = computed(() => ({
   toolType: props.toolCall.toolName || '',
-  toolUseId: props.toolCall.toolUseId,
+  toolUseId: props.toolCall.id,
   input: props.toolCall.input || {},
   result: props.toolCall.result
 }))

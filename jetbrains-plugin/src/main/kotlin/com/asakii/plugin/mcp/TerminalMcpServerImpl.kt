@@ -1,4 +1,4 @@
-﻿package com.asakii.plugin.mcp
+package com.asakii.plugin.mcp
 
 import com.asakii.claude.agent.sdk.mcp.McpServer
 import com.asakii.claude.agent.sdk.mcp.McpServerBase
@@ -7,15 +7,9 @@ import com.asakii.plugin.mcp.tools.terminal.*
 import com.asakii.server.mcp.TerminalBackgroundResult
 import com.asakii.server.mcp.TerminalMcpServerProvider
 import com.asakii.settings.AgentSettingsService
-import com.asakii.settings.McpDefaults
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 import com.asakii.logging.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -82,93 +76,18 @@ class TerminalMcpServerImpl(private val project: Project) : McpServerBase(), Dis
     override fun getAllowedTools(): List<String> = 
         AgentSettingsService.getInstance().getTerminalAutoApprovedTools()
 
-    fun getDisallowedBuiltinTools(): List<String> {
-        val settings = AgentSettingsService.getInstance()
-        return if (settings.enableTerminalMcp && settings.terminalDisableBuiltinBash) {
-            listOf("Bash")
-        } else {
-            emptyList()
-        }
-    }
+    fun getDisallowedBuiltinTools(): List<String> = TerminalFeatureConfig.getDisallowedBuiltinTools()
 
-    fun getCodexDisabledFeatures(): List<String> {
-        val settings = AgentSettingsService.getInstance()
-        return if (settings.enableTerminalMcp && settings.terminalDisableBuiltinBash) {
-            listOf("shell_tool")
-        } else {
-            emptyList()
-        }
-    }
-
-    companion object {
-        private val BASE_SCHEMAS: Map<String, JsonObject> = loadBaseSchemas()
-
-        private fun loadBaseSchemas(): Map<String, JsonObject> {
-            logger.info { "Loading Terminal tool schemas from McpDefaults" }
-
-            return try {
-                val json = Json { ignoreUnknownKeys = true }
-                val toolsMap = json.decodeFromString<Map<String, JsonObject>>(McpDefaults.TERMINAL_TOOLS_SCHEMA)
-                logger.info { "Loaded ${toolsMap.size} terminal tool schemas: ${toolsMap.keys}" }
-                toolsMap
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to parse Terminal schemas: ${e.message}" }
-                emptyMap()
-            }
-        }
-
-        fun getToolSchemas(): Map<String, JsonObject> {
-            val settings = AgentSettingsService.getInstance()
-            val baseSchemas = BASE_SCHEMAS.toMutableMap()
-
-            val terminalSchema = baseSchemas["Terminal"] ?: return baseSchemas
-            val properties = terminalSchema["properties"] as? JsonObject ?: return baseSchemas
-            val shellTypeProperty = properties["shell_type"] as? JsonObject ?: return baseSchemas
-
-            val availableShells = settings.getEffectiveAvailableShells()
-            val defaultShell = settings.getEffectiveDefaultShell()
-
-            logger.info { "Dynamic shell config - available: $availableShells, default: $defaultShell" }
-
-            val shellTypeEntries = shellTypeProperty.toMutableMap()
-            shellTypeEntries["enum"] = JsonArray(availableShells.map { JsonPrimitive(it) })
-            shellTypeEntries["default"] = JsonPrimitive(defaultShell)
-
-            val isWindows = settings.isWindows()
-            val platform = if (isWindows) "Windows" else "Unix"
-            shellTypeEntries["description"] = JsonPrimitive(
-                "Shell type. Platform: $platform. Available: ${availableShells.joinToString(", ")}. Default: $defaultShell"
-            )
-
-            val updatedShellType = JsonObject(shellTypeEntries)
-            val propertiesEntries = properties.toMutableMap()
-            propertiesEntries["shell_type"] = updatedShellType
-            val updatedProperties = JsonObject(propertiesEntries)
-            val terminalEntries = terminalSchema.toMutableMap()
-            terminalEntries["properties"] = updatedProperties
-            baseSchemas["Terminal"] = JsonObject(terminalEntries)
-
-            return baseSchemas
-        }
-
-        fun getToolSchema(toolName: String): JsonObject {
-            return getToolSchemas()[toolName] ?: run {
-                logger.warn { "Terminal tool schema not found: $toolName" }
-                buildJsonObject { }
-            }
-        }
-
-        val TOOL_SCHEMAS: Map<String, JsonObject>
-            get() = getToolSchemas()
-    }
+    fun getCodexDisabledFeatures(): List<String> = TerminalFeatureConfig.getCodexDisabledFeatures()
 
     override suspend fun onInitialize() {
         logger.info { "Initializing Terminal MCP Server for project: ${project.name}" }
 
         try {
-            logger.info { "Using pre-loaded schemas: ${TOOL_SCHEMAS.size} tools (${TOOL_SCHEMAS.keys})" }
+            val schemas = TerminalToolSchemaManager.TOOL_SCHEMAS
+            logger.info { "Using pre-loaded schemas: ${schemas.size} tools (${schemas.keys})" }
 
-            if (TOOL_SCHEMAS.isEmpty()) {
+            if (schemas.isEmpty()) {
                 logger.error { "No Terminal schemas loaded! Tools will not work properly." }
             }
 
@@ -182,31 +101,31 @@ class TerminalMcpServerImpl(private val project: Project) : McpServerBase(), Dis
             terminalInterruptTool = TerminalInterruptTool(sessionManager)
             logger.info { "All Terminal tool instances created" }
 
-            registerToolFromSchema("Terminal", getToolSchema("Terminal")) { arguments ->
+            registerToolFromSchema("Terminal", TerminalToolSchemaManager.getToolSchema("Terminal")) { arguments ->
                 wrapToolResult(terminalTool.execute(arguments))
             }
 
-            registerToolFromSchema("TerminalRead", getToolSchema("TerminalRead")) { arguments ->
+            registerToolFromSchema("TerminalRead", TerminalToolSchemaManager.getToolSchema("TerminalRead")) { arguments ->
                 wrapToolResult(terminalReadTool.execute(arguments))
             }
 
-            registerToolFromSchema("TerminalList", getToolSchema("TerminalList")) { arguments ->
+            registerToolFromSchema("TerminalList", TerminalToolSchemaManager.getToolSchema("TerminalList")) { arguments ->
                 wrapToolResult(terminalListTool.execute(arguments))
             }
 
-            registerToolFromSchema("TerminalKill", getToolSchema("TerminalKill")) { arguments ->
+            registerToolFromSchema("TerminalKill", TerminalToolSchemaManager.getToolSchema("TerminalKill")) { arguments ->
                 wrapToolResult(terminalKillTool.execute(arguments))
             }
 
-            registerToolFromSchema("TerminalTypes", getToolSchema("TerminalTypes")) { arguments ->
+            registerToolFromSchema("TerminalTypes", TerminalToolSchemaManager.getToolSchema("TerminalTypes")) { arguments ->
                 wrapToolResult(terminalTypesTool.execute(arguments))
             }
 
-            registerToolFromSchema("TerminalRename", getToolSchema("TerminalRename")) { arguments ->
+            registerToolFromSchema("TerminalRename", TerminalToolSchemaManager.getToolSchema("TerminalRename")) { arguments ->
                 wrapToolResult(terminalRenameTool.execute(arguments))
             }
 
-            registerToolFromSchema("TerminalInterrupt", getToolSchema("TerminalInterrupt")) { arguments ->
+            registerToolFromSchema("TerminalInterrupt", TerminalToolSchemaManager.getToolSchema("TerminalInterrupt")) { arguments ->
                 wrapToolResult(terminalInterruptTool.execute(arguments))
             }
 
@@ -228,7 +147,7 @@ class TerminalMcpServerImpl(private val project: Project) : McpServerBase(), Dis
  */
 class TerminalMcpServerProviderImpl(private val project: Project) : TerminalMcpServerProvider {
 
-    private val servers = ConcurrentHashMap<String, TerminalMcpServerImpl>()
+    internal val servers = ConcurrentHashMap<String, TerminalMcpServerImpl>()
 
     override fun getServer(): McpServer {
         return getServerForSession("default")
@@ -244,23 +163,9 @@ class TerminalMcpServerProviderImpl(private val project: Project) : TerminalMcpS
         }
     }
 
-    override fun getDisallowedBuiltinTools(): List<String> {
-        val settings = AgentSettingsService.getInstance()
-        return if (settings.enableTerminalMcp && settings.terminalDisableBuiltinBash) {
-            listOf("Bash")
-        } else {
-            emptyList()
-        }
-    }
+    override fun getDisallowedBuiltinTools(): List<String> = TerminalFeatureConfig.getDisallowedBuiltinTools()
 
-    override fun getCodexDisabledFeatures(): List<String> {
-        val settings = AgentSettingsService.getInstance()
-        return if (settings.enableTerminalMcp && settings.terminalDisableBuiltinBash) {
-            listOf("shell_tool")
-        } else {
-            emptyList()
-        }
-    }
+    override fun getCodexDisabledFeatures(): List<String> = TerminalFeatureConfig.getCodexDisabledFeatures()
 
     override fun setCurrentAiSession(aiSessionId: String?) {
         if (aiSessionId == null) return
@@ -275,45 +180,6 @@ class TerminalMcpServerProviderImpl(private val project: Project) : TerminalMcpS
     }
 
     override fun runToBackground(toolUseId: String?): TerminalBackgroundResult {
-        val backgroundedIds = mutableListOf<String>()
-
-        if (toolUseId != null) {
-            // Single task mode: background specific task
-            for ((_, server) in servers) {
-                if (server.sessionManager.markTaskAsBackground(toolUseId)) {
-                    backgroundedIds.add(toolUseId)
-                    logger.info { "⏸️ Terminal task moved to background: $toolUseId" }
-                    break
-                }
-            }
-            return if (backgroundedIds.isNotEmpty()) {
-                TerminalBackgroundResult(
-                    success = true,
-                    backgroundedIds = backgroundedIds,
-                    count = 1
-                )
-            } else {
-                TerminalBackgroundResult(
-                    success = false,
-                    error = "Task not found: $toolUseId"
-                )
-            }
-        } else {
-            // Batch mode: background all running tasks
-            for ((sessionId, server) in servers) {
-                val tasks = server.sessionManager.getBackgroundableTasks(0) // Get all running tasks
-                for (task in tasks) {
-                    if (server.sessionManager.markTaskAsBackground(task.toolUseId)) {
-                        backgroundedIds.add(task.toolUseId)
-                        logger.info { "⏸️ Terminal task moved to background: ${task.toolUseId} (session: $sessionId)" }
-                    }
-                }
-            }
-            return TerminalBackgroundResult(
-                success = true,
-                backgroundedIds = backgroundedIds,
-                count = backgroundedIds.size
-            )
-        }
+        return TerminalBackgroundManager.runToBackground(servers, toolUseId)
     }
 }

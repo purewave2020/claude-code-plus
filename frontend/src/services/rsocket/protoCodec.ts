@@ -29,11 +29,6 @@ import {
   HistoryMetadataSchema,
   HistoryResultSchema,
   RpcMessageSchema,
-  ContentBlockSchema,
-  TextBlockSchema,
-  ThinkingBlockSchema,
-  ImageBlockSchema,
-  ImageSourceSchema,
   // ServerCall 相关
   ServerCallRequestSchema,
   ServerCallResponseSchema,
@@ -42,72 +37,67 @@ import {
   UserAnswerItemSchema,
   PermissionUpdateSchema,
   PermissionRuleValueSchema,
-  // JetBrains 集成（统一 ServerCall）
-  type SessionCommandNotify,
-  type ThemeChangedNotify,
-  type ActiveFileChangedNotify,
-  type IdeSettingsChangedNotify,
-  type IdeSettings,
-  type ThinkingLevelConfig as ProtoThinkingLevelConfig,
-  type OptionConfig as ProtoOptionConfig,
-  SessionCommandType,
-  type ContentBlock,
   type AskUserQuestionRequest,
-  type RequestPermissionRequest,
-  Provider,
-  PermissionMode,
-  SandboxMode,
-  SessionStatus,
-  ContentStatus,
-  PermissionBehavior,
-  PermissionUpdateType,
-  PermissionUpdateDestination
+  type RequestPermissionRequest
 } from '@/proto/ai_agent_rpc_pb'
 import type {
   RpcConnectOptions,
   RpcConnectResult,
   RpcPermissionMode,
   RpcContentBlock,
-  RpcSessionStatus,
-  RpcContentStatus
+  RpcSessionStatus
 } from '@/types/rpc'
+import { RpcMessage } from '@/types/rpc/index'
 
-// 导入新的 RPC 类系统（直接从子模块导入原始类名）
+// 导入映射函数
 import {
-  // 消息类
-  RpcMessage,
-  RpcUserMessage,
-  RpcAssistantMessage,
-  RpcResultMessage,
-  RpcStreamEventMessage,
-  RpcErrorMessage,
-  RpcStatusSystemMessage,
-  RpcCompactBoundaryMessage,
-  RpcSystemInitMessage,
-  RpcUnknownMessage,
-  // 内容块类
-  ContentBlock as RpcContentBlockClass,
-  TextBlock,
-  ThinkingBlock,
-  ToolUseBlock,
-  ToolResultBlock,
-  ImageBlock,
-  CommandExecutionBlock,
-  ErrorBlock,
-  UnknownBlock,
-  // 流事件类
-  StreamEventData,
-  MessageStartEvent,
-  ContentBlockStartEvent,
-  ContentBlockDeltaEvent,
-  ContentBlockStopEvent,
-  MessageDeltaEvent,
-  MessageStopEvent,
-  UnknownEvent
-} from '@/types/rpc/index'
+  Provider,
+  PermissionMode,
+  SandboxMode,
+  SessionCommandType,
+  mapProviderToProto,
+  mapProviderFromProto,
+  mapPermissionModeToProto,
+  mapPermissionModeFromProto,
+  mapSandboxModeToProto,
+  mapSessionStatusFromProto,
+  mapContentStatusFromProto,
+  mapContentBlockToProto,
+  mapContentBlockFromProto,
+  mapContentBlockFromProtoAsClass,
+  mapDeltaFromProto,
+  mapRpcMessageFromProto,
+  mapSessionCommandFromProto,
+  mapSessionCommandTypeFromProto,
+  mapThemeChangedFromProto,
+  mapActiveFileChangedFromProto,
+  mapOptionConfigFromProto,
+  mapSettingsChangedFromProto,
+  mapPermissionUpdateFromProto,
+  mapPermissionUpdateTypeFromProto,
+  mapPermissionUpdateTypeToProto,
+  mapPermissionBehaviorFromProto,
+  mapPermissionBehaviorToProto,
+  mapPermissionDestinationFromProto,
+  mapPermissionDestinationToProto,
+  type SessionCommandParams,
+  type ThemeChangedParams,
+  type ActiveFileChangedParams,
+  type SettingsChangedParams,
+  type OptionConfigItem,
+  type PermissionUpdateParams
+} from './protoMappers'
 
-// 重新导出 Protobuf 枚举
+// 重新导出 Protobuf 枚举和映射类型
 export { Provider, PermissionMode, SandboxMode, SessionCommandType }
+export type {
+  SessionCommandParams,
+  ThemeChangedParams,
+  ActiveFileChangedParams,
+  SettingsChangedParams,
+  OptionConfigItem,
+  PermissionUpdateParams
+}
 
 /**
  * RPC 类型到 Protobuf 类型的转换
@@ -842,541 +832,6 @@ export const ProtoCodec = {
     return { success, isBash, taskId, command, bashCount, agentCount, backgroundedBashIds, backgroundedAgentIds, error }
   }
 }
-
-// ==================== 辅助映射函数 ====================
-
-function mapProviderToProto(provider: string): Provider {
-  switch (provider) {
-    case 'claude': return Provider.CLAUDE
-    case 'codex': return Provider.CODEX
-    default: return Provider.UNSPECIFIED
-  }
-}
-
-function mapProviderFromProto(provider: Provider): 'claude' | 'codex' {
-  switch (provider) {
-    case Provider.CLAUDE: return 'claude'
-    case Provider.CODEX: return 'codex'
-    default: return 'claude'
-  }
-}
-
-function mapPermissionModeToProto(mode: RpcPermissionMode): PermissionMode {
-  switch (mode) {
-    case 'default': return PermissionMode.DEFAULT
-    case 'bypassPermissions': return PermissionMode.BYPASS_PERMISSIONS
-    case 'acceptEdits': return PermissionMode.ACCEPT_EDITS
-    case 'plan': return PermissionMode.PLAN
-    default: return PermissionMode.DEFAULT
-  }
-}
-
-function mapPermissionModeFromProto(mode: PermissionMode): RpcPermissionMode {
-  switch (mode) {
-    case PermissionMode.DEFAULT: return 'default'
-    case PermissionMode.BYPASS_PERMISSIONS: return 'bypassPermissions'
-    case PermissionMode.ACCEPT_EDITS: return 'acceptEdits'
-    case PermissionMode.PLAN: return 'plan'
-    default: return 'default'
-  }
-}
-
-function mapSandboxModeToProto(mode: string): SandboxMode {
-  switch (mode) {
-    case 'read-only': return SandboxMode.READ_ONLY
-    case 'workspace-write': return SandboxMode.WORKSPACE_WRITE
-    case 'full-access': return SandboxMode.DANGER_FULL_ACCESS
-    case 'danger-full-access': return SandboxMode.DANGER_FULL_ACCESS
-    default: return SandboxMode.READ_ONLY
-  }
-}
-
-function mapSessionStatusFromProto(status: SessionStatus): RpcSessionStatus {
-  switch (status) {
-    case SessionStatus.CONNECTED: return 'connected'
-    case SessionStatus.DISCONNECTED: return 'disconnected'
-    case SessionStatus.INTERRUPTED: return 'interrupted'
-    case SessionStatus.MODEL_CHANGED: return 'model_changed'
-    default: return 'disconnected'
-  }
-}
-
-function mapContentStatusFromProto(status: ContentStatus): RpcContentStatus {
-  switch (status) {
-    case ContentStatus.IN_PROGRESS: return 'in_progress'
-    case ContentStatus.COMPLETED: return 'completed'
-    case ContentStatus.FAILED: return 'failed'
-    default: return 'in_progress'
-  }
-}
-
-function mapContentBlockToProto(block: RpcContentBlock): ContentBlock {
-  const proto = create(ContentBlockSchema)
-
-  switch (block.type) {
-    case 'text':
-      proto.block = {
-        case: 'text',
-        value: create(TextBlockSchema, { text: block.text || '' })
-      }
-      break
-    case 'thinking':
-      proto.block = {
-        case: 'thinking',
-        value: create(ThinkingBlockSchema, {
-          thinking: block.thinking || '',
-          signature: block.signature
-        })
-      }
-      break
-    case 'image':
-      proto.block = {
-        case: 'image',
-        value: create(ImageBlockSchema, {
-          source: create(ImageSourceSchema, {
-            type: block.source?.type || 'base64',
-            mediaType: block.source?.media_type || 'image/png',
-            data: block.source?.data,
-            url: block.source?.url
-          })
-        })
-      }
-      break
-    default:
-      proto.block = {
-        case: 'text',
-        value: create(TextBlockSchema, { text: '' })
-      }
-  }
-
-  return proto
-}
-
-/**
- * 将 Protobuf 消息转换为 RPC 类实例
- * 返回的对象支持 instanceof 判断
- */
-function mapRpcMessageFromProto(proto: any): RpcMessage {
-  const provider = mapProviderFromProto(proto.provider)
-
-  switch (proto.message?.case) {
-    case 'user':
-      return new RpcUserMessage({
-        type: 'user',
-        provider,
-        message: {
-          content: proto.message.value.message?.content.map(mapContentBlockFromProtoAsClass) || []
-        },
-        parentToolUseId: proto.message.value.parentToolUseId,
-        isReplay: proto.message.value.isReplay,
-        uuid: proto.message.value.uuid
-      })
-
-    case 'assistant':
-      return new RpcAssistantMessage({
-        type: 'assistant',
-        provider,
-        message: {
-          content: proto.message.value.message?.content.map(mapContentBlockFromProtoAsClass) || []
-        },
-        id: proto.message.value.id,
-        parentToolUseId: proto.message.value.parentToolUseId,
-        uuid: proto.message.value.uuid
-      })
-
-    case 'result':
-      return new RpcResultMessage({
-        type: 'result',
-        provider,
-        subtype: proto.message.value.subtype,
-        duration_ms: proto.message.value.durationMs ? Number(proto.message.value.durationMs) : undefined,
-        duration_api_ms: proto.message.value.durationApiMs ? Number(proto.message.value.durationApiMs) : undefined,
-        is_error: proto.message.value.isError,
-        num_turns: proto.message.value.numTurns,
-        session_id: proto.message.value.sessionId,
-        total_cost_usd: proto.message.value.totalCostUsd,
-        result: proto.message.value.result
-      })
-
-    case 'streamEvent':
-      return mapStreamEventFromProtoAsClass(proto.message.value, provider)
-
-    case 'error':
-      return new RpcErrorMessage({
-        type: 'error',
-        provider,
-        message: proto.message.value.errorMessage
-      })
-
-    case 'statusSystem':
-      return new RpcStatusSystemMessage({
-        type: 'status_system',
-        provider,
-        subtype: proto.message.value.subtype,
-        status: proto.message.value.status,
-        session_id: proto.message.value.sessionId
-      })
-
-    case 'compactBoundary':
-      return new RpcCompactBoundaryMessage({
-        type: 'compact_boundary',
-        provider,
-        subtype: proto.message.value.subtype,
-        session_id: proto.message.value.sessionId,
-        compact_metadata: proto.message.value.compactMetadata ? {
-          trigger: proto.message.value.compactMetadata.trigger,
-          pre_tokens: proto.message.value.compactMetadata.preTokens
-        } : undefined
-      })
-
-    case 'systemInit':
-      return new RpcSystemInitMessage({
-        type: 'system_init',
-        provider,
-        session_id: proto.message.value.sessionId,
-        cwd: proto.message.value.cwd,
-        model: proto.message.value.model,
-        permissionMode: proto.message.value.permissionMode,
-        apiKeySource: proto.message.value.apiKeySource,
-        tools: proto.message.value.tools,
-        mcpServers: proto.message.value.mcpServers?.map((s: { name: string; status: string }) => ({ name: s.name, status: s.status }))
-      })
-
-    default:
-      return new RpcUnknownMessage({ type: 'unknown', provider })
-  }
-}
-
-/**
- * 将 Protobuf ContentBlock 转换为 RPC 类实例
- * 返回的对象支持 instanceof 判断
- */
-function mapContentBlockFromProtoAsClass(proto: ContentBlock): RpcContentBlockClass {
-  if (!proto.block) {
-    return new TextBlock({ type: 'text', text: '' })
-  }
-
-  switch (proto.block.case) {
-    case 'text':
-      return new TextBlock({ type: 'text', text: proto.block.value.text })
-
-    case 'thinking':
-      return new ThinkingBlock({
-        type: 'thinking',
-        thinking: proto.block.value.thinking,
-        signature: proto.block.value.signature
-      })
-
-    case 'toolUse':
-      return new ToolUseBlock({
-        type: 'tool_use',
-        id: proto.block.value.id,
-        name: proto.block.value.toolName,
-        tool_type: proto.block.value.toolType,
-        input_json: proto.block.value.inputJson ? new TextDecoder().decode(proto.block.value.inputJson) : undefined,
-        status: mapContentStatusFromProto(proto.block.value.status)
-      })
-
-    case 'toolResult':
-      return new ToolResultBlock({
-        type: 'tool_result',
-        tool_use_id: proto.block.value.toolUseId,
-        content_json: proto.block.value.contentJson ? new TextDecoder().decode(proto.block.value.contentJson) : undefined,
-        is_error: proto.block.value.isError,
-        agent_id: proto.block.value.agentId
-      })
-
-    case 'image':
-      return new ImageBlock({
-        type: 'image',
-        source: {
-          type: proto.block.value.source?.type || 'base64',
-          media_type: proto.block.value.source?.mediaType || 'image/png',
-          data: proto.block.value.source?.data,
-          url: proto.block.value.source?.url
-        }
-      })
-
-    case 'commandExecution':
-      return new CommandExecutionBlock({
-        type: 'command_execution',
-        command: proto.block.value.command,
-        output: proto.block.value.output,
-        exit_code: proto.block.value.exitCode,
-        status: mapContentStatusFromProto(proto.block.value.status)
-      })
-
-    case 'error':
-      return new ErrorBlock({
-        type: 'error',
-        message: proto.block.value.message
-      })
-
-    default:
-      return new UnknownBlock({ type: 'unknown', raw: proto })
-  }
-}
-
-/**
- * 将 Protobuf StreamEvent 转换为 RpcStreamEventMessage 类实例
- * 返回的对象支持 instanceof 判断
- */
-function mapStreamEventFromProtoAsClass(proto: any, provider: 'claude' | 'codex'): RpcStreamEventMessage {
-  const eventData = proto.event
-  let event: StreamEventData
-
-  if (!eventData || !eventData.event) {
-    console.warn('[protoCodec] stream_event has no event field:', proto)
-    event = new UnknownEvent({ type: 'unknown' })
-  } else {
-    const innerEvent = eventData.event
-
-    switch (innerEvent.case) {
-      case 'messageStart':
-        event = new MessageStartEvent({
-          type: 'message_start',
-          message: innerEvent.value.messageInfo ? {
-            id: innerEvent.value.messageInfo.id,
-            model: innerEvent.value.messageInfo.model,
-            content: innerEvent.value.messageInfo.content?.map(mapContentBlockFromProtoAsClass) || []
-          } : undefined
-        })
-        break
-
-      case 'contentBlockStart':
-        event = new ContentBlockStartEvent({
-          type: 'content_block_start',
-          index: innerEvent.value.index,
-          content_block: mapContentBlockFromProtoAsClass(innerEvent.value.contentBlock)
-        })
-        break
-
-      case 'contentBlockDelta':
-        event = new ContentBlockDeltaEvent({
-          type: 'content_block_delta',
-          index: innerEvent.value.index,
-          delta: mapDeltaFromProto(innerEvent.value.delta)
-        })
-        break
-
-      case 'contentBlockStop':
-        event = new ContentBlockStopEvent({
-          type: 'content_block_stop',
-          index: innerEvent.value.index
-        })
-        break
-
-      case 'messageDelta':
-        event = new MessageDeltaEvent({
-          type: 'message_delta',
-          usage: innerEvent.value.usage ? {
-            input_tokens: innerEvent.value.usage.inputTokens,
-            output_tokens: innerEvent.value.usage.outputTokens,
-            cached_input_tokens: innerEvent.value.usage.cachedInputTokens,
-            cache_creation_tokens: innerEvent.value.usage.cacheCreationTokens,
-            cache_read_tokens: innerEvent.value.usage.cacheReadTokens
-          } : undefined
-        })
-        break
-
-      case 'messageStop':
-        event = new MessageStopEvent({ type: 'message_stop' })
-        break
-
-      default:
-        console.warn('[protoCodec] unknown stream_event.event.case:', innerEvent.case, innerEvent)
-        event = new UnknownEvent({ type: 'unknown', originalType: innerEvent.case })
-    }
-  }
-
-  return new RpcStreamEventMessage({
-    type: 'stream_event',
-    provider,
-    uuid: proto.uuid,
-    session_id: proto.sessionId,
-    parentToolUseId: proto.parentToolUseId,
-    event
-  })
-}
-
-// 保留旧的函数用于兼容（返回普通对象）
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function _mapStreamEventFromProto(proto: any, provider: 'claude' | 'codex'): any {
-  const base = {
-    type: 'stream_event' as const,
-    provider,
-    uuid: proto.uuid,
-    session_id: proto.sessionId,
-    parentToolUseId: proto.parentToolUseId
-  }
-
-  // proto.event 是 StreamEventData，其中的 oneof event 字段包含 case 和 value
-  const eventData = proto.event
-  if (!eventData) {
-    console.warn('[protoCodec] stream_event has no event field:', proto)
-    return { ...base, event: { type: 'unknown' } } as any
-  }
-
-  // StreamEventData.event 是 oneof 字段
-  const event = eventData.event
-  if (!event) {
-    console.warn('[protoCodec] StreamEventData has no event oneof:', eventData)
-    return { ...base, event: { type: 'unknown' } } as any
-  }
-
-  switch (event.case) {
-    case 'messageStart':
-      return {
-        ...base,
-        event: {
-          type: 'message_start',
-          message: event.value.messageInfo ? {
-            id: event.value.messageInfo.id,
-            model: event.value.messageInfo.model,
-            content: event.value.messageInfo.content?.map(mapContentBlockFromProto) || []
-          } : undefined
-        }
-      } as any
-
-    case 'contentBlockStart':
-      return {
-        ...base,
-        event: {
-          type: 'content_block_start',
-          index: event.value.index,
-          content_block: mapContentBlockFromProto(event.value.contentBlock)
-        }
-      } as any
-
-    case 'contentBlockDelta':
-      return {
-        ...base,
-        event: {
-          type: 'content_block_delta',
-          index: event.value.index,
-          delta: mapDeltaFromProto(event.value.delta)
-        }
-      } as any
-
-    case 'contentBlockStop':
-      return {
-        ...base,
-        event: {
-          type: 'content_block_stop',
-          index: event.value.index
-        }
-      } as any
-
-    case 'messageDelta':
-      return {
-        ...base,
-        event: {
-          type: 'message_delta',
-          usage: event.value.usage ? {
-            input_tokens: event.value.usage.inputTokens,
-            output_tokens: event.value.usage.outputTokens,
-            cached_input_tokens: event.value.usage.cachedInputTokens,
-            cache_creation_tokens: event.value.usage.cacheCreationTokens,
-            cache_read_tokens: event.value.usage.cacheReadTokens
-          } : undefined
-        }
-      } as any
-
-    case 'messageStop':
-      return {
-        ...base,
-        event: { type: 'message_stop' }
-      } as any
-
-    default:
-      console.warn('[protoCodec] unknown stream_event.event.case:', event.case, event)
-      return { ...base, event: { type: 'unknown' } } as any
-  }
-}
-
-function mapContentBlockFromProto(proto: ContentBlock): RpcContentBlock {
-  if (!proto.block) {
-    return { type: 'text', text: '' }
-  }
-
-  switch (proto.block.case) {
-    case 'text':
-      return { type: 'text', text: proto.block.value.text }
-
-    case 'thinking':
-      return {
-        type: 'thinking',
-        thinking: proto.block.value.thinking,
-        signature: proto.block.value.signature
-      }
-
-    case 'toolUse':
-      return {
-        type: 'tool_use',
-        id: proto.block.value.id,
-        toolName: proto.block.value.toolName,
-        toolType: proto.block.value.toolType,
-        input: proto.block.value.inputJson ? JSON.parse(new TextDecoder().decode(proto.block.value.inputJson)) : undefined,
-        status: mapContentStatusFromProto(proto.block.value.status)
-      }
-
-    case 'toolResult':
-      return {
-        type: 'tool_result',
-        tool_use_id: proto.block.value.toolUseId,
-        content: proto.block.value.contentJson ? JSON.parse(new TextDecoder().decode(proto.block.value.contentJson)) : undefined,
-        is_error: proto.block.value.isError,
-        agent_id: proto.block.value.agentId
-      }
-
-    case 'image':
-      return {
-        type: 'image',
-        source: {
-          type: proto.block.value.source?.type || 'base64',
-          media_type: proto.block.value.source?.mediaType || 'image/png',
-          data: proto.block.value.source?.data,
-          url: proto.block.value.source?.url
-        }
-      }
-
-    case 'commandExecution':
-      return {
-        type: 'command_execution',
-        command: proto.block.value.command,
-        output: proto.block.value.output,
-        exitCode: proto.block.value.exitCode,
-        status: mapContentStatusFromProto(proto.block.value.status)
-      }
-
-    case 'error':
-      return {
-        type: 'error',
-        message: proto.block.value.message
-      }
-
-    default:
-      return { type: 'text', text: '' }
-  }
-}
-
-function mapDeltaFromProto(proto: any): any {
-  if (!proto?.delta) {
-    return { type: 'unknown' }
-  }
-
-  switch (proto.delta.case) {
-    case 'textDelta':
-      return { type: 'text_delta', text: proto.delta.value.text }
-    case 'thinkingDelta':
-      return { type: 'thinking_delta', thinking: proto.delta.value.thinking }
-    case 'inputJsonDelta':
-      return { type: 'input_json_delta', partial_json: proto.delta.value.partialJson }
-    default:
-      return { type: 'unknown' }
-  }
-}
-
 // ==================== ServerCall 编解码（反向调用）====================
 
 /**
@@ -1387,61 +842,6 @@ export interface DecodedServerCallRequest {
   method: string
   params: AskUserQuestionParams | RequestPermissionParams | SessionCommandParams | ThemeChangedParams | ActiveFileChangedParams | SettingsChangedParams | unknown
   paramsCase: 'askUserQuestion' | 'requestPermission' | 'sessionCommand' | 'themeChanged' | 'activeFileChanged' | 'settingsChanged' | 'paramsJson' | undefined
-}
-
-/**
- * SessionCommand 参数类型
- */
-export interface SessionCommandParams {
-  type: 'switch' | 'create' | 'close' | 'rename' | 'toggleHistory' | 'setLocale' | 'delete' | 'reset' | 'unspecified'
-  sessionId?: string
-  newName?: string
-  locale?: string
-}
-
-/**
- * ThemeChanged 参数类型
- */
-export interface ThemeChangedParams {
-  background: string
-  foreground: string
-  borderColor: string
-  panelBackground: string
-  textFieldBackground: string
-  selectionBackground: string
-  selectionForeground: string
-  linkColor: string
-  errorColor: string
-  warningColor: string
-  successColor: string
-  separatorColor: string
-  hoverBackground: string
-  accentColor: string
-  infoBackground: string
-  codeBackground: string
-  secondaryForeground: string
-  fontFamily: string
-  fontSize: number
-  editorFontFamily: string
-  editorFontSize: number
-}
-
-/**
- * ActiveFileChanged 参数类型（活跃文件变更通知）
- */
-export interface ActiveFileChangedParams {
-  hasActiveFile: boolean
-  path?: string
-  relativePath?: string
-  name?: string
-  line?: number
-  column?: number
-  hasSelection: boolean
-  startLine?: number
-  startColumn?: number
-  endLine?: number
-  endColumn?: number
-  selectedContent?: string
 }
 
 /**
@@ -1464,18 +864,6 @@ export interface RequestPermissionParams {
   input: unknown
   toolUseId?: string
   permissionSuggestions?: PermissionUpdateParams[]
-}
-
-/**
- * PermissionUpdate 参数类型
- */
-export interface PermissionUpdateParams {
-  type: 'addRules' | 'replaceRules' | 'removeRules' | 'setMode' | 'addDirectories' | 'removeDirectories'
-  rules?: Array<{ toolName: string; ruleContent?: string }>
-  behavior?: 'allow' | 'deny' | 'ask'
-  mode?: RpcPermissionMode
-  directories?: string[]
-  destination?: 'userSettings' | 'projectSettings' | 'localSettings' | 'session'
 }
 
 /**
@@ -1540,183 +928,6 @@ export function decodeServerCallRequest(data: Uint8Array): DecodedServerCallRequ
     method: proto.method,
     params,
     paramsCase
-  }
-}
-
-/**
- * 从 Proto 映射 SessionCommandNotify
- */
-function mapSessionCommandFromProto(proto: SessionCommandNotify): SessionCommandParams {
-  return {
-    type: mapSessionCommandTypeFromProto(proto.type),
-    sessionId: proto.sessionId,
-    newName: proto.newName,
-    locale: proto.locale
-  }
-}
-
-/**
- * 映射 SessionCommandType
- */
-function mapSessionCommandTypeFromProto(type: SessionCommandType): SessionCommandParams['type'] {
-  switch (type) {
-    case SessionCommandType.SESSION_CMD_SWITCH: return 'switch'
-    case SessionCommandType.SESSION_CMD_CREATE: return 'create'
-    case SessionCommandType.SESSION_CMD_CLOSE: return 'close'
-    case SessionCommandType.SESSION_CMD_RENAME: return 'rename'
-    case SessionCommandType.SESSION_CMD_TOGGLE_HISTORY: return 'toggleHistory'
-    case SessionCommandType.SESSION_CMD_SET_LOCALE: return 'setLocale'
-    case SessionCommandType.SESSION_CMD_DELETE: return 'delete'
-    case SessionCommandType.SESSION_CMD_RESET: return 'reset'
-    default: return 'unspecified'
-  }
-}
-
-/**
- * 从 Proto 映射 ThemeChangedNotify
- */
-function mapThemeChangedFromProto(proto: ThemeChangedNotify): ThemeChangedParams {
-  return {
-    background: proto.background,
-    foreground: proto.foreground,
-    borderColor: proto.borderColor,
-    panelBackground: proto.panelBackground,
-    textFieldBackground: proto.textFieldBackground,
-    selectionBackground: proto.selectionBackground,
-    selectionForeground: proto.selectionForeground,
-    linkColor: proto.linkColor,
-    errorColor: proto.errorColor,
-    warningColor: proto.warningColor,
-    successColor: proto.successColor,
-    separatorColor: proto.separatorColor,
-    hoverBackground: proto.hoverBackground,
-    accentColor: proto.accentColor,
-    infoBackground: proto.infoBackground,
-    codeBackground: proto.codeBackground,
-    secondaryForeground: proto.secondaryForeground,
-    fontFamily: proto.fontFamily,
-    fontSize: proto.fontSize,
-    editorFontFamily: proto.editorFontFamily,
-    editorFontSize: proto.editorFontSize
-  }
-}
-
-/**
- * 从 Proto 映射 ActiveFileChangedNotify
- */
-function mapActiveFileChangedFromProto(proto: ActiveFileChangedNotify): ActiveFileChangedParams {
-  return {
-    hasActiveFile: proto.hasActiveFile,
-    path: proto.path,
-    relativePath: proto.relativePath,
-    name: proto.name,
-    line: proto.line,
-    column: proto.column,
-    hasSelection: proto.hasSelection,
-    startLine: proto.startLine,
-    startColumn: proto.startColumn,
-    endLine: proto.endLine,
-    endColumn: proto.endColumn,
-    selectedContent: proto.selectedContent
-  }
-}
-
-/**
- * 设置变更参数（从 IdeSettingsChangedNotify 解码）
- */
-/**
- * 通用选项配置（用于下拉列表）
- */
-export interface OptionConfigItem {
-  id: string
-  label: string
-  description: string
-  isDefault: boolean
-}
-
-export interface SettingsChangedParams {
-  settings: {
-    defaultModelId: string
-    defaultModelName: string
-    defaultBypassPermissions: boolean
-    enableUserInteractionMcp: boolean
-    enableJetbrainsMcp: boolean
-    includePartialMessages: boolean
-    codexDefaultModelId?: string
-    codexDefaultReasoningEffort?: string
-    codexDefaultReasoningSummary?: string
-    codexDefaultSandboxMode?: string
-    defaultThinkingLevel: string
-    defaultThinkingTokens: number
-    defaultThinkingLevelId: string
-    thinkingLevels: Array<{
-      id: string
-      name: string
-      tokens: number
-      isCustom: boolean
-    }>
-    permissionMode: string
-    // 配置选项列表
-    codexReasoningEffortOptions: OptionConfigItem[]
-    codexReasoningSummaryOptions: OptionConfigItem[]
-    codexSandboxModeOptions: OptionConfigItem[]
-    permissionModeOptions: OptionConfigItem[]
-  }
-}
-
-/**
- * 从 Proto 映射 OptionConfig
- */
-function mapOptionConfigFromProto(opt: ProtoOptionConfig): OptionConfigItem {
-  return {
-    id: opt.id || '',
-    label: opt.label || '',
-    description: opt.description || '',
-    isDefault: opt.isDefault ?? false
-  }
-}
-
-/**
- * 从 Proto 映射 IdeSettingsChangedNotify
- */
-function mapSettingsChangedFromProto(proto: IdeSettingsChangedNotify): SettingsChangedParams {
-  const s = proto.settings as IdeSettings | undefined
-  const defaultThinkingLevels = [
-    { id: 'off', name: 'Off', tokens: 0, isCustom: false },
-    { id: 'think', name: 'Think', tokens: 2048, isCustom: false },
-    { id: 'ultra', name: 'Ultra', tokens: 8096, isCustom: false }
-  ]
-
-  return {
-    settings: {
-      defaultModelId: s?.defaultModelId || '',
-      defaultModelName: s?.defaultModelName || '',
-      defaultBypassPermissions: s?.defaultBypassPermissions ?? false,
-      enableUserInteractionMcp: s?.enableUserInteractionMcp ?? true,
-      enableJetbrainsMcp: s?.enableJetbrainsMcp ?? true,
-      includePartialMessages: s?.includePartialMessages ?? true,
-      codexDefaultModelId: s?.codexDefaultModelId || '',
-      codexDefaultReasoningEffort: s?.codexDefaultReasoningEffort || undefined,
-      codexDefaultReasoningSummary: s?.codexDefaultReasoningSummary || undefined,
-      codexDefaultSandboxMode: s?.codexDefaultSandboxMode || undefined,
-      defaultThinkingLevel: s?.defaultThinkingLevel || 'ULTRA',
-      defaultThinkingTokens: s?.defaultThinkingTokens ?? 0,
-      defaultThinkingLevelId: s?.defaultThinkingLevelId || 'ultra',
-      thinkingLevels: s?.thinkingLevels && s.thinkingLevels.length > 0
-        ? s.thinkingLevels.map((level: ProtoThinkingLevelConfig) => ({
-            id: level.id,
-            name: level.name,
-            tokens: level.tokens,
-            isCustom: level.isCustom
-          }))
-        : defaultThinkingLevels,
-      permissionMode: s?.permissionMode || 'default',
-      // 配置选项列表
-      codexReasoningEffortOptions: s?.codexReasoningEffortOptions?.map(mapOptionConfigFromProto) || [],
-      codexReasoningSummaryOptions: s?.codexReasoningSummaryOptions?.map(mapOptionConfigFromProto) || [],
-      codexSandboxModeOptions: s?.codexSandboxModeOptions?.map(mapOptionConfigFromProto) || [],
-      permissionModeOptions: s?.permissionModeOptions?.map(mapOptionConfigFromProto) || []
-    }
   }
 }
 
@@ -1811,23 +1022,6 @@ function mapRequestPermissionRequestFromProto(proto: RequestPermissionRequest): 
 }
 
 /**
- * 从 Proto 映射 PermissionUpdate
- */
-function mapPermissionUpdateFromProto(proto: any): PermissionUpdateParams {
-  return {
-    type: mapPermissionUpdateTypeFromProto(proto.type),
-    rules: proto.rules?.map((r: any) => ({
-      toolName: r.toolName,
-      ruleContent: r.ruleContent
-    })),
-    behavior: proto.behavior ? mapPermissionBehaviorFromProto(proto.behavior) : undefined,
-    mode: proto.mode ? mapPermissionModeFromProto(proto.mode) : undefined,
-    directories: proto.directories,
-    destination: proto.destination ? mapPermissionDestinationFromProto(proto.destination) : undefined
-  }
-}
-
-/**
  * 映射 PermissionUpdate 到 Proto
  */
 function mapPermissionUpdateToProto(update: PermissionUpdateParams) {
@@ -1844,75 +1038,4 @@ function mapPermissionUpdateToProto(update: PermissionUpdateParams) {
     directories: update.directories || [],
     destination: update.destination ? mapPermissionDestinationToProto(update.destination) : undefined
   })
-}
-
-/**
- * PermissionUpdateType 映射
- */
-function mapPermissionUpdateTypeFromProto(type: PermissionUpdateType): PermissionUpdateParams['type'] {
-  switch (type) {
-    case PermissionUpdateType.ADD_RULES: return 'addRules'
-    case PermissionUpdateType.REPLACE_RULES: return 'replaceRules'
-    case PermissionUpdateType.REMOVE_RULES: return 'removeRules'
-    case PermissionUpdateType.SET_MODE: return 'setMode'
-    case PermissionUpdateType.ADD_DIRECTORIES: return 'addDirectories'
-    case PermissionUpdateType.REMOVE_DIRECTORIES: return 'removeDirectories'
-    default: return 'addRules'
-  }
-}
-
-function mapPermissionUpdateTypeToProto(type: PermissionUpdateParams['type']): PermissionUpdateType {
-  switch (type) {
-    case 'addRules': return PermissionUpdateType.ADD_RULES
-    case 'replaceRules': return PermissionUpdateType.REPLACE_RULES
-    case 'removeRules': return PermissionUpdateType.REMOVE_RULES
-    case 'setMode': return PermissionUpdateType.SET_MODE
-    case 'addDirectories': return PermissionUpdateType.ADD_DIRECTORIES
-    case 'removeDirectories': return PermissionUpdateType.REMOVE_DIRECTORIES
-    default: return PermissionUpdateType.UNSPECIFIED
-  }
-}
-
-/**
- * PermissionBehavior 映射
- */
-function mapPermissionBehaviorFromProto(behavior: PermissionBehavior): 'allow' | 'deny' | 'ask' {
-  switch (behavior) {
-    case PermissionBehavior.ALLOW: return 'allow'
-    case PermissionBehavior.DENY: return 'deny'
-    case PermissionBehavior.ASK: return 'ask'
-    default: return 'ask'
-  }
-}
-
-function mapPermissionBehaviorToProto(behavior: 'allow' | 'deny' | 'ask'): PermissionBehavior {
-  switch (behavior) {
-    case 'allow': return PermissionBehavior.ALLOW
-    case 'deny': return PermissionBehavior.DENY
-    case 'ask': return PermissionBehavior.ASK
-    default: return PermissionBehavior.UNSPECIFIED
-  }
-}
-
-/**
- * PermissionUpdateDestination 映射
- */
-function mapPermissionDestinationFromProto(dest: PermissionUpdateDestination): PermissionUpdateParams['destination'] {
-  switch (dest) {
-    case PermissionUpdateDestination.USER_SETTINGS: return 'userSettings'
-    case PermissionUpdateDestination.PROJECT_SETTINGS: return 'projectSettings'
-    case PermissionUpdateDestination.LOCAL_SETTINGS: return 'localSettings'
-    case PermissionUpdateDestination.SESSION: return 'session'
-    default: return 'session'
-  }
-}
-
-function mapPermissionDestinationToProto(dest: NonNullable<PermissionUpdateParams['destination']>): PermissionUpdateDestination {
-  switch (dest) {
-    case 'userSettings': return PermissionUpdateDestination.USER_SETTINGS
-    case 'projectSettings': return PermissionUpdateDestination.PROJECT_SETTINGS
-    case 'localSettings': return PermissionUpdateDestination.LOCAL_SETTINGS
-    case 'session': return PermissionUpdateDestination.SESSION
-    default: return PermissionUpdateDestination.UNSPECIFIED
-  }
 }

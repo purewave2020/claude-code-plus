@@ -34,12 +34,7 @@ import io.ktor.server.websocket.*
 import com.asakii.rpc.proto.GetHistoryMetadataRequest
 import com.asakii.rpc.proto.LoadHistoryRequest
 import com.asakii.server.history.HistoryJsonlLoader
-import com.asakii.server.history.CodexHistoryMapper
 import com.asakii.server.rpc.AiAgentRpcServiceImpl
-import com.asakii.codex.agent.sdk.appserver.CodexAppServerClient
-import com.asakii.rpc.api.RpcHistorySession
-import com.asakii.rpc.api.RpcHistoryMetadata
-import com.asakii.rpc.api.RpcHistoryResult
 import com.asakii.rpc.api.RpcHistorySessionsResult
 import com.asakii.server.mcp.McpProviders
 import com.asakii.server.rsocket.ProtoConverter.toProto
@@ -60,7 +55,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.Serializable
 import kotlinx.coroutines.runBlocking
 import java.awt.Color
 import java.io.IOException
@@ -71,31 +65,6 @@ import kotlin.time.Duration.Companion.seconds
 
 
 /**
- * 前端期望的文件信息格式
- * 用于 /api/files/search 和 /api/files/recent 端点
- */
-@Serializable
-data class IndexedFileInfo(
-    val name: String,
-    val relativePath: String,
-    val absolutePath: String,
-    val fileType: String,
-    val size: Long,
-    val lastModified: Long
-)
-
-/**
- * 文件搜索 API 响应
- */
-@Serializable
-data class FileSearchResponse(
-    val success: Boolean,
-    val data: List<IndexedFileInfo>? = null,
-    val error: String? = null,
-    val errorCode: String? = null  // 错误码：INDEXING 表示正在索引
-)
-
-/**
  * HTTP + SSE 服务器（基于 Ktor）
  * 提供前后端通信 API
  *
@@ -104,27 +73,6 @@ data class FileSearchResponse(
  * - SSE: 实时事件推送（主题变化、Claude 消息等）
  */
 private val logger = getLogger("HttpApiServer")
-
-/**
- * JetBrains RSocket Handler 接口
- * 由插件模块实现，用于处理 JetBrains IDE 集成的 RSocket 调用
- */
-interface JetBrainsRSocketHandlerProvider {
-    /**
-     * 创建 RSocket 请求处理器
-     */
-    fun createHandler(): io.rsocket.kotlin.RSocket
-
-    /**
-     * 设置客户端 requester（用于反向调用）
-     */
-    fun setClientRequester(clientId: String, requester: io.rsocket.kotlin.RSocket)
-
-    /**
-     * 移除客户端
-     */
-    fun removeClient(clientId: String)
-}
 
 class HttpApiServer(
     private val ideTools: IdeTools,
@@ -154,6 +102,9 @@ class HttpApiServer(
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     private val eventFlow = _eventFlow.asSharedFlow()
+
+    // Codex 历史辅助类
+    private val codexHistoryHelper = CodexHistoryHelper(ideTools, serviceConfigProvider, scope)
 
     companion object {
         private const val DEFAULT_HOST = "127.0.0.1"
@@ -758,7 +709,7 @@ class HttpApiServer(
                                 mcpProviders = mcpProviders
                             )
                             val result = if (provider == "codex") {
-                                listCodexHistorySessions(maxResults, offset)
+                                codexHistoryHelper.listHistorySessions(maxResults, offset)
                             } else {
                                 rpcService.getHistorySessions(maxResults, offset)
                             }
@@ -786,7 +737,7 @@ class HttpApiServer(
                             logger.info { "🗑️ [HTTP] 删除历史会话: $sessionId" }
 
                             val deleted = if (provider == "codex") {
-                                archiveCodexHistorySession(sessionId)
+                                codexHistoryHelper.archiveSession(sessionId)
                             } else {
                                 val projectPath = ideTools.getProjectPath()
                                 com.asakii.claude.agent.sdk.utils.ClaudeSessionScanner.deleteSession(projectPath, sessionId)
@@ -824,7 +775,7 @@ class HttpApiServer(
                                         HttpStatusCode.BadRequest,
                                         mapOf("error" to "Missing sessionId")
                                     )
-                                getCodexHistoryMetadata(threadId, projectPath.takeIf { it.isNotBlank() }).toProto()
+                                codexHistoryHelper.getHistoryMetadata(threadId, projectPath.takeIf { it.isNotBlank() }).toProto()
                             } else {
                                 val rpcService = AiAgentRpcServiceImpl(
                                     ideTools = ideTools,
@@ -859,7 +810,7 @@ class HttpApiServer(
                                         HttpStatusCode.BadRequest,
                                         mapOf("error" to "Missing sessionId")
                                     )
-                                loadCodexHistory(
+                                codexHistoryHelper.loadHistory(
                                     threadId = threadId,
                                     fallbackProjectPath = req.projectPath.takeIf { it.isNotBlank() },
                                     offset = req.offset,
@@ -1439,172 +1390,6 @@ class HttpApiServer(
         baseUrl = url
         logger.info { "🚀 Ktor server started at: $url (configured: $configuredPort, actual: $actualPort)" }
         return url
-    }
-
-    // Codex history sessions (app-server list).
-    private suspend fun listCodexHistorySessions(maxResults: Int, offset: Int): RpcHistorySessionsResult {
-        val config = serviceConfigProvider()
-        val codexPath = config.codex.binaryPath?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
-        val workingDirectory = ideTools.getProjectPath().takeIf { it.isNotBlank() }?.let { Path.of(it) }
-
-        val client = CodexAppServerClient.create(
-            codexPath = codexPath,
-            workingDirectory = workingDirectory,
-            scope = scope
-        )
-
-        return try {
-            client.initialize(
-                clientName = "claude-code-plus",
-                clientTitle = "Claude Code Plus",
-                clientVersion = "1.0.0"
-            )
-
-            val threads = fetchCodexThreads(client, maxResults, offset)
-            val fallbackProjectPath = ideTools.getProjectPath()
-            RpcHistorySessionsResult(
-                sessions = threads.map { thread ->
-                    val resumedThread = try {
-                        client.resumeThread(thread.id)
-                    } catch (e: Exception) {
-                        logger.warn(e) { "⚠️ [HTTP] Failed to resume Codex thread for messageCount: ${thread.id}" }
-                        null
-                    }
-                    val messageCount = resumedThread?.let { CodexHistoryMapper.countMessages(it) } ?: -1
-                    val cwd = (resumedThread?.cwd ?: thread.cwd).takeIf { it.isNotBlank() } ?: fallbackProjectPath
-                    RpcHistorySession(
-                        sessionId = thread.id,
-                        firstUserMessage = thread.preview,
-                        timestamp = thread.createdAt,
-                        messageCount = messageCount,
-                        projectPath = cwd,
-                        customTitle = null
-                    )
-                }
-            )
-        } finally {
-            client.close()
-        }
-    }
-
-    private suspend fun getCodexHistoryMetadata(
-        threadId: String,
-        fallbackProjectPath: String?
-    ): RpcHistoryMetadata {
-        val config = serviceConfigProvider()
-        val codexPath = config.codex.binaryPath?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
-        val workingDirectory = (fallbackProjectPath ?: ideTools.getProjectPath())
-            .takeIf { it.isNotBlank() }
-            ?.let { Path.of(it) }
-
-        val client = CodexAppServerClient.create(
-            codexPath = codexPath,
-            workingDirectory = workingDirectory,
-            scope = scope
-        )
-
-        return try {
-            client.initialize(
-                clientName = "claude-code-plus",
-                clientTitle = "Claude Code Plus",
-                clientVersion = "1.0.0"
-            )
-
-            val thread = client.resumeThread(threadId)
-            val fallback = fallbackProjectPath ?: ideTools.getProjectPath()
-            CodexHistoryMapper.buildMetadata(thread, fallback)
-        } finally {
-            client.close()
-        }
-    }
-
-    private suspend fun loadCodexHistory(
-        threadId: String,
-        fallbackProjectPath: String?,
-        offset: Int,
-        limit: Int
-    ): RpcHistoryResult {
-        val config = serviceConfigProvider()
-        val codexPath = config.codex.binaryPath?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
-        val workingDirectory = (fallbackProjectPath ?: ideTools.getProjectPath())
-            .takeIf { it.isNotBlank() }
-            ?.let { Path.of(it) }
-
-        val client = CodexAppServerClient.create(
-            codexPath = codexPath,
-            workingDirectory = workingDirectory,
-            scope = scope
-        )
-
-        return try {
-            client.initialize(
-                clientName = "claude-code-plus",
-                clientTitle = "Claude Code Plus",
-                clientVersion = "1.0.0"
-            )
-
-            val thread = client.resumeThread(threadId)
-            CodexHistoryMapper.buildHistoryResult(thread, offset, limit)
-        } finally {
-            client.close()
-        }
-    }
-
-    private suspend fun archiveCodexHistorySession(threadId: String): Boolean {
-        val config = serviceConfigProvider()
-        val codexPath = config.codex.binaryPath?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
-        val workingDirectory = ideTools.getProjectPath().takeIf { it.isNotBlank() }?.let { Path.of(it) }
-
-        val client = CodexAppServerClient.create(
-            codexPath = codexPath,
-            workingDirectory = workingDirectory,
-            scope = scope
-        )
-
-        return try {
-            client.initialize(
-                clientName = "claude-code-plus",
-                clientTitle = "Claude Code Plus",
-                clientVersion = "1.0.0"
-            )
-            client.archiveThread(threadId)
-            true
-        } catch (e: Exception) {
-            logger.error(e) { "? [HTTP] Failed to archive Codex thread: $threadId" }
-            false
-        } finally {
-            client.close()
-        }
-    }
-
-    private suspend fun fetchCodexThreads(
-        client: CodexAppServerClient,
-        maxResults: Int,
-        offset: Int
-    ): List<com.asakii.codex.agent.sdk.appserver.ThreadInfo> {
-        val result = mutableListOf<com.asakii.codex.agent.sdk.appserver.ThreadInfo>()
-        var cursor: String? = null
-        var skipped = 0
-
-        while (result.size < maxResults) {
-            val limit = (maxResults + offset - skipped).coerceAtLeast(1)
-            val page = client.listThreads(cursor = cursor, limit = limit)
-            if (page.data.isEmpty()) break
-
-            for (thread in page.data) {
-                if (skipped < offset) {
-                    skipped += 1
-                    continue
-                }
-                result.add(thread)
-                if (result.size >= maxResults) break
-            }
-
-            cursor = page.nextCursor?.takeIf { it.isNotBlank() }
-            if (cursor == null) break
-        }
-
-        return result
     }
 
     // Stop server.
