@@ -1292,55 +1292,46 @@ class BuiltInMcpServerDialog(
             topPanel.add(Box.createVerticalStrut(8))
         }
 
-        // 禁用工具配置（标签选择界面）- Claude Code built-in tools（紧凑布局）
+        // 禁用工具配置（标签选择界面）- Claude Code built-in tools（紧凑布局，可折叠）
         if (defaultDisabledTools.isNotEmpty() || entry.hasDisableToolsToggle) {
-            // 标题行：标签 + 输入框 + 按钮 + Reset
-            val disabledToolsHeaderPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Disables Claude Code tools:").apply {
-                    foreground = JBColor(0x1976D2, 0x6BA3D6)
-                })
-                add(disabledToolInput.apply {
-                    toolTipText = "Type tool name, then click + or press Enter"
-                })
-                add(JButton("+").apply {
-                    preferredSize = Dimension(36, disabledToolInput.preferredSize.height)
-                    toolTipText = "Add tool to disable"
-                    addActionListener {
-                        val toolName = disabledToolInput.text.trim()
-                        if (toolName.isNotEmpty() && !disabledToolsList.contains(toolName)) {
-                            addDisabledToolTag(toolName)
-                            disabledToolInput.text = ""
-                        }
-                    }
-                })
-                add(JButton("Reset").apply {
-                    toolTipText = "Reset to default: ${defaultDisabledTools.joinToString(", ").ifEmpty { "(none)" }}"
-                    addActionListener {
-                        disabledToolsList.clear()
-                        disabledToolsPanel?.removeAll()
-                        defaultDisabledTools.forEach { addDisabledToolTag(it) }
-                        disabledToolsPanel?.revalidate()
-                        disabledToolsPanel?.repaint()
-                    }
-                })
-            }
-            topPanel.add(disabledToolsHeaderPanel)
-            topPanel.add(Box.createVerticalStrut(2))
-
-            // 标签流式布局面板（减小高度）
+            // 标签流式布局面板
             disabledToolsPanel = JPanel(WrapLayout(FlowLayout.LEFT, 4, 2)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
             }
             disabledToolsList.forEach { addDisabledToolTag(it) }
 
             val toolsScrollPane = JBScrollPane(disabledToolsPanel).apply {
-                preferredSize = Dimension(550, 64)  // 增加高度以显示多行标签
+                preferredSize = Dimension(550, 64)
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 border = BorderFactory.createLineBorder(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground())
                 horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
             }
-            topPanel.add(toolsScrollPane)
+
+            // 创建可折叠面板
+            val (headerPanel, contentWrapper) = createCollapsibleTagPanel(
+                title = "Disables Claude Code tools:",
+                titleColor = JBColor(0x1976D2, 0x6BA3D6),
+                inputField = disabledToolInput,
+                onAdd = { toolName ->
+                    if (toolName.isNotEmpty() && !disabledToolsList.contains(toolName)) {
+                        addDisabledToolTag(toolName)
+                        true
+                    } else false
+                },
+                onReset = {
+                    disabledToolsList.clear()
+                    disabledToolsPanel?.removeAll()
+                    defaultDisabledTools.forEach { addDisabledToolTag(it) }
+                    disabledToolsPanel?.revalidate()
+                    disabledToolsPanel?.repaint()
+                },
+                resetTooltip = "Reset to default: ${defaultDisabledTools.joinToString(", ").ifEmpty { "(none)" }}",
+                contentPanel = toolsScrollPane,
+                initiallyExpanded = disabledToolsList.isNotEmpty()
+            )
+            topPanel.add(headerPanel)
+            topPanel.add(Box.createVerticalStrut(2))
+            topPanel.add(contentWrapper)
             topPanel.add(Box.createVerticalStrut(6))
 
             // Enter 键支持
@@ -1353,55 +1344,46 @@ class BuiltInMcpServerDialog(
             }
         }
 
-        // Codex disabled features 配置（紧凑布局）
+        // Codex disabled features 配置（紧凑布局，可折叠）
         if (defaultCodexDisabledFeatures.isNotEmpty() || entry.hasDisableToolsToggle) {
-            // 标题行：标签 + 输入框 + 按钮 + Reset
-            val codexHeaderPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Disables Codex features:").apply {
-                    foreground = JBColor(0x388E3C, 0x81C784)
-                })
-                add(codexDisabledFeaturesInput.apply {
-                    toolTipText = "Type feature name, then click + or press Enter"
-                })
-                add(JButton("+").apply {
-                    preferredSize = Dimension(36, codexDisabledFeaturesInput.preferredSize.height)
-                    toolTipText = "Add Codex feature to disable"
-                    addActionListener {
-                        val featureName = codexDisabledFeaturesInput.text.trim()
-                        if (featureName.isNotEmpty() && !codexDisabledFeaturesList.contains(featureName)) {
-                            addCodexDisabledFeatureTag(featureName)
-                            codexDisabledFeaturesInput.text = ""
-                        }
-                    }
-                })
-                add(JButton("Reset").apply {
-                    toolTipText = "Reset to default: ${defaultCodexDisabledFeatures.joinToString(", ").ifEmpty { "(none)" }}"
-                    addActionListener {
-                        codexDisabledFeaturesList.clear()
-                        codexDisabledFeaturesPanel?.removeAll()
-                        defaultCodexDisabledFeatures.forEach { addCodexDisabledFeatureTag(it) }
-                        codexDisabledFeaturesPanel?.revalidate()
-                        codexDisabledFeaturesPanel?.repaint()
-                    }
-                })
-            }
-            topPanel.add(codexHeaderPanel)
-            topPanel.add(Box.createVerticalStrut(2))
-
-            // 标签流式布局面板（减小高度）
+            // 标签流式布局面板
             codexDisabledFeaturesPanel = JPanel(WrapLayout(FlowLayout.LEFT, 4, 2)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
             }
             codexDisabledFeaturesList.forEach { addCodexDisabledFeatureTag(it) }
 
             val codexScrollPane = JBScrollPane(codexDisabledFeaturesPanel).apply {
-                preferredSize = Dimension(550, 64)  // 增加高度以显示多行标签
+                preferredSize = Dimension(550, 64)
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 border = BorderFactory.createLineBorder(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground())
                 horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
             }
-            topPanel.add(codexScrollPane)
+
+            // 创建可折叠面板
+            val (headerPanel, contentWrapper) = createCollapsibleTagPanel(
+                title = "Disables Codex features:",
+                titleColor = JBColor(0x388E3C, 0x81C784),
+                inputField = codexDisabledFeaturesInput,
+                onAdd = { featureName ->
+                    if (featureName.isNotEmpty() && !codexDisabledFeaturesList.contains(featureName)) {
+                        addCodexDisabledFeatureTag(featureName)
+                        true
+                    } else false
+                },
+                onReset = {
+                    codexDisabledFeaturesList.clear()
+                    codexDisabledFeaturesPanel?.removeAll()
+                    defaultCodexDisabledFeatures.forEach { addCodexDisabledFeatureTag(it) }
+                    codexDisabledFeaturesPanel?.revalidate()
+                    codexDisabledFeaturesPanel?.repaint()
+                },
+                resetTooltip = "Reset to default: ${defaultCodexDisabledFeatures.joinToString(", ").ifEmpty { "(none)" }}",
+                contentPanel = codexScrollPane,
+                initiallyExpanded = codexDisabledFeaturesList.isNotEmpty()
+            )
+            topPanel.add(headerPanel)
+            topPanel.add(Box.createVerticalStrut(2))
+            topPanel.add(contentWrapper)
             topPanel.add(Box.createVerticalStrut(6))
 
             // Enter 键支持
@@ -1414,43 +1396,8 @@ class BuiltInMcpServerDialog(
             }
         }
 
-        // Codex 自动批准工具配置（紧凑布局）
+        // Codex 自动批准工具配置（紧凑布局，可折叠）
         if (defaultAutoApprovedTools.isNotEmpty()) {
-            // 标题行：标签 + 输入框 + 按钮 + Reset
-            val autoApprovedHeaderPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Auto-approved Tools:").apply {
-                    foreground = JBColor(0x7B1FA2, 0xBA68C8)  // 紫色，区分于其他配置
-                    toolTipText = "Tools that will be auto-approved for both Claude Code and Codex modes"
-                })
-                add(autoApprovedToolsInput.apply {
-                    toolTipText = "Type tool name, then click + or press Enter"
-                })
-                add(JButton("+").apply {
-                    preferredSize = Dimension(36, autoApprovedToolsInput.preferredSize.height)
-                    toolTipText = "Add tool to auto-approve list"
-                    addActionListener {
-                        val toolName = autoApprovedToolsInput.text.trim()
-                        if (toolName.isNotEmpty() && !autoApprovedToolsList.contains(toolName)) {
-                            addAutoApprovedToolTag(toolName)
-                            autoApprovedToolsInput.text = ""
-                        }
-                    }
-                })
-                add(JButton("Reset").apply {
-                    toolTipText = "Reset to default: ${defaultAutoApprovedTools.joinToString(", ").ifEmpty { "(none)" }}"
-                    addActionListener {
-                        autoApprovedToolsList.clear()
-                        autoApprovedToolsPanel?.removeAll()
-                        defaultAutoApprovedTools.forEach { addAutoApprovedToolTag(it) }
-                        autoApprovedToolsPanel?.revalidate()
-                        autoApprovedToolsPanel?.repaint()
-                    }
-                })
-            }
-            topPanel.add(autoApprovedHeaderPanel)
-            topPanel.add(Box.createVerticalStrut(2))
-
             // 标签流式布局面板
             autoApprovedToolsPanel = JPanel(WrapLayout(FlowLayout.LEFT, 4, 2)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
@@ -1458,18 +1405,51 @@ class BuiltInMcpServerDialog(
             autoApprovedToolsList.forEach { addAutoApprovedToolTag(it) }
 
             val autoApprovedScrollPane = JBScrollPane(autoApprovedToolsPanel).apply {
-                preferredSize = Dimension(550, 64)  // 增加高度以显示多行标签
+                preferredSize = Dimension(550, 64)
                 alignmentX = JPanel.LEFT_ALIGNMENT
                 border = BorderFactory.createLineBorder(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground())
                 horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
             }
-            topPanel.add(autoApprovedScrollPane)
-            topPanel.add(Box.createVerticalStrut(2))
 
-            // 提示信息
-            topPanel.add(JBLabel("<html><font color='gray' size='-1'>ℹ️ Tools in this list are auto-approved without user confirmation (applies to both Claude Code and Codex)</font></html>").apply {
+            // 提示信息面板
+            val hintLabel = JBLabel("<html><font color='gray' size='-1'>ℹ️ Tools in this list are auto-approved without user confirmation (applies to both Claude Code and Codex)</font></html>").apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
-            })
+            }
+
+            // 创建内容包装面板（包含 ScrollPane 和提示信息）
+            val autoApprovedContentPanel = JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(autoApprovedScrollPane)
+                add(Box.createVerticalStrut(2))
+                add(hintLabel)
+            }
+
+            // 创建可折叠面板
+            val (headerPanel, contentWrapper) = createCollapsibleTagPanel(
+                title = "Auto-approved Tools:",
+                titleColor = JBColor(0x7B1FA2, 0xBA68C8),
+                inputField = autoApprovedToolsInput,
+                onAdd = { toolName ->
+                    if (toolName.isNotEmpty() && !autoApprovedToolsList.contains(toolName)) {
+                        addAutoApprovedToolTag(toolName)
+                        true
+                    } else false
+                },
+                onReset = {
+                    autoApprovedToolsList.clear()
+                    autoApprovedToolsPanel?.removeAll()
+                    defaultAutoApprovedTools.forEach { addAutoApprovedToolTag(it) }
+                    autoApprovedToolsPanel?.revalidate()
+                    autoApprovedToolsPanel?.repaint()
+                },
+                resetTooltip = "Reset to default: ${defaultAutoApprovedTools.joinToString(", ").ifEmpty { "(none)" }}",
+                contentPanel = autoApprovedContentPanel,
+                initiallyExpanded = autoApprovedToolsList.isNotEmpty()
+            )
+            topPanel.add(headerPanel)
+            topPanel.add(Box.createVerticalStrut(2))
+            topPanel.add(contentWrapper)
             topPanel.add(Box.createVerticalStrut(6))
 
             // Enter 键支持
@@ -1709,6 +1689,99 @@ class BuiltInMcpServerDialog(
         panel.add(customScrollPane, BorderLayout.CENTER)
         panel.preferredSize = Dimension(600, 580)
         return panel
+    }
+
+    /**
+     * 创建可折叠标签面板
+     * @param title 标题文本
+     * @param titleColor 标题颜色
+     * @param inputField 输入框
+     * @param onAdd 添加回调，返回 true 表示添加成功
+     * @param onReset 重置回调
+     * @param resetTooltip 重置按钮提示
+     * @param contentPanel 内容面板（标签区域）
+     * @param initiallyExpanded 初始是否展开
+     * @return Pair<HeaderPanel, ContentWrapper>
+     */
+    private fun createCollapsibleTagPanel(
+        title: String,
+        titleColor: Color,
+        inputField: JBTextField,
+        onAdd: (String) -> Boolean,
+        onReset: () -> Unit,
+        resetTooltip: String,
+        contentPanel: JComponent,
+        initiallyExpanded: Boolean = true
+    ): Pair<JPanel, JPanel> {
+        var isExpanded = initiallyExpanded
+
+        // 内容包装面板（用于显示/隐藏）
+        val contentWrapper = JPanel(BorderLayout()).apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+            add(contentPanel, BorderLayout.CENTER)
+            isVisible = isExpanded
+        }
+
+        // 折叠按钮
+        val collapseButton = JBLabel().apply {
+            icon = if (isExpanded) AllIcons.General.ArrowDown else AllIcons.General.ArrowRight
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            toolTipText = if (isExpanded) "Collapse" else "Expand"
+        }
+
+        // 标题标签
+        val titleLabel = JBLabel(title).apply {
+            foreground = titleColor
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        }
+
+        // 点击标题或按钮时切换展开状态
+        val toggleAction = {
+            isExpanded = !isExpanded
+            contentWrapper.isVisible = isExpanded
+            collapseButton.icon = if (isExpanded) AllIcons.General.ArrowDown else AllIcons.General.ArrowRight
+            collapseButton.toolTipText = if (isExpanded) "Collapse" else "Expand"
+            // 触发父容器重新布局
+            contentWrapper.parent?.revalidate()
+            contentWrapper.parent?.repaint()
+        }
+
+        collapseButton.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) { toggleAction() }
+        })
+        titleLabel.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) { toggleAction() }
+        })
+
+        // 标题行面板
+        val headerPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+            add(collapseButton)
+            add(titleLabel)
+            add(inputField.apply {
+                toolTipText = "Type name, then click + or press Enter"
+            })
+            add(JButton("+").apply {
+                preferredSize = Dimension(36, inputField.preferredSize.height)
+                toolTipText = "Add to list"
+                addActionListener {
+                    val text = inputField.text.trim()
+                    if (onAdd(text)) {
+                        inputField.text = ""
+                        // 添加成功后自动展开
+                        if (!isExpanded) {
+                            toggleAction()
+                        }
+                    }
+                }
+            })
+            add(JButton("Reset").apply {
+                toolTipText = resetTooltip
+                addActionListener { onReset() }
+            })
+        }
+
+        return Pair(headerPanel, contentWrapper)
     }
 
     /**
