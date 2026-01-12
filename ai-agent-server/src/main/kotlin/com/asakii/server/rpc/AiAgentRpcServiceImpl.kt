@@ -676,23 +676,39 @@ class AiAgentRpcServiceImpl(
     }
 
     private suspend fun disconnectInternal() {
+        // 仅断开客户端，保留 MCP 资源以支持重连
+        // 完整清理由 disposeSession() 负责
         try {
             client?.disconnect()
         } catch (t: Throwable) {
-            sdkLog.warn("鈿狅笍 [AI-Agent] 鏂紑瀹㈡埛绔椂鍑洪敊: ${t.message}")
+            sdkLog.warn { "⚠️ [AI-Agent] 断开客户端时出错: ${t.message}" }
         } finally {
             client = null
         }
+    }
+
+    override suspend fun disposeSession(): RpcStatusResult {
+        sdkLog.info { "🗑️ [SDK] 销毁会话: sessionId=$sessionId" }
+
+        // 先断开客户端
+        disconnectInternal()
+
+        // 清理 MCP HTTP Gateway 端点
         runCatching {
             McpHttpGateway.unregisterProviderSession(currentProvider, sessionId)
-        }.onFailure { error ->
-            sdkLog.warn("[MCP] Failed to unregister session endpoints: ${error.message}")
+        }.onFailure { e ->
+            sdkLog.warn { "[MCP] Failed to unregister session endpoints: ${e.message}" }
         }
+
+        // 清理 Terminal MCP session
         runCatching {
             mcpProviders.terminal.disposeSession(sessionId)
-        }.onFailure { error ->
-            sdkLog.warn("[MCP] Failed to dispose terminal session: ${error.message}")
+        }.onFailure { e ->
+            sdkLog.warn { "[MCP] Failed to dispose terminal session: ${e.message}" }
         }
+
+        sdkLog.info { "✅ [SDK] 会话已销毁: sessionId=$sessionId" }
+        return RpcStatusResult(success = true)
     }
 
     private fun buildPermissionRequester(): PermissionRequester? {

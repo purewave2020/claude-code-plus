@@ -267,6 +267,8 @@ onUnmounted(() => {
   // 移除快捷键监听
   window.removeEventListener('keydown', handleKeydown, true)
 })
+</script>
+
 <style scoped>
 .terminal-background-bar {
   background: var(--theme-warning-background, #fff8e6);

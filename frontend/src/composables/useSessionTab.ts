@@ -41,6 +41,7 @@ import {useSessionStats, type SessionStatsInstance} from './useSessionStats'
 import {useSessionPermissions, type SessionPermissionsInstance} from './useSessionPermissions'
 import {useSessionMessages, type SessionMessagesInstance} from './useSessionMessages'
 import {useFileChanges, type FileChangesInstance} from './useFileChanges'
+import {useCodexRpcAdapter, type CodexRpcAdapterInstance} from './useCodexRpcAdapter'
 import type {ActiveFileInfo} from '@/services/jetbrainsRSocket'
 import {loggers} from '@/utils/logger'
 import type {PendingPermissionRequest, PendingUserQuestion, PermissionResponse} from '@/types/permission'
@@ -261,154 +262,20 @@ export function useSessionTab(initialOrder: number = 0) {
     // 后端会话实例（新架构：通过 BackendSessionFactory 创建）
     const backendSession = ref<BackendSession | null>(null)
 
-    // ========== Codex RPC 事件转换状态 ==========
-    // 用于将 Codex BackendEvent 转换为 Claude RPC 流式事件格式
-    const codexRpcState = {
-        messageStarted: false,           // 是否已发送 message_start
-        contentBlockIndex: 0,            // 当前 content_block 索引
-        textBlockIndex: -1,              // 文本块索引，-1 表示未创建
-        thinkingBlockIndex: -1,          // 思考块索引，-1 表示未创建
-        toolBlockIndexMap: new Map<string, number>(),  // toolId -> blockIndex
-        currentMessageId: '',            // 当前消息 ID
-        
-        // 内容累积（用于在 turn_completed 时构建完整消息）
-        accumulatedText: '',             // 累积的文本内容
-        accumulatedThinking: '',         // 累积的思考内容
-        toolUseBlocks: new Map<string, {  // 工具调用块
-            id: string,
-            toolName: string,
-            toolType: string,
-            input: Record<string, unknown>,
-            result?: unknown
-        }>(),
-    }
-
-    /**
-     * 重置 Codex RPC 转换状态（在 turn 结束时调用）
-     */
-    function resetCodexRpcState(): void {
-        codexRpcState.messageStarted = false
-        codexRpcState.contentBlockIndex = 0
-        codexRpcState.textBlockIndex = -1
-        codexRpcState.thinkingBlockIndex = -1
-        codexRpcState.toolBlockIndexMap.clear()
-        codexRpcState.currentMessageId = ''
-        
-        // 重置累积内容
-        codexRpcState.accumulatedText = ''
-        codexRpcState.accumulatedThinking = ''
-        codexRpcState.toolUseBlocks.clear()
-    }
-
-    // ========== Codex → Claude RPC 事件转换辅助函数 ==========
+    // ========== Codex RPC 适配器 ==========
+    // 将 Codex BackendEvent 转换为 Claude RPC 流式事件格式
+    // 延迟初始化，在首次使用时创建（因为需要 messagesHandler 和 tools）
+    let codexRpcAdapter: CodexRpcAdapterInstance | null = null
     
-    /**
-     * 发送 Claude RPC 流式事件
-     */
-    function emitRpcEvent(eventPayload: Record<string, unknown>): void {
-        messagesHandler.handleStreamEvent({
-            type: 'stream_event',
-            uuid: codexRpcState.currentMessageId,
-            event: eventPayload
-        } as any)
-    }
-
-    /**
-     * 确保已发送 message_start（首次内容时触发）
-     */
-    function ensureCodexMessageStarted(): void {
-        if (!codexRpcState.messageStarted) {
-            codexRpcState.currentMessageId = `codex-msg-${Date.now()}`
-            emitRpcEvent({
-                type: 'message_start',
-                message: {
-                    id: codexRpcState.currentMessageId,
-                    role: 'assistant',
-                    content: []
-                }
-            })
-            codexRpcState.messageStarted = true
-            log.debug(`[Tab ${tabId}] Codex: 发送 message_start, id=${codexRpcState.currentMessageId}`)
-        }
-    }
-
-    /**
-     * 处理文本类 delta 事件（text_delta / thinking_delta 共用）
-     */
-    function handleCodexTextDelta(
-        deltaText: string,
-        blockType: 'text' | 'thinking'
-    ): void {
-        ensureCodexMessageStarted()
-        
-        const isText = blockType === 'text'
-        const blockIndexRef = isText ? 'textBlockIndex' : 'thinkingBlockIndex'
-        const accumulatorRef = isText ? 'accumulatedText' : 'accumulatedThinking'
-        
-        // 首次收到时，发送 content_block_start
-        if (codexRpcState[blockIndexRef] === -1) {
-            codexRpcState[blockIndexRef] = codexRpcState.contentBlockIndex++
-            const contentBlock = isText 
-                ? { type: 'text', text: '' }
-                : { type: 'thinking', thinking: '' }
-            emitRpcEvent({
-                type: 'content_block_start',
-                index: codexRpcState[blockIndexRef],
-                content_block: contentBlock
-            })
-            log.debug(`[Tab ${tabId}] Codex: 发送 content_block_start (${blockType}), index=${codexRpcState[blockIndexRef]}`)
-        }
-        
-        // 发送 content_block_delta
-        const delta = isText 
-            ? { type: 'text_delta', text: deltaText }
-            : { type: 'thinking_delta', thinking: deltaText }
-        emitRpcEvent({
-            type: 'content_block_delta',
-            index: codexRpcState[blockIndexRef],
-            delta
-        })
-        
-        // 累积内容
-        codexRpcState[accumulatorRef] += deltaText
-    }
-
-    /**
-     * 构建完整的 assistant 消息内容块
-     */
-    function buildCompleteContentBlocks(): any[] {
-        const contentBlocks: any[] = []
-        
-        // 1. 添加思考块（如果有）
-        if (codexRpcState.accumulatedThinking) {
-            contentBlocks.push({
-                type: 'thinking',
-                thinking: codexRpcState.accumulatedThinking,
-                signature: 'codex-thinking'  // Codex 不提供 signature，使用占位符
+    function getCodexRpcAdapter(): CodexRpcAdapterInstance {
+        if (!codexRpcAdapter) {
+            codexRpcAdapter = useCodexRpcAdapter({
+                tabId,
+                tools,
+                messagesHandler
             })
         }
-        
-        // 2. 添加文本块（如果有）
-        if (codexRpcState.accumulatedText) {
-            contentBlocks.push({
-                type: 'text',
-                text: codexRpcState.accumulatedText
-            })
-        }
-        
-        // 3. 添加工具调用块
-        for (const [_id, tool] of codexRpcState.toolUseBlocks) {
-            contentBlocks.push({
-                type: 'tool_use',
-                id: tool.id,
-                name: tool.toolName,
-                toolName: tool.toolName,
-                toolType: tool.toolType,
-                input: tool.input
-            })
-        }
-        
-        return contentBlocks
+        return codexRpcAdapter
     }
 
     // ========== 连接设置（连接时确定，切换需要重连）==========
@@ -1129,6 +996,40 @@ export function useSessionTab(initialOrder: number = 0) {
         permissions.cancelAllQuestions('Tab disconnected')
 
         log.info(`[Tab ${tabId}] 已断开连接`)
+    }
+
+    /**
+     * 销毁会话（完全清理所有资源）
+     *
+     * 在前端删除 Tab 时调用，执行完整清理：
+     * 1. 断开 Claude CLI 客户端
+     * 2. 注销 MCP HTTP Gateway 端点
+     * 3. 释放 Terminal MCP 会话资源
+     *
+     * 注意：disconnect() 仅断开客户端，不清理 MCP 资源，支持重连。
+     * disposeSession() 执行完整清理，Tab 删除时调用。
+     */
+    async function disposeSession(): Promise<void> {
+        // 取消自动重连
+        cancelReconnect()
+
+        if (rsocketSession.value) {
+            try {
+                await rsocketSession.value.disposeSession()
+            } catch (err) {
+                log.warn(`[Tab ${tabId}] disposeSession RPC 失败:`, err)
+            }
+            rsocketSession.value = null
+        }
+
+        sessionId.value = null
+        connectionState.status = ConnectionStatus.DISCONNECTED
+
+        // 取消所有待处理的权限和问题
+        permissions.cancelAllPermissions('Tab disposed')
+        permissions.cancelAllQuestions('Tab disposed')
+
+        log.info(`[Tab ${tabId}] 会话已销毁`)
     }
 
     /**
@@ -2152,110 +2053,46 @@ export function useSessionTab(initialOrder: number = 0) {
 
     /**
      * 处理 BackendSession 事件（将 Codex BackendEvent 转换为 Claude RPC 流式事件格式）
+     * 使用 CodexRpcAdapter 进行事件转换
      */
     function handleBackendEvent(event: import('@/types/backend').BackendEvent): void {
+        const adapter = getCodexRpcAdapter()
+        
         switch (event.type) {
             case 'text_delta':
-                handleCodexTextDelta(event.text, 'text')
+                adapter.handleTextDelta(event.text, 'text')
                 break
 
             case 'thinking_delta':
-                handleCodexTextDelta(event.text, 'thinking')
+                adapter.handleTextDelta(event.text, 'thinking')
                 break
 
-            case 'tool_started': {
-                log.info(`[Tab ${tabId}] 工具开始: ${event.toolName}, itemId=${event.itemId}`)
-                ensureCodexMessageStarted()
-                
-                if (event.itemId) {
-                    const toolBlockIndex = codexRpcState.contentBlockIndex++
-                    codexRpcState.toolBlockIndexMap.set(event.itemId, toolBlockIndex)
-                    
-                    emitRpcEvent({
-                        type: 'content_block_start',
-                        index: toolBlockIndex,
-                        content_block: {
-                            type: 'tool_use',
-                            id: event.itemId,
-                            toolName: event.toolName,
-                            name: event.toolName,
-                            toolType: event.toolType,
-                            input: event.parameters || {}
-                        }
-                    })
-                    log.debug(`[Tab ${tabId}] Codex: 发送 content_block_start (tool_use), index=${toolBlockIndex}, id=${event.itemId}`)
-                    
-                    // 记录工具调用（用于构建完整消息）
-                    codexRpcState.toolUseBlocks.set(event.itemId, {
-                        id: event.itemId,
-                        toolName: event.toolName,
-                        toolType: event.toolType,
-                        input: event.parameters || {}
-                    })
-                }
+            case 'tool_started':
+                adapter.handleToolStarted({
+                    itemId: event.itemId,
+                    toolName: event.toolName,
+                    toolType: event.toolType,
+                    parameters: event.parameters
+                })
                 break
-            }
 
-            case 'tool_completed': {
-                log.info(`[Tab ${tabId}] 工具完成: ${event.itemId}, success=${event.success}`)
-                log.info(`[Tab ${tabId}] event.result 类型: ${typeof event.result}, 内容:`, event.result)
-                
-                if (event.itemId) {
-                    const toolBlockIndex = codexRpcState.toolBlockIndexMap.get(event.itemId)
-                    if (toolBlockIndex !== undefined) {
-                        emitRpcEvent({ type: 'content_block_stop', index: toolBlockIndex })
-                        log.debug(`[Tab ${tabId}] Codex: 发送 content_block_stop, index=${toolBlockIndex}`)
-                    }
-                    
-                    // 更新工具结果（用于 UI 显示）
-                    if (event.result) {
-                        const updateSuccess = tools.updateToolResult(event.itemId, event.result as import('@/types/display').ToolResult)
-                        log.info(`[Tab ${tabId}] updateToolResult 结果: ${updateSuccess}`)
-                    } else {
-                        log.warn(`[Tab ${tabId}] event.result 为空，无法更新工具结果`)
-                    }
-                    
-                    // 更新累积的工具块结果
-                    const toolBlock = codexRpcState.toolUseBlocks.get(event.itemId)
-                    if (toolBlock && event.result) {
-                        toolBlock.result = event.result
-                    }
-                }
+            case 'tool_completed':
+                adapter.handleToolCompleted({
+                    itemId: event.itemId,
+                    success: event.success,
+                    result: event.result
+                })
                 break
-            }
 
-            case 'turn_completed': {
-                log.info(`[Tab ${tabId}] 轮次完成: ${event.turnId}, status=${event.status}`)
-                
-                if (codexRpcState.messageStarted) {
-                    // 发送 message_stop
-                    emitRpcEvent({ type: 'message_stop' })
-                    log.debug(`[Tab ${tabId}] Codex: 发送 message_stop`)
-                    
-                    // 构建并发送完整 assistant 消息（与 Claude 行为一致）
-                    const contentBlocks = buildCompleteContentBlocks()
-                    if (contentBlocks.length > 0) {
-                        messagesHandler.handleNormalMessage({
-                            type: 'assistant',
-                            id: codexRpcState.currentMessageId,
-                            role: 'assistant',
-                            timestamp: Date.now(),
-                            content: contentBlocks,
-                            isStreaming: false
-                        } as any)
-                        log.debug(`[Tab ${tabId}] Codex: 发送完整 assistant 消息, contentBlocks=${contentBlocks.length}`)
-                    }
-                }
-                
-                resetCodexRpcState()
-                messagesHandler.stopGenerating()
-                processNextQueuedMessage()
+            case 'turn_completed':
+                adapter.handleTurnCompleted(
+                    { turnId: event.turnId, status: event.status },
+                    processNextQueuedMessage
+                )
                 break
-            }
 
             case 'approval_request':
                 log.info(`[Tab ${tabId}] 收到审批请求: ${event.approvalType}`)
-                // 为 Codex 添加审批请求处理
                 if (backendType.value === 'codex') {
                     handleCodexApprovalRequest(event)
                 }
@@ -2550,6 +2387,7 @@ export function useSessionTab(initialOrder: number = 0) {
         setInitialConnectOptions,
         connect,
         disconnect,
+        disposeSession,
         reconnect,
         reloadSession,
 

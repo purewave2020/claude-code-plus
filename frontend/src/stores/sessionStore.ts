@@ -28,6 +28,8 @@ import { aiAgentService } from '@/services/aiAgentService'
 import { useSettingsStore } from '@/stores/settingsStore'
 import type { BackendType, BackendCapabilities } from '@/types/backend'
 import { getCapabilities, getAvailableBackends as getAvailableBackendsList } from '@/services/backendCapabilities'
+import { getConnectOptionsForBackend, getDefaultAutoCleanupContexts, inferBackendType } from './sessionStoreHelpers'
+import { runTerminalBackground } from './sessionStoreTerminal'
 
 const log = loggers.session
 
@@ -43,77 +45,7 @@ export interface CreateTabOptions extends TabConnectOptions {
   backendType?: BackendType
 }
 
-/**
- * 获取默认会话设置（动态获取，避免硬编码）- 保留以备将来使用
- */
-function _getDefaultSessionSettings() {
-  const defaultModelId = getDefaultModelId()
-  const defaultModelCapability = getModelCapability(defaultModelId)
-  return {
-    modelId: defaultModelCapability.modelId,
-    thinkingLevel: 8096, // Ultra - 默认思考等级（与 IDEA 设置保持一致）
-    permissionMode: 'default' as RpcPermissionMode,
-    skipPermissions: false
-  }
-}
 
-/**
- * 获取特定后端类型的连接选项
- */
-function getConnectOptionsForBackend(backendType: BackendType, settingsStore: ReturnType<typeof useSettingsStore>): TabConnectOptions {
-  const globalSettings = settingsStore.settings
-
-  if (backendType === 'claude') {
-    return {
-      model: globalSettings.claudeModel || 'claude-opus-4-5-20251101',
-      thinkingLevel: globalSettings.claudeThinkingTokens ?? undefined,
-      permissionMode: globalSettings.permissionMode as RpcPermissionMode,
-      skipPermissions: globalSettings.skipPermissions,
-    }
-  } else {
-    // Codex 后端
-    return {
-      model: globalSettings.codexModel || 'gpt-5.2-codex',
-      thinkingLevel: undefined, // Codex 使用 effort level，不是 token budget
-      reasoningEffort: globalSettings.codexReasoningEffort ?? undefined,
-      permissionMode: globalSettings.permissionMode as RpcPermissionMode,
-      skipPermissions: globalSettings.skipPermissions,
-      sandboxMode: globalSettings.codexSandboxMode || 'workspace-write',
-    }
-  }
-}
-
-/**
- * 获取默认的上下文自动清理开关（按后端区分）
- */
-function getDefaultAutoCleanupContexts(
-  backendType: BackendType,
-  settingsStore: ReturnType<typeof useSettingsStore>
-): boolean {
-  if (backendType === 'claude') {
-    return settingsStore.settings.claudeDefaultAutoCleanupContexts
-  }
-  return settingsStore.settings.codexDefaultAutoCleanupContexts
-}
-
-/**
- * 从 sessionId 推断后端类型
- *
- * 规则：
- * - Claude sessionId 格式：uuid-v4
- * - Codex sessionId 格式：thread_xxxxx
- */
-function inferBackendType(sessionId: string): BackendType | null {
-  if (!sessionId) return null
-
-  // Codex 使用 thread_ 前缀
-  if (sessionId.startsWith('thread_')) {
-    return 'codex'
-  }
-
-  // 默认为 Claude
-  return 'claude'
-}
 
 /**
  * Session Store
@@ -637,8 +569,12 @@ export const useSessionStore = defineStore('session', () => {
       }
     }
 
-    // 断开连接（不等待，后端会自动检测连接关闭并清理资源）
-    tab.disconnect()
+    // 销毁会话（完整清理 MCP 等资源）
+    try {
+      await tab.disposeSession()
+    } catch (err) {
+      log.warn(`[SessionStore] disposeSession 失败:`, err)
+    }
 
     // 从列表移除（shallowRef 需要替换整个数组才能触发响应式）
     tabs.value = tabs.value.filter(t => t !== tab)
@@ -809,73 +745,6 @@ export const useSessionStore = defineStore('session', () => {
         backgroundedBashIds: [],
         backgroundedAgentIds: [],
         error: '当前没有活跃的会话'
-      }
-    }
-
-    // Import jetbrainsRSocket dynamically to avoid circular dependency
-    const { jetbrainsRSocket, TerminalBackgroundStatus } = await import('@/services/jetbrainsRSocket')
-
-    // Helper function to run terminal background via RSocket
-    const runTerminalBackground = async (toolUseId?: string): Promise<{
-      success: boolean
-      count: number
-      backgroundedIds: string[]
-      error?: string
-    }> => {
-      try {
-        // Get backgroundable terminals
-        const terminals = await jetbrainsRSocket.getBackgroundableTerminals()
-        
-        // Filter by toolUseId if provided
-        const items = toolUseId 
-          ? terminals.filter(t => t.toolUseId === toolUseId).map(t => ({ sessionId: t.sessionId, toolUseId: t.toolUseId }))
-          : terminals.map(t => ({ sessionId: t.sessionId, toolUseId: t.toolUseId }))
-        
-        if (items.length === 0) {
-          return { success: true, count: 0, backgroundedIds: [] }
-        }
-
-        // Wrap streaming API as Promise
-        return new Promise((resolve) => {
-          const backgroundedIds: string[] = []
-          let hasError = false
-          let errorMsg: string | undefined
-
-          jetbrainsRSocket.terminalBackground(
-            items,
-            (event) => {
-              if (event.status === TerminalBackgroundStatus.SUCCESS) {
-                backgroundedIds.push(event.toolUseId)
-              } else if (event.status === TerminalBackgroundStatus.FAILED) {
-                hasError = true
-                errorMsg = event.error
-              }
-            },
-            () => {
-              resolve({
-                success: !hasError,
-                count: backgroundedIds.length,
-                backgroundedIds,
-                error: errorMsg
-              })
-            },
-            (error) => {
-              resolve({
-                success: false,
-                count: backgroundedIds.length,
-                backgroundedIds,
-                error: error.message
-              })
-            }
-          )
-        })
-      } catch (error) {
-        return {
-          success: false,
-          count: 0,
-          backgroundedIds: [],
-          error: error instanceof Error ? error.message : String(error)
-        }
       }
     }
 

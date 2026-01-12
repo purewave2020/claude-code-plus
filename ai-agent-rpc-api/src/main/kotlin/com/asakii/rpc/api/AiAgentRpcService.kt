@@ -82,9 +82,24 @@ interface AiAgentRpcService {
     suspend fun setMaxThinkingTokens(maxThinkingTokens: Int?): RpcSetMaxThinkingTokensResult
 
     /**
-     * 断开会话
+     * 断开会话（保留 MCP 资源，支持重连）
      */
     suspend fun disconnect(): RpcStatusResult
+
+    /**
+     * 销毁会话（完全清理所有资源）
+     *
+     * 在前端删除 Tab 时调用，执行完整清理：
+     * 1. 断开 Claude CLI 客户端
+     * 2. 注销 MCP HTTP Gateway 端点
+     * 3. 释放 Terminal MCP 会话资源
+     *
+     * 注意：disconnect() 仅断开客户端，不清理 MCP 资源，支持重连。
+     * disposeSession() 执行完整清理，Tab 删除时调用。
+     *
+     * @return 销毁结果
+     */
+    suspend fun disposeSession(): RpcStatusResult
 
     /**
      * 设置模型

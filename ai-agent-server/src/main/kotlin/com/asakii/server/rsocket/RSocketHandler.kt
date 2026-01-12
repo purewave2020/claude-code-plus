@@ -116,6 +116,7 @@ class RSocketHandler(
                     "agent.getMcpStatus" -> handleGetMcpStatus(rpcService)
                     "agent.reconnectMcp" -> handleReconnectMcp(dataBytes, rpcService)
                     "agent.getMcpTools" -> handleGetMcpTools(dataBytes, rpcService)
+                    "agent.disposeSession" -> handleDisposeSession(rpcService)
                     else -> throw IllegalArgumentException("Unknown route: $route")
                 }
 
@@ -226,6 +227,13 @@ class RSocketHandler(
         wsLog.info("📥 [RSocket] disconnect request")
         val result = rpcService.disconnect()
         wsLog.info("📤 [RSocket] disconnect result: status=${result.status}")
+        return buildPayload { data(result.toProto().toByteArray()) }
+    }
+
+    private suspend fun handleDisposeSession(rpcService: AiAgentRpcService): Payload {
+        wsLog.info("🗑️ [RSocket] disposeSession request")
+        val result = rpcService.disposeSession()
+        wsLog.info("📤 [RSocket] disposeSession result: success=${result.success}")
         return buildPayload { data(result.toProto().toByteArray()) }
     }
 

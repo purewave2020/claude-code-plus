@@ -33,3 +33,12 @@ export type { SessionMessagesInstance } from './useSessionMessages'
 export { useI18n } from './useI18n'
 export { useEnvironment } from './useEnvironment'
 export { useKeyboardShortcuts } from './useKeyboardShortcuts'
+
+// ChatInput 相关 composables
+export { useCodexConfig } from './useCodexConfig'
+export { useAtSymbol } from './useAtSymbol'
+export type { AtSymbolOptions } from './useAtSymbol'
+export { useSlashCommands } from './useSlashCommands'
+export type { SlashCommand, SlashCommandOptions } from './useSlashCommands'
+export { useActiveFile } from './useActiveFile'
+export type { ActiveFileInfo } from './useActiveFile'

@@ -397,6 +397,60 @@ export class RSocketSession {
     }
 
     /**
+     * 销毁会话（完全清理所有资源）
+     *
+     * 在前端删除 Tab 时调用，执行完整清理：
+     * 1. 断开 Claude CLI 客户端
+     * 2. 注销 MCP HTTP Gateway 端点
+     * 3. 释放 Terminal MCP 会话资源
+     *
+     * 注意：disconnect() 仅断开客户端，不清理 MCP 资源，支持重连。
+     * disposeSession() 执行完整清理，Tab 删除时调用。
+     */
+    async disposeSession(): Promise<void> {
+        if (!this._isConnected || !this.client) {
+            // 未连接时直接返回
+            log.info('[RSocketSession] disposeSession: 未连接，跳过')
+            return
+        }
+
+        log.info('[RSocketSession] disposeSession: 销毁会话')
+
+        try {
+            // 调用后端 disposeSession RPC
+            const responseData = await this.client.requestResponse('agent.disposeSession')
+            const result = ProtoCodec.decodeStatusResult(responseData)
+            log.info(`[RSocketSession] disposeSession 结果: status=${result.status}`)
+        } catch (err) {
+            log.warn('[RSocketSession] disposeSession 失败:', err)
+        }
+
+        // 无论 RPC 成功与否，都清理本地状态
+        this.cleanupLocalState()
+    }
+
+    /**
+     * 清理本地状态（内部方法）
+     */
+    private cleanupLocalState(): void {
+        if (this.unsubscribeClientDisconnect) {
+            this.unsubscribeClientDisconnect()
+            this.unsubscribeClientDisconnect = null
+        }
+
+        if (this.client) {
+            this.client.disconnect()
+            this.client = null
+        }
+
+        this._isConnected = false
+        this._capabilities = null
+        this._cancelStream = null
+        this.sessionId = null
+        this.pendingHandlers.clear()
+    }
+
+    /**
      * 重连会话（复用连接）
      */
     async reconnectSession(options?: ConnectOptions): Promise<string> {

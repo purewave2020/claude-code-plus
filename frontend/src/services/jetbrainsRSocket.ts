@@ -1624,7 +1624,6 @@ class JetBrainsRSocketService {
       if (index >= 0) this.activeFileChangeHandlers.splice(index, 1)
     }
   }
-}
 
   /**
    * 添加终端任务更新监听器
@@ -1636,6 +1635,7 @@ class JetBrainsRSocketService {
       if (index >= 0) this.terminalTaskUpdateHandlers.splice(index, 1)
     }
   }
+}
 
 // ========== 单例导出 ==========
 
