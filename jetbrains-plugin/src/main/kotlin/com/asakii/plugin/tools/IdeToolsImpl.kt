@@ -503,7 +503,8 @@ class IdeToolsImpl(
     override fun getActiveEditorFile(): ActiveFileInfo? {
         return try {
             var result: ActiveFileInfo? = null
-            ApplicationManager.getApplication().invokeAndWait {
+            // 使用 ModalityState.any() 避免模态对话框导致的阻塞
+            ApplicationManager.getApplication().invokeAndWait({
                 ApplicationManager.getApplication().runReadAction {
                     val fileEditorManager = FileEditorManager.getInstance(project)
                     val selectedFileEditor = fileEditorManager.selectedEditor
@@ -535,7 +536,6 @@ class IdeToolsImpl(
                                     name = fileName,
                                     fileType = fileType
                                 )
-                                logger.info { "✅ Active $fileType file: $relativePath" }
                             }
                             else -> {
                                 // 文本文件：获取光标位置和选区信息
@@ -550,7 +550,7 @@ class IdeToolsImpl(
                         }
                     }
                 }
-            }
+            }, com.intellij.openapi.application.ModalityState.any())
             result
         } catch (e: ProcessCanceledException) {
             throw e
@@ -598,8 +598,6 @@ class IdeToolsImpl(
                 val filePath = extractFilePathFromDiff(contentTitles, title, contents)
                 val relativePath = calculateRelativePath(filePath, projectPath)
 
-                logger.info { "✅ Active diff (${request.javaClass.simpleName}): $title -> $filePath" }
-
                 ActiveFileInfo(
                     path = filePath,
                     relativePath = relativePath,
@@ -616,8 +614,6 @@ class IdeToolsImpl(
 
                 if (filePath != null) {
                     val relativePath = calculateRelativePath(filePath, projectPath)
-                    logger.info { "✅ Active diff (from virtual file): $filePath" }
-
                     ActiveFileInfo(
                         path = filePath,
                         relativePath = relativePath,
@@ -626,7 +622,6 @@ class IdeToolsImpl(
                         diffTitle = request?.title ?: virtualFile.name
                     )
                 } else {
-                    logger.info { "⚠️ Unsupported diff request type: ${request?.javaClass?.name}" }
                     null
                 }
             }
@@ -770,12 +765,6 @@ class IdeToolsImpl(
 
             // 获取选中的文本内容
             selectedContent = selection.selectedText
-        }
-
-        if (hasSelection) {
-            logger.info { "✅ Active editor file: $relativePath (selection: $startLine:$startColumn - $endLine:$endColumn)" }
-        } else {
-            logger.info { "✅ Active editor file: $relativePath (line=$line, column=$column)" }
         }
 
         return ActiveFileInfo(

@@ -541,6 +541,27 @@ class HttpServerProjectService(private val project: Project) : Disposable {
         // 用于存储当前监听的编辑器，避免重复注册
         var currentEditor: com.intellij.openapi.editor.Editor? = null
         var selectionListener: SelectionListener? = null
+        
+        // 防抖机制：用于取消之前的推送任务
+        var pendingPushJob: kotlinx.coroutines.Job? = null
+        val debounceDelayMs = 150L  // 防抖延迟 150ms
+
+        // 带防抖的推送函数
+        fun debouncedPush() {
+            pendingPushJob?.cancel()
+            pendingPushJob = scope.launch {
+                kotlinx.coroutines.delay(debounceDelayMs)
+                pushActiveFileUpdate(ideTools, jetbrainsRSocketHandler)
+            }
+        }
+        
+        // 立即推送函数（用于文件切换等重要事件）
+        fun immediatePush() {
+            pendingPushJob?.cancel()
+            pendingPushJob = scope.launch {
+                pushActiveFileUpdate(ideTools, jetbrainsRSocketHandler)
+            }
+        }
 
         // 注册选区监听器的函数
         fun registerSelectionListener() {
@@ -559,15 +580,25 @@ class HttpServerProjectService(private val project: Project) : Disposable {
 
             // 为新编辑器注册选区监听器
             editor?.let { ed ->
+                // 记录上一次的选区状态，用于判断是否需要推送
+                var lastHasSelection = ed.selectionModel.hasSelection()
+                
                 val listener = object : SelectionListener {
                     override fun selectionChanged(e: SelectionEvent) {
-                        // 直接推送，不做防抖
-                        pushActiveFileUpdate(ideTools, jetbrainsRSocketHandler)
+                        val currentHasSelection = ed.selectionModel.hasSelection()
+                        
+                        // 只在选区状态变化时推送：
+                        // 1. 从无选区变为有选区
+                        // 2. 从有选区变为无选区
+                        // 3. 选区内容变化（都有选区的情况）
+                        if (currentHasSelection || lastHasSelection != currentHasSelection) {
+                            debouncedPush()
+                        }
+                        lastHasSelection = currentHasSelection
                     }
                 }
                 selectionListener = listener
                 ed.selectionModel.addSelectionListener(listener, this)
-                logger.info { "📡 Selection listener registered for: ${ed.document}" }
             }
         }
 
@@ -576,20 +607,20 @@ class HttpServerProjectService(private val project: Project) : Disposable {
             FileEditorManagerListener.FILE_EDITOR_MANAGER,
             object : FileEditorManagerListener {
                 override fun selectionChanged(event: FileEditorManagerEvent) {
-                    // 当切换到新文件时，重新注册选区监听器并推送
+                    // 当切换到新文件时，重新注册选区监听器并立即推送
                     registerSelectionListener()
-                    pushActiveFileUpdate(ideTools, jetbrainsRSocketHandler)
+                    immediatePush()
                 }
 
                 override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
-                    // 打开新文件时，重新注册选区监听器并推送
+                    // 打开新文件时，重新注册选区监听器并立即推送
                     registerSelectionListener()
-                    pushActiveFileUpdate(ideTools, jetbrainsRSocketHandler)
+                    immediatePush()
                 }
 
                 override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
-                    // 关闭文件时推送（可能活跃文件变化了）
-                    pushActiveFileUpdate(ideTools, jetbrainsRSocketHandler)
+                    // 关闭文件时立即推送（可能活跃文件变化了）
+                    immediatePush()
                 }
             } as FileEditorManagerListener
         )
@@ -607,15 +638,17 @@ class HttpServerProjectService(private val project: Project) : Disposable {
         ideTools: IdeToolsImpl,
         jetbrainsRSocketHandler: JetBrainsRSocketHandler
     ) {
-        scope.launch {
-            try {
-                val activeFile = ideTools.getActiveEditorFile()
+        try {
+            val activeFile = ideTools.getActiveEditorFile()
+            scope.launch {
                 withTimeout(5000) {
                     jetbrainsRSocketHandler.pushActiveFileChanged(activeFile)
                 }
-            } catch (e: Exception) {
-                logger.warn("⚠️ Failed to push active file update: ${e.message}", e)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 防抖取消，忽略
+        } catch (e: Exception) {
+            logger.debug { "⚠️ Failed to push active file update: ${e.message}" }
         }
     }
 

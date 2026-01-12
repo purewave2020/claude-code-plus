@@ -357,7 +357,8 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
         override fun getActiveFile(): ActiveFileInfo? {
             return try {
                 var result: ActiveFileInfo? = null
-                ApplicationManager.getApplication().invokeAndWait {
+                // 使用 ModalityState.any() 避免模态对话框导致的阻塞
+                ApplicationManager.getApplication().invokeAndWait({
                     ApplicationManager.getApplication().runReadAction {
                         val fileEditorManager = FileEditorManager.getInstance(ideaProject)
                         val selectedTextEditor = fileEditorManager.selectedTextEditor
@@ -414,7 +415,6 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                                     endColumn = endColumn,
                                     selectedContent = selectedContent
                                 )
-                                logger.info { "✅ [JetBrainsApi.file] Active file: $relativePath" }
                             } else {
                                 // 非文本编辑器，只返回路径
                                 result = ActiveFileInfo(
@@ -422,11 +422,10 @@ class JetBrainsApiImpl(private val ideaProject: Project) : JetBrainsApi {
                                     relativePath = relativePath,
                                     name = fileName
                                 )
-                                logger.info { "✅ [JetBrainsApi.file] Active file (no editor): $relativePath" }
                             }
                         }
                     }
-                }
+                }, com.intellij.openapi.application.ModalityState.any())
                 result
             } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
                 throw e  // 必须重新抛出
