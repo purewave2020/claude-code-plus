@@ -357,7 +357,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         state.jetbrainsFileDisabledTools = tools.joinToString(",")
     }
 
-    // ==================== Codex Auto-Approved Tools ====================
+    // ==================== MCP Auto-Approved Tools (Claude Code & Codex) ====================
 
     /**
      * 获取 JetBrains File MCP 的自动批准工具列表

@@ -1419,8 +1419,9 @@ class BuiltInMcpServerDialog(
             // 标题行：标签 + 输入框 + 按钮 + Reset
             val autoApprovedHeaderPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Codex Auto-approved Tools:").apply {
+                add(JBLabel("Auto-approved Tools:").apply {
                     foreground = JBColor(0x7B1FA2, 0xBA68C8)  // 紫色，区分于其他配置
+                    toolTipText = "Tools that will be auto-approved for both Claude Code and Codex modes"
                 })
                 add(autoApprovedToolsInput.apply {
                     toolTipText = "Type tool name, then click + or press Enter"
@@ -1466,7 +1467,7 @@ class BuiltInMcpServerDialog(
             topPanel.add(Box.createVerticalStrut(2))
 
             // 提示信息
-            topPanel.add(JBLabel("<html><font color='gray' size='-1'>ℹ️ Tools in this list are auto-approved in Codex mode without user confirmation</font></html>").apply {
+            topPanel.add(JBLabel("<html><font color='gray' size='-1'>ℹ️ Tools in this list are auto-approved without user confirmation (applies to both Claude Code and Codex)</font></html>").apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
             })
             topPanel.add(Box.createVerticalStrut(6))
