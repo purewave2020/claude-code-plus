@@ -813,26 +813,30 @@ class AiAgentRpcServiceImpl(
             mcpProviders.git.getServer()?.let { globalServers["jetbrains_git"] = it }
         }
 
-        // 注册 global MCP 服务器（共享端点，通过 header 传递会话信息）
-        if (globalServers.isNotEmpty()) {
-            globalServers.forEach { (name, server) ->
-                McpHttpGateway.registerServer(GLOBAL_MCP_PROVIDER, GLOBAL_MCP_SESSION_ID, name, server)
-                val url = McpHttpGateway.buildServerUrl(name)
-                val headers = buildInternalMcpHeaders(GLOBAL_MCP_PROVIDER, GLOBAL_MCP_SESSION_ID)
-                claudeServers[name] = McpHttpServerConfig(url = url, headers = headers)
-                sdkLog.info("✅ [MCP] HTTP endpoint registered (scope=global): $name -> $url")
-            }
+        // 构建 permissionRequester（仅 Codex 需要 MCP 工具权限检查）
+        val mcpPermissionRequester = if (provider == AiAgentProvider.CODEX) buildPermissionRequester() else null
+
+        // 注册 MCP 服务器的辅助函数
+        suspend fun registerMcpServer(
+            name: String,
+            server: McpServer,
+            regProvider: AiAgentProvider,
+            regSessionId: String,
+            scope: String
+        ) {
+            val allowedTools = server.getAllowedTools().map { "mcp__${name}__$it" }.toSet()
+            McpHttpGateway.registerServer(regProvider, regSessionId, name, server, mcpPermissionRequester, allowedTools)
+            val url = McpHttpGateway.buildServerUrl(name)
+            claudeServers[name] = McpHttpServerConfig(url = url, headers = buildInternalMcpHeaders(regProvider, regSessionId))
+            sdkLog.info("✅ [MCP] HTTP endpoint registered (scope=$scope): $name -> $url")
         }
 
-        // 注册 session MCP 服务器（共享端点，通过 header 传递会话信息）
-        if (sessionServers.isNotEmpty()) {
-            sessionServers.forEach { (name, server) ->
-                McpHttpGateway.registerServer(provider, sessionId, name, server)
-                val url = McpHttpGateway.buildServerUrl(name)
-                val headers = buildInternalMcpHeaders(provider, sessionId)
-                claudeServers[name] = McpHttpServerConfig(url = url, headers = headers)
-                sdkLog.info("✅ [MCP] HTTP endpoint registered (scope=session): $name -> $url")
-            }
+        // 注册 global 和 session MCP 服务器
+        globalServers.forEach { (name, server) ->
+            registerMcpServer(name, server, GLOBAL_MCP_PROVIDER, GLOBAL_MCP_SESSION_ID, "global")
+        }
+        sessionServers.forEach { (name, server) ->
+            registerMcpServer(name, server, provider, sessionId, "session")
         }
 
         val internalServers = mutableMapOf<String, McpServer>().apply {

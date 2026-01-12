@@ -1,6 +1,8 @@
 package com.asakii.server.mcp
 
 import com.asakii.ai.agent.sdk.AiAgentProvider
+import com.asakii.ai.agent.sdk.client.PermissionRequest
+import com.asakii.ai.agent.sdk.client.PermissionRequester
 import com.asakii.server.util.JsonTools
 import com.asakii.claude.agent.sdk.mcp.ContentItem
 import com.asakii.claude.agent.sdk.mcp.McpServer as SdkMcpServer
@@ -40,6 +42,15 @@ object McpHttpGateway {
         val path: String,
         val server: McpSyncServer,
         val transport: HttpServletStreamableServerTransportProvider
+    )
+
+    /**
+     * MCP 工具权限检查上下文
+     * 仅 Codex 模式使用
+     */
+    private data class PermissionContext(
+        val permissionRequester: PermissionRequester,
+        val allowedTools: Set<String>  // 格式: mcp__{serverName}__{toolName}
     )
 
     private val json = JsonTools.kotlinJson
@@ -98,7 +109,9 @@ object McpHttpGateway {
         provider: AiAgentProvider,
         sessionId: String,
         serverName: String,
-        server: SdkMcpServer
+        server: SdkMcpServer,
+        permissionRequester: PermissionRequester? = null,
+        allowedTools: Set<String> = emptySet()
     ): String {
         ensureStarted()
         val key = EndpointKey(provider, sessionId, serverName)
@@ -125,7 +138,13 @@ object McpHttpGateway {
         }
 
         val syncServer = serverBuilder.build()
-        registerTools(syncServer, server)
+        
+        // 构建权限上下文（仅 Codex 需要）
+        val permissionContext = if (provider == AiAgentProvider.CODEX && permissionRequester != null) {
+            PermissionContext(permissionRequester, allowedTools)
+        } else null
+        
+        registerTools(syncServer, server, permissionContext)
 
         val endpoint = Endpoint(endpointPath, syncServer, transport)
         endpointsByKey[key] = endpoint
@@ -180,26 +199,58 @@ object McpHttpGateway {
         return endpointsByKey[key]?.transport
     }
 
-    private suspend fun registerTools(syncServer: McpSyncServer, server: SdkMcpServer) {
+    private suspend fun registerTools(
+        syncServer: McpSyncServer,
+        server: SdkMcpServer,
+        permissionContext: PermissionContext?
+    ) {
         val tools = server.listTools()
         logger.info { "[MCP] Registering ${tools.size} tool(s) for server '${server.name}': ${tools.joinToString { it.name }}" }
-        tools.forEach { toolDef ->
+        
+        for (toolDef in tools) {
             val schemaJson = json.encodeToString(JsonObject.serializer(), toolDef.inputSchema)
             val tool = McpSchema.Tool.builder()
                 .name(toolDef.name)
                 .description(toolDef.description)
                 .inputSchema(jsonMapper, schemaJson)
                 .build()
+            val fullToolName = "mcp__${server.name}__${toolDef.name}"
 
             val spec = McpServerFeatures.SyncToolSpecification(tool) { _, arguments ->
                 runBlocking {
                     val jsonArgs = toJsonObject(arguments)
-                    val result = server.callToolJson(toolDef.name, jsonArgs)
-                    toCallToolResult(result)
-                }
+                    checkPermission(permissionContext, fullToolName, jsonArgs)
+                        ?: server.callToolJson(toolDef.name, jsonArgs)
+                }.let(::toCallToolResult)
             }
             syncServer.addTool(spec)
         }
+    }
+
+    /**
+     * Codex 模式下检查 MCP 工具权限
+     * @return 权限拒绝时返回错误结果，允许时返回 null
+     */
+    private suspend fun checkPermission(
+        ctx: PermissionContext?,
+        toolName: String,
+        args: JsonObject
+    ): ToolResult? {
+        if (ctx == null || toolName in ctx.allowedTools) return null
+        
+        logger.debug { "[MCP] Requesting permission for $toolName" }
+        val decision = ctx.permissionRequester.requestPermission(
+            PermissionRequest(toolName = toolName, inputJson = args, toolUseId = null)
+        )
+        
+        if (decision.approved) {
+            logger.debug { "[MCP] Permission granted for $toolName" }
+            return null
+        }
+        
+        val reason = decision.denyReason ?: "User denied permission"
+        logger.info { "[MCP] Permission denied for $toolName: $reason" }
+        return ToolResult.error("Permission denied: $reason")
     }
 
     private fun toJsonObject(arguments: Map<String, Any>): JsonObject {
