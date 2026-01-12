@@ -121,6 +121,7 @@ object McpHttpGateway {
         val transport = HttpServletStreamableServerTransportProvider.builder()
             .jsonMapper(jsonMapper)
             .mcpEndpoint(endpointPath)
+            .keepAliveInterval(Duration.ofMinutes(1))  // Keep SSE connections alive
             .build()
 
         val serverBuilder = OfficialMcpServer.sync(transport)
