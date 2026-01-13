@@ -26,11 +26,28 @@ export enum ToolCallStatus {
 
 /**
  * 连接状态
+ *
+ * 状态转换流程：
+ * - 新建 Tab: IDLE
+ * - 开始连接: IDLE → CONNECTING (RSocket 建立) → AUTHENTICATING (agent.connect RPC) → CONNECTED
+ * - 连接失败: → ERROR
+ * - 断线重连: CONNECTED → RECONNECTING → CONNECTING → CONNECTED
+ * - 主动断开: → DISCONNECTED
  */
 export enum ConnectionStatus {
-  DISCONNECTED = 'DISCONNECTED',
+  /** Tab 刚创建，未开始连接 */
+  IDLE = 'IDLE',
+  /** RSocket WebSocket 正在建立 */
   CONNECTING = 'CONNECTING',
+  /** agent.connect RPC 正在进行 */
+  AUTHENTICATING = 'AUTHENTICATING',
+  /** 完全就绪，可以发送消息 */
   CONNECTED = 'CONNECTED',
+  /** 断线重连中 */
+  RECONNECTING = 'RECONNECTING',
+  /** 主动断开 */
+  DISCONNECTED = 'DISCONNECTED',
+  /** 连接错误 */
   ERROR = 'ERROR'
 }
 

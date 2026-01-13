@@ -377,9 +377,35 @@ export const useSessionStore = defineStore('session', () => {
 
     log.info(`[SessionStore] 新 Tab 使用设置:`, connectOptions)
 
-    // 延迟连接：保存初始连接配置，等首次发送时再 connect
+    // 保存初始连接配置
     tab.setInitialConnectOptions(connectOptions)
-    currentConnectionState.value = tab.connectionState.status
+
+    // 主动连接模式：Tab 创建时立即建立连接（异步，不阻塞返回）
+    // 可通过 options.immediateConnect = false 禁用
+    const shouldConnect = (options as any)?.immediateConnect !== false
+
+    if (shouldConnect) {
+      // 初始状态为 IDLE
+      currentConnectionState.value = ConnectionStatus.IDLE
+
+      // 异步连接，不阻塞 createTab 返回
+      tab.connect(connectOptions).then(() => {
+        // 连接成功后同步状态（只有当前 Tab 才同步）
+        if (currentTab.value?.tabId === tab.tabId) {
+          currentConnectionState.value = tab.connectionState.status
+        }
+        log.info(`[SessionStore] Tab ${tab.tabId} 主动连接成功`)
+      }).catch((error) => {
+        // 连接失败（会自动触发重连）
+        log.warn(`[SessionStore] Tab ${tab.tabId} 主动连接失败:`, error)
+        if (currentTab.value?.tabId === tab.tabId) {
+          currentConnectionState.value = tab.connectionState.status
+        }
+      })
+    } else {
+      // 禁用主动连接时，同步当前状态
+      currentConnectionState.value = tab.connectionState.status
+    }
 
     return tab
   }

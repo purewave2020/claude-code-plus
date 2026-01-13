@@ -118,7 +118,11 @@ data class RpcConnectOptions(
     val codexReasoningSummary: String? = null,
 
     // === 会话恢复相关配置 ===
-    val replayUserMessages: Boolean? = null  // 恢复会话时重放用户消息
+    val replayUserMessages: Boolean? = null,  // 恢复会话时重放用户消息
+
+    // === 连接标识 ===
+    /** 前端永久连接 ID，用于 MCP 路由（不随重连变化） */
+    val connectId: String? = null
 )
 
 /**
@@ -147,7 +151,9 @@ data class RpcConnectResult(
     val status: RpcSessionStatus = RpcSessionStatus.CONNECTED,
     val model: String? = null,
     val capabilities: RpcCapabilities? = null,
-    val cwd: String? = null
+    val cwd: String? = null,
+    /** 回显前端传入的 connectId（用于 MCP 路由） */
+    val connectId: String? = null
 )
 
 /**

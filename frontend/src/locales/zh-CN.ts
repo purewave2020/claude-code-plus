@@ -117,9 +117,13 @@ export default {
       clearToLineStartHint: '清空到行首'
     },
     connectionStatus: {
-      connected: '已连接',
+      idle: '初始化中',
       connecting: '正在连接...',
+      authenticating: '认证中...',
+      connected: '已连接',
+      reconnecting: '重连中...',
       disconnected: '未连接',
+      error: '连接错误',
       generating: '生成中...'
     },
     claudeThinking: 'Claude 正在思考...',

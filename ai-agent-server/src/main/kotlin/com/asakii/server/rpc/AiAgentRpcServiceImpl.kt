@@ -119,6 +119,8 @@ class AiAgentRpcServiceImpl(
     private var client: UnifiedAgentClient? = null
     private var currentProvider: AiAgentProvider = AiAgentProvider.CLAUDE  // 默认值，connect 时会根据配置更新
     private var lastConnectOptions: RpcConnectOptions? = null
+    /** 前端永久连接标识，用于 MCP 路由（不随重连变化）。若前端未提供则回退到 sessionId */
+    private var connectId: String? = null
 
     // 🔧 追踪当前 query 的完成状态，用于 interrupt 同步等待
     private var queryCompletion: CompletableDeferred<Unit>? = null
@@ -200,6 +202,11 @@ class AiAgentRpcServiceImpl(
 
         disconnectInternal()
 
+        // 保存 connectId（前端永久连接标识），用于 MCP 路由
+        // 若前端未提供，则回退到内部 sessionId
+        connectId = normalizedOptions.connectId ?: sessionId
+        sdkLog.info { "[connect] connectId=$connectId (from options=${normalizedOptions.connectId != null})" }
+
         val connectOptions = buildConnectOptions(normalizedOptions)
         currentProvider = connectOptions.provider
         sdkLog.info { "[connect] provider=${connectOptions.provider}, model=${connectOptions.model ?: "default"}" }
@@ -272,7 +279,9 @@ class AiAgentRpcServiceImpl(
             model = connectOptions.model,
             status = RpcSessionStatus.CONNECTED,
             capabilities = capabilities,
-            cwd = projectCwd
+            cwd = projectCwd,
+            // 回显 connectId 供前端确认
+            connectId = connectId
         )
     }
 
@@ -688,26 +697,28 @@ class AiAgentRpcServiceImpl(
     }
 
     override suspend fun disposeSession(): RpcStatusResult {
-        sdkLog.info { "🗑️ [SDK] 销毁会话: sessionId=$sessionId" }
+        // 使用 connectId 进行清理（与注册时一致）
+        val effectiveConnectId = connectId ?: sessionId
+        sdkLog.info { "🗑️ [SDK] 销毁会话: connectId=$effectiveConnectId, sessionId=$sessionId" }
 
         // 先断开客户端
         disconnectInternal()
 
-        // 清理 MCP HTTP Gateway 端点
+        // 清理 MCP HTTP Gateway 端点（使用 connectId，与注册时一致）
         runCatching {
-            McpHttpGateway.unregisterProviderSession(currentProvider, sessionId)
+            McpHttpGateway.unregisterProviderSession(currentProvider, effectiveConnectId)
         }.onFailure { e ->
             sdkLog.warn { "[MCP] Failed to unregister session endpoints: ${e.message}" }
         }
 
-        // 清理 Terminal MCP session
+        // 清理 Terminal MCP session（仍使用 sessionId，因为终端是按 AI session 关联的）
         runCatching {
             mcpProviders.terminal.disposeSession(sessionId)
         }.onFailure { e ->
             sdkLog.warn { "[MCP] Failed to dispose terminal session: ${e.message}" }
         }
 
-        sdkLog.info { "✅ [SDK] 会话已销毁: sessionId=$sessionId" }
+        sdkLog.info { "✅ [SDK] 会话已销毁: connectId=$effectiveConnectId" }
         return RpcStatusResult(status = RpcSessionStatus.DISCONNECTED)
     }
 
@@ -786,8 +797,10 @@ class AiAgentRpcServiceImpl(
     ): McpSessionSetup {
         val defaults = serviceConfig.claude
         val fallbackBackends = serviceConfig.mcpEnabledBackends
+        // 使用 connectId 进行 MCP 路由（connectId 在 connect() 中已设置，回退到 sessionId）
+        val effectiveConnectId = connectId ?: sessionId
         sdkLog.info(
-            "[MCP] prepareMcpSession: provider=$provider, sessionId=$sessionId, fallbackBackends=${fallbackBackends.joinToString()}"
+            "[MCP] prepareMcpSession: provider=$provider, connectId=$effectiveConnectId, sessionId=$sessionId, fallbackBackends=${fallbackBackends.joinToString()}"
         )
         sdkLog.info(
             "[MCP] builtins enabled: userInteraction=${defaults.enableUserInteractionMcp} backends=${defaults.userInteractionMcpBackends.joinToString()}," +
@@ -855,11 +868,12 @@ class AiAgentRpcServiceImpl(
 
         // 注册 global 和 session MCP 服务器
         // 注意：global servers 也需要使用当前 provider 注册，以便 Codex 模式下进行权限检查
+        // session servers 使用 connectId 进行路由（不随重连变化）
         globalServers.forEach { (name, server) ->
             registerMcpServer(name, server, provider, GLOBAL_MCP_SESSION_ID, "global")
         }
         sessionServers.forEach { (name, server) ->
-            registerMcpServer(name, server, provider, sessionId, "session")
+            registerMcpServer(name, server, provider, effectiveConnectId, "session")
         }
 
         val internalServers = mutableMapOf<String, McpServer>().apply {

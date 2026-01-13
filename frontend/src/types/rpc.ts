@@ -520,6 +520,10 @@ export interface RpcConnectOptions {
 
   // === 会话恢复相关配置 ===
   replayUserMessages?: boolean  // 恢复会话时重放用户消息
+
+  // === 前端连接标识 ===
+  /** 前端生成的永久连接 ID，用于 MCP 路由（不随重连变化） */
+  connectId?: string
 }
 
 /** Agent 能力声明 */
@@ -542,6 +546,8 @@ export interface RpcConnectResult {
   model?: string
   capabilities?: RpcCapabilities
   cwd?: string
+  /** 回显的前端连接 ID（确认后端已接收） */
+  connectId?: string
 }
 
 export interface RpcStatusResult {

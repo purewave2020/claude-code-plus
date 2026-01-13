@@ -130,7 +130,8 @@ export const ProtoCodec = {
       sandboxMode: options.sandboxMode ? mapSandboxModeToProto(options.sandboxMode) : undefined,
       codexReasoningEffort: options.codexReasoningEffort,
       codexReasoningSummary: options.codexReasoningSummary,
-      replayUserMessages: options.replayUserMessages
+      replayUserMessages: options.replayUserMessages,
+      connectId: options.connectId
     })
 
     return toBinary(ConnectOptionsSchema, proto)
@@ -333,7 +334,8 @@ export const ProtoCodec = {
         canResumeSession: proto.capabilities.canResumeSession,
         canRunInBackground: proto.capabilities.canRunInBackground
       } : undefined,
-      cwd: proto.cwd
+      cwd: proto.cwd,
+      connectId: proto.connectId
     }
   },
 

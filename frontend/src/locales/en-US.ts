@@ -117,9 +117,13 @@ export default {
       clearToLineStartHint: 'clear to line start'
     },
     connectionStatus: {
-      connected: 'Connected',
+      idle: 'Initializing',
       connecting: 'Connecting...',
+      authenticating: 'Authenticating...',
+      connected: 'Connected',
+      reconnecting: 'Reconnecting...',
       disconnected: 'Disconnected',
+      error: 'Connection Error',
       generating: 'Generating...'
     },
     claudeThinking: 'Claude is thinking...',

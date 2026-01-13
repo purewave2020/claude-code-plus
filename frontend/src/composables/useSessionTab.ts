@@ -230,6 +230,8 @@ export function useSessionTab(initialOrder: number = 0) {
 
     // ========== Tab 基础信息 ==========
     const tabId = `tab-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+    /** 永久连接标识，用于 MCP 路由（不随重连变化），复用 tabId */
+    const connectId = tabId
     const sessionId = ref<string | null>(null)
     const projectPath = ref<string | null>(null)
     const name = ref('新会话')
@@ -244,7 +246,7 @@ export function useSessionTab(initialOrder: number = 0) {
 
     // 使用 reactive 对象而不是 ref，以便在 shallowRef 容器中也能被追踪
     const connectionState = reactive({
-        status: ConnectionStatus.DISCONNECTED as ConnectionStatus,
+        status: ConnectionStatus.IDLE as ConnectionStatus,
         capabilities: null as RpcCapabilities | null,
         lastError: null as string | null
     })
@@ -763,14 +765,14 @@ export function useSessionTab(initialOrder: number = 0) {
     function handleSessionDisconnected(error?: Error): void {
         log.warn(`[Tab ${tabId}] 会话被动断开`, error?.message)
 
-        // ✅ 先保存当前 sessionId 用于重连恢复会话上下文
+        // ✅ 保留 sessionId 用于重连恢复会话上下文（不清空）
         const currentSessionIdForResume = sessionId.value
 
-        // 更新连接状态
-        connectionState.status = ConnectionStatus.DISCONNECTED
+        // 更新连接状态为 RECONNECTING（准备自动重连）
+        connectionState.status = ConnectionStatus.RECONNECTING
         connectionState.lastError = error?.message || '连接已断开'
         rsocketSession.value = null
-        sessionId.value = null
+        // 注意：不清空 sessionId，保留用于重连
 
         // 停止生成状态
         if (messagesHandler.isGenerating.value) {
@@ -807,8 +809,9 @@ export function useSessionTab(initialOrder: number = 0) {
      */
     async function connect(options: TabConnectOptions = {}): Promise<void> {
         const resolvedOptions: TabConnectOptions = {...(initialConnectOptions.value || {}), ...options}
-        if (connectionState.status === ConnectionStatus.CONNECTING) {
-            log.warn(`[Tab ${tabId}] 正在连接中，请勿重复连接`)
+        if (connectionState.status === ConnectionStatus.CONNECTING ||
+            connectionState.status === ConnectionStatus.AUTHENTICATING) {
+            log.warn(`[Tab ${tabId}] 正在连接中（${connectionState.status}），请勿重复连接`)
             return
         }
 
@@ -859,7 +862,9 @@ export function useSessionTab(initialOrder: number = 0) {
                 // 固定开启重放用户消息
                 replayUserMessages: true,
                 // 统一协议：传递 provider 参数，后端根据此参数路由到对应的 AI Agent
-                provider: (resolvedOptions as any).provider || backendType.value
+                provider: (resolvedOptions as any).provider || backendType.value,
+                // 永久连接标识，用于 MCP 路由（不随重连变化）
+                connectId: connectId
             }
             if (backendType.value === 'codex') {
                 if (settingsStore.settings.codexSandboxMode) {
@@ -873,7 +878,10 @@ export function useSessionTab(initialOrder: number = 0) {
                 }
             }
 
-            // 连接并获取 sessionId
+            // RSocket 建立完成，进入认证阶段
+            connectionState.status = ConnectionStatus.AUTHENTICATING
+
+            // 连接并获取 sessionId（包含 agent.connect RPC）
             const newSessionId = await session.connect(connectOptions)
 
             // 连接成功后，设置具体的思考级别（如果启用了思考且 provider 支持）
@@ -1380,8 +1388,11 @@ export function useSessionTab(initialOrder: number = 0) {
             return
         }
 
-        if (connectionState.status === ConnectionStatus.CONNECTING) {
-            log.info(`[Tab ${tabId}] 正在连接中，等待连接完成...`)
+        // 正在连接中（CONNECTING 或 AUTHENTICATING）或正在重连中（RECONNECTING），等待完成
+        if (connectionState.status === ConnectionStatus.CONNECTING ||
+            connectionState.status === ConnectionStatus.AUTHENTICATING ||
+            connectionState.status === ConnectionStatus.RECONNECTING) {
+            log.info(`[Tab ${tabId}] 正在连接中（${connectionState.status}），等待连接完成...`)
             await new Promise<void>((resolve, reject) => {
                 const check = () => {
                     if (connectionState.status === ConnectionStatus.CONNECTED) {
@@ -1398,7 +1409,7 @@ export function useSessionTab(initialOrder: number = 0) {
             return
         }
 
-        log.info(`[Tab ${tabId}] 连接未建立，开始连接 (provider=${backendType.value})...`)
+        log.info(`[Tab ${tabId}] 连接未建立（${connectionState.status}），开始连接 (provider=${backendType.value})...`)
 
         // 统一使用 RSocket 连接，通过 provider 参数区分后端
         const options = {
@@ -2320,6 +2331,8 @@ export function useSessionTab(initialOrder: number = 0) {
     return {
         // Tab 标识
         tabId,
+        /** 永久连接标识，用于 MCP 路由（不随重连变化） */
+        connectId,
 
         // 基础信息（响应式）
         sessionId,

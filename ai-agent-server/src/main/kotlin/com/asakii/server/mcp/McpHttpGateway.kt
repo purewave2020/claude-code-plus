@@ -32,9 +32,15 @@ import java.util.concurrent.ConcurrentHashMap
 private val logger = getLogger("McpHttpGateway")
 
 object McpHttpGateway {
+    /**
+     * MCP 端点路由键
+     * @param provider AI 提供商
+     * @param connectId 前端永久连接标识（用于 MCP 路由，不随重连变化）
+     * @param serverName MCP 服务器名称
+     */
     private data class EndpointKey(
         val provider: AiAgentProvider,
-        val sessionId: String,
+        val connectId: String,
         val serverName: String
     )
 
@@ -60,6 +66,7 @@ object McpHttpGateway {
     private var jettyServer: Server? = null
     private var actualPort: Int = 0
 
+    /** HTTP 头名称：连接标识（值为前端 connectId，用于 MCP 路由） */
     const val HEADER_SESSION_ID = "X-Session-Id"
     const val HEADER_PROVIDER = "X-Provider"
 
@@ -68,12 +75,13 @@ object McpHttpGateway {
     ) : HttpServlet() {
         override fun service(req: HttpServletRequest, resp: HttpServletResponse) {
             val path = req.requestURI ?: ""
-            val sessionId = req.getHeader(HEADER_SESSION_ID)?.takeIf { it.isNotBlank() }
+            // 从 X-Session-Id 头获取 connectId（用于 MCP 路由）
+            val connectId = req.getHeader(HEADER_SESSION_ID)?.takeIf { it.isNotBlank() }
             val providerName = req.getHeader(HEADER_PROVIDER)?.takeIf { it.isNotBlank() }
-            logger.debug { "[MCP] Incoming request: ${req.method} $path (sessionId=$sessionId, provider=$providerName)" }
-            val transport = resolver(path, sessionId, providerName)
+            logger.debug { "[MCP] Incoming request: ${req.method} $path (connectId=$connectId, provider=$providerName)" }
+            val transport = resolver(path, connectId, providerName)
             if (transport == null) {
-                logger.warn { "[MCP] No transport found for path: $path, sessionId=$sessionId, provider=$providerName" }
+                logger.warn { "[MCP] No transport found for path: $path, connectId=$connectId, provider=$providerName" }
                 resp.sendError(HttpServletResponse.SC_NOT_FOUND)
                 return
             }
@@ -105,16 +113,25 @@ object McpHttpGateway {
         }
     }
 
+    /**
+     * 注册 MCP 服务器
+     * @param provider AI 提供商
+     * @param connectId 前端永久连接标识（用于 MCP 路由）
+     * @param serverName MCP 服务器名称
+     * @param server MCP 服务器实例
+     * @param permissionRequester 权限请求器（仅 Codex 需要）
+     * @param allowedTools 允许的工具列表
+     */
     suspend fun registerServer(
         provider: AiAgentProvider,
-        sessionId: String,
+        connectId: String,
         serverName: String,
         server: SdkMcpServer,
         permissionRequester: PermissionRequester? = null,
         allowedTools: Set<String> = emptySet()
     ): String {
         ensureStarted()
-        val key = EndpointKey(provider, sessionId, serverName)
+        val key = EndpointKey(provider, connectId, serverName)
         endpointsByKey[key]?.let { return buildUrl(it.path) }
 
         val endpointPath = buildEndpointPath(serverName)
@@ -149,17 +166,23 @@ object McpHttpGateway {
 
         val endpoint = Endpoint(endpointPath, syncServer, transport)
         endpointsByKey[key] = endpoint
-        logger.info { "[MCP] Registered endpoint $endpointPath (provider=$provider, session=$sessionId, key=$key)" }
+        logger.info { "[MCP] Registered endpoint $endpointPath (provider=$provider, connectId=$connectId, key=$key)" }
         return buildUrl(endpointPath)
     }
 
-    fun unregisterSession(sessionId: String) {
-        val keys = endpointsByKey.keys.filter { it.sessionId == sessionId }
+    /**
+     * 注销指定 connectId 的所有 MCP 端点
+     */
+    fun unregisterSession(connectId: String) {
+        val keys = endpointsByKey.keys.filter { it.connectId == connectId }
         keys.forEach { unregister(it) }
     }
 
-    fun unregisterProviderSession(provider: AiAgentProvider, sessionId: String) {
-        val keys = endpointsByKey.keys.filter { it.sessionId == sessionId && it.provider == provider }
+    /**
+     * 注销指定 provider 和 connectId 的所有 MCP 端点
+     */
+    fun unregisterProviderSession(provider: AiAgentProvider, connectId: String) {
+        val keys = endpointsByKey.keys.filter { it.connectId == connectId && it.provider == provider }
         keys.forEach { unregister(it) }
     }
 
@@ -171,32 +194,34 @@ object McpHttpGateway {
     }
 
     /**
-     * 根据请求中的 X-Session-Id 和 X-Provider 解析 transport。
+     * 根据请求中的 X-Session-Id（实际为 connectId）和 X-Provider 解析 transport。
      * URL 格式: /mcp/{serverName}
+     *
+     * 注意：HTTP 头 X-Session-Id 的值实际上是前端的 connectId（永久连接标识）
      */
     private fun resolveTransportByRequest(
         path: String,
-        sessionId: String?,
+        connectId: String?,
         providerName: String?
     ): HttpServletStreamableServerTransportProvider? {
         val normalized = path.trimEnd('/')
         // 从 /mcp/{serverName} 提取 serverName
         val serverName = normalized.removePrefix("/mcp/").takeIf { it.isNotBlank() } ?: return null
-        
-        // 如果没有会话信息，无法路由
-        if (sessionId.isNullOrBlank() || providerName.isNullOrBlank()) {
-            logger.warn { "[MCP] Missing required session info: sessionId=$sessionId, provider=$providerName" }
+
+        // 如果没有路由信息，无法路由
+        if (connectId.isNullOrBlank() || providerName.isNullOrBlank()) {
+            logger.warn { "[MCP] Missing required routing info: connectId=$connectId, provider=$providerName" }
             return null
         }
-        
+
         val provider = try {
             AiAgentProvider.valueOf(providerName.uppercase())
         } catch (e: IllegalArgumentException) {
             logger.warn { "[MCP] Invalid provider: $providerName" }
             return null
         }
-        
-        val key = EndpointKey(provider, sessionId, serverName)
+
+        val key = EndpointKey(provider, connectId, serverName)
         return endpointsByKey[key]?.transport
     }
 

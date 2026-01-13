@@ -88,6 +88,9 @@ message ConnectOptions {
 
   // Chrome 扩展配置
   optional bool chrome_enabled = 40;  // 是否启用 Chrome 扩展（需要重连生效）
+
+  // 前端连接标识
+  optional string connect_id = 50;  // 前端生成的永久连接 ID，用于 MCP 路由（不随重连变化）
 }
 
 // 对应 RpcCapabilities
@@ -111,6 +114,7 @@ message ConnectResult {
   optional string model = 4;
   optional Capabilities capabilities = 5;
   optional string cwd = 6;
+  optional string connect_id = 7;  // 回显前端传递的 connectId（确认后端已接收）
 }
 
 // 对应 RpcSetPermissionModeResult

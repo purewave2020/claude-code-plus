@@ -29,7 +29,7 @@
             :class="{
               active: tab.id === currentSessionId,
               generating: tab.isGenerating,
-              connecting: tab.connectionStatus === 'CONNECTING',
+              connecting: ['IDLE', 'CONNECTING', 'AUTHENTICATING', 'RECONNECTING'].includes(tab.connectionStatus || ''),
               error: tab.connectionStatus === 'ERROR'
             }"
             :title="getTabTooltip(tab)"
@@ -40,7 +40,7 @@
             <span
               class="status-indicator"
               :class="{
-                connecting: tab.connectionStatus === 'CONNECTING',
+                connecting: ['IDLE', 'CONNECTING', 'AUTHENTICATING', 'RECONNECTING'].includes(tab.connectionStatus || ''),
                 generating: tab.isGenerating,
                 connected: tab.connectionStatus === 'CONNECTED',
                 disconnected: tab.connectionStatus === 'DISCONNECTED',
@@ -48,7 +48,7 @@
               }"
               :title="statusTitle(tab)"
             >
-              <span v-if="tab.connectionStatus === 'CONNECTING'" class="spinner connecting" />
+              <span v-if="['IDLE', 'CONNECTING', 'AUTHENTICATING', 'RECONNECTING'].includes(tab.connectionStatus || '')" class="spinner connecting" />
               <span v-else-if="tab.isGenerating" class="spinner generating" />
               <span v-else class="dot-solid" />
             </span>
@@ -114,7 +114,8 @@ export interface SessionTabInfo {
   resumeFromSessionId?: string | null
   isGenerating?: boolean
   isConnected?: boolean
-  connectionStatus?: 'CONNECTED' | 'CONNECTING' | 'DISCONNECTED' | 'ERROR'
+  /** 连接状态（7 种状态：IDLE/CONNECTING/AUTHENTICATING/CONNECTED/RECONNECTING/DISCONNECTED/ERROR） */
+  connectionStatus?: 'IDLE' | 'CONNECTING' | 'AUTHENTICATING' | 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED' | 'ERROR'
   error?: string | null
   backendType?: BackendType  // 添加后端类型字段
 }
@@ -257,11 +258,24 @@ function handleDragEnd() {
 }
 
 function statusTitle(tab: SessionTabInfo): string {
-  if (tab.connectionStatus === 'CONNECTED') return t('chat.connectionStatus.connected')
-  if (tab.connectionStatus === 'CONNECTING') return t('chat.connectionStatus.connecting')
-  if (tab.connectionStatus === 'DISCONNECTED') return t('chat.connectionStatus.disconnected')
-  if (tab.connectionStatus === 'ERROR') return tab.error || (t('chat.connectionStatus.error') || '连接错误')
-  return t('chat.connectionStatus.disconnected')
+  switch (tab.connectionStatus) {
+    case 'IDLE':
+      return t('chat.connectionStatus.idle') || '初始化中'
+    case 'CONNECTING':
+      return t('chat.connectionStatus.connecting')
+    case 'AUTHENTICATING':
+      return t('chat.connectionStatus.authenticating') || '认证中...'
+    case 'CONNECTED':
+      return t('chat.connectionStatus.connected')
+    case 'RECONNECTING':
+      return t('chat.connectionStatus.reconnecting') || '重连中...'
+    case 'DISCONNECTED':
+      return t('chat.connectionStatus.disconnected')
+    case 'ERROR':
+      return tab.error || (t('chat.connectionStatus.error') || '连接错误')
+    default:
+      return t('chat.connectionStatus.disconnected')
+  }
 }
 
 function displaySessionId(tab: SessionTabInfo): string | null {
