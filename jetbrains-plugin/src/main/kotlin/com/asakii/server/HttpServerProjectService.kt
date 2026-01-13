@@ -194,9 +194,25 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 val settings = AgentSettingsService.getInstance()
                 val defaultProvider = settings.getDefaultBackendProvider()
                 val thinkingLevelName = settings.getThinkingLevelById(settings.defaultThinkingLevelId)?.name ?: "Ultra"
-                val codexPath = settings.codexPath
+                val userCodexPath = settings.codexPath.trim()
+                val autoCodexPath = if (userCodexPath.isBlank()) {
+                    AgentSettingsService.detectCodexPath().trim()
+                } else {
+                    ""
+                }
+                val codexPath = userCodexPath
+                    .ifBlank { autoCodexPath }
                     .takeIf { it.isNotBlank() }
-                    ?: AgentSettingsService.detectCodexPath().takeIf { it.isNotBlank() }
+                val codexPathSource = when {
+                    userCodexPath.isNotBlank() -> "user"
+                    autoCodexPath.isNotBlank() -> "auto"
+                    else -> "none"
+                }
+                val codexPathExists = codexPath?.let { path ->
+                    runCatching { Path.of(path) }
+                        .map { it.toFile().exists() }
+                        .getOrElse { false }
+                } ?: false
                 val userInteractionBackends = settings.getUserInteractionMcpProviders()
                 val jetbrainsBackends = settings.getJetbrainsMcpProviders()
                 val jetbrainsFileBackends = settings.getJetbrainsFileMcpProviders()
@@ -210,6 +226,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                     "📦 Loading agent settings: nodePath=${settings.nodePath.ifBlank { "(system PATH)" }}, " +
                         "model=$defaultModelLabel, thinkingLevel=$thinkingLevelName, defaultBackend=${defaultProvider.name.lowercase()} " +
                         "(${settings.defaultThinkingTokens} tokens), permissionMode=${settings.permissionMode}, " +
+                        "codexPath=${codexPath ?: "(auto)"}, codexPathSource=$codexPathSource, codexPathExists=$codexPathExists, " +
                         "userInteractionMcp=${settings.enableUserInteractionMcp}(${userInteractionBackends.joinToString()}), " +
                         "jetbrainsMcp=${settings.enableJetBrainsMcp}(${jetbrainsBackends.joinToString()}), " +
                         "jetbrainsFileMcp=${settings.enableJetBrainsFileMcp}(${jetbrainsFileBackends.joinToString()}), " +
