@@ -11,6 +11,21 @@ import kotlinx.serialization.json.JsonElement
 sealed interface ContentBlock
 
 /**
+ * 工具调用的通用接口，统一 ToolUseBlock 和 SpecificToolUse 的类型检查。
+ *
+ * 背景：项目中有两套工具类型：
+ * - ToolUseBlock: 用于 JSON 序列化/反序列化，匹配 Claude API 原始格式
+ * - SpecificToolUse: 强类型工具类（如 BashToolUse, EditToolUse），提供类型安全的参数访问
+ *
+ * 这个接口统一了两者的公共属性，避免类型转换问题。
+ */
+interface ToolUseLike {
+    val id: String
+    val name: String
+    val input: JsonElement
+}
+
+/**
  * Text content block.
  */
 @Serializable
@@ -37,10 +52,10 @@ data class ThinkingBlock(
 @Serializable
 @SerialName("tool_use")
 data class ToolUseBlock(
-    val id: String,
-    val name: String,
-    val input: JsonElement = kotlinx.serialization.json.JsonObject(emptyMap())  // 默认为空对象，因为 stream 开始时 input 可能为空
-) : ContentBlock
+    override val id: String,
+    override val name: String,
+    override val input: JsonElement = kotlinx.serialization.json.JsonObject(emptyMap())  // 默认为空对象，因为 stream 开始时 input 可能为空
+) : ContentBlock, ToolUseLike
 
 /**
  * Tool result content block.

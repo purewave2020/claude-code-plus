@@ -179,7 +179,7 @@ class ClaudeStreamAdapter(
 
             is ContentBlockStartEvent -> {
                 val block = parsed.contentBlock
-                val toolName = (block as? ToolUseBlock)?.name
+                val toolName = (block as? ToolUseLike)?.name
 
                 blockBuffer[parsed.index] = ContentBlockState(
                     block = block

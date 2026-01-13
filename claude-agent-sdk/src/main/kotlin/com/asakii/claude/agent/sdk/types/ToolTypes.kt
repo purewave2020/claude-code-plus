@@ -79,10 +79,10 @@ enum class ToolType(
  * - 在序列化为 JSON 发送给前端时,应该手动构建 {type: "tool_use", name: "...", id: "...", input: {...}} 格式
  */
 @Serializable
-sealed interface SpecificToolUse : ContentBlock {
-    val id: String              // 工具调用ID
-    val name: String            // 工具名称，如 "TodoWrite", "Edit", "Write" 等
-    val input: JsonElement      // 原始参数 (与 Claude API 格式一致)
+sealed interface SpecificToolUse : ContentBlock, ToolUseLike {
+    override val id: String              // 工具调用ID
+    override val name: String            // 工具名称，如 "TodoWrite", "Edit", "Write" 等
+    override val input: JsonElement      // 原始参数 (与 Claude API 格式一致)
 
     // 内部使用的枚举类型，不序列化到 JSON
     @kotlinx.serialization.Transient
