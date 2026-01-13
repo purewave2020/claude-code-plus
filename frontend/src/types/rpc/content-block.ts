@@ -66,7 +66,7 @@ export class ToolUseBlock extends ContentBlock {
   constructor(data: any) {
     super(data)
     this.id = data?.id ?? ''
-    this.name = data?.name ?? data?.tool_name ?? ''
+    this.name = data?.name ?? data?.toolName ?? data?.tool_name ?? ''
     this.toolType = data?.toolType ?? data?.tool_type
     this.status = data?.status ?? 'in_progress'
 
