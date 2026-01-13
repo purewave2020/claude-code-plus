@@ -16,7 +16,11 @@ import com.intellij.notification.Notifications
 
 import com.intellij.openapi.application.ApplicationManager
 
+import com.intellij.openapi.application.ReadAction
+
 import com.intellij.openapi.diagnostic.Logger
+
+import com.intellij.openapi.editor.Document
 import com.asakii.plugin.logging.*
 
 import com.intellij.openapi.editor.Editor
@@ -468,13 +472,17 @@ class IdeaPlatformService(private val project: Project) {
 
         return try {
 
-            val virtualFile = findVirtualFile(filePath) ?: return true // 文件不存在，无需保存
+            // 在 Read Action 中获取文档信息
+            val documentInfo = ReadAction.compute<Pair<Document, Boolean>?, Throwable> {
+                val virtualFile = findVirtualFile(filePath) ?: return@compute null
+                val document = FileDocumentManager.getInstance().getDocument(virtualFile) ?: return@compute null
+                val isUnsaved = FileDocumentManager.getInstance().isDocumentUnsaved(document)
+                document to isUnsaved
+            } ?: return true // 文件不存在或无法获取文档，无需保存
 
-            val document = FileDocumentManager.getInstance().getDocument(virtualFile) ?: return true
+            val (document, isUnsaved) = documentInfo
 
-
-
-            if (FileDocumentManager.getInstance().isDocumentUnsaved(document)) {
+            if (isUnsaved) {
 
                 ApplicationManager.getApplication().invokeAndWait {
 
