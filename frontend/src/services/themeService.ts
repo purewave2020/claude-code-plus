@@ -537,6 +537,39 @@ export class ThemeService {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
   }
 
+  /**
+   * 判断颜色是否为暗色
+   * 通过计算相对亮度来判断
+   */
+  private isColorDark(color: string): boolean {
+    // 解析颜色（支持 #rgb, #rrggbb, rgb(), rgba()）
+    let r = 0, g = 0, b = 0
+
+    if (color.startsWith('#')) {
+      const hex = color.slice(1)
+      if (hex.length === 3) {
+        r = parseInt(hex[0] + hex[0], 16)
+        g = parseInt(hex[1] + hex[1], 16)
+        b = parseInt(hex[2] + hex[2], 16)
+      } else if (hex.length >= 6) {
+        r = parseInt(hex.slice(0, 2), 16)
+        g = parseInt(hex.slice(2, 4), 16)
+        b = parseInt(hex.slice(4, 6), 16)
+      }
+    } else if (color.startsWith('rgb')) {
+      const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+      if (match) {
+        r = parseInt(match[1], 10)
+        g = parseInt(match[2], 10)
+        b = parseInt(match[3], 10)
+      }
+    }
+
+    // 计算相对亮度 (ITU-R BT.709)
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+    return luminance < 0.5
+  }
+
   private watchSystemTheme() {
     if (!window.matchMedia) return
 
@@ -569,6 +602,9 @@ export class ThemeService {
     const root = document.documentElement
 
     // 注入 CSS 变量
+    // 判断是否为暗色主题（简单通过背景亮度判断）
+    const isDark = this.isColorDark(theme.background)
+
     const vars: Record<string, string> = {
       '--theme-background': theme.background,
       '--theme-foreground': theme.foreground,
@@ -590,7 +626,11 @@ export class ThemeService {
       '--theme-card-background': theme.panelBackground,
       // 状态颜色（使用后端配置或回退到默认值）
       '--theme-pending': theme.pendingColor || theme.accentColor,
-      '--theme-running': theme.runningColor || theme.successColor
+      '--theme-running': theme.runningColor || theme.successColor,
+      // 滚动条颜色（基于主题自动派生）
+      '--theme-scrollbar-track': isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+      '--theme-scrollbar-thumb': isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+      '--theme-scrollbar-thumb-hover': isDark ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 0, 0, 0.35)'
     }
 
     // 字体变量（如果存在）

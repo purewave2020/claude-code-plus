@@ -87,7 +87,7 @@ const containerRef = ref<HTMLElement | null>(null)
 const denyReason = ref('')
 
 const pendingPermission = computed(() => {
-  const permissions = sessionStore.getCurrentPendingPermissions()
+  const permissions = sessionStore.currentPendingPermissions
   return permissions.length > 0 ? permissions[0] : null
 })
 

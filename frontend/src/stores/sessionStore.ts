@@ -973,10 +973,18 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   /**
+   * 当前待处理的权限请求（响应式 computed）
+   */
+  const currentPendingPermissions = computed(() =>
+    currentTab.value?.permissions.pendingPermissionList.value ?? []
+  )
+
+  /**
    * 获取当前待处理的权限请求
+   * @deprecated 使用 currentPendingPermissions computed 属性代替
    */
   function getCurrentPendingPermissions() {
-    return currentTab.value?.permissions.pendingPermissionList.value ?? []
+    return currentPendingPermissions.value
   }
 
   /**
@@ -1158,6 +1166,7 @@ export const useSessionStore = defineStore('session', () => {
     getCurrentPendingQuestions,
     answerQuestion,
     cancelQuestion,
+    currentPendingPermissions,
     getCurrentPendingPermissions,
     getPermissionForToolCall,
     respondPermission,

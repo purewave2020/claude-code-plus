@@ -51,39 +51,29 @@
       </div>
     </div>
 
-    <!-- 使用 vue-virtual-scroller 的 DynamicScroller -->
-    <DynamicScroller
+    <!-- 使用 el-scrollbar + content-visibility 优化渲染 -->
+    <el-scrollbar
       v-else
-      ref="scrollerRef"
+      ref="scrollbarRef"
       class="message-list"
-      :items="displayMessages"
-      :min-item-size="60"
-      :buffer="200"
-      key-field="id"
+      always
       @scroll="handleScroll"
     >
-      <template #default="{ item, index, active }">
-        <DynamicScrollerItem
-          :item="item"
-          :active="active"
+      <div ref="contentRef" class="message-content">
+        <div
+          v-for="(item, index) in displayMessages"
+          :key="item.id"
+          :data-message-id="item.id"
           :data-index="index"
-          :size-dependencies="[
-            item.content,
-            item.status,
-            item.result,
-            item.input
-          ]"
-          :emit-resize="true"
+          class="message-item"
         >
           <component
             :is="messageComponent"
             :source="item"
           />
-        </DynamicScrollerItem>
-      </template>
+        </div>
 
-      <!-- Streaming 状态指示器 - 在消息列表末尾 -->
-      <template #after>
+        <!-- Streaming 状态指示器 - 在消息列表末尾 -->
         <div
           v-if="isStreaming"
           class="streaming-indicator"
@@ -96,8 +86,8 @@
           </span>
           <span class="streaming-stats">({{ streamingStats }})</span>
         </div>
-      </template>
-    </DynamicScroller>
+      </div>
+    </el-scrollbar>
 
     <!-- 回到底部按钮 -->
     <transition name="fade-slide">
@@ -122,8 +112,7 @@ import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
-import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+import type { ScrollbarInstance } from 'element-plus'
 import type { Message } from '@/types/message'
 import type { DisplayItem } from '@/types/display'
 import type { ScrollState, ScrollAnchor } from '@/composables/useSessionTab'
@@ -169,7 +158,15 @@ const emit = defineEmits<{
 }>()
 
 const wrapperRef = ref<HTMLElement>()
-const scrollerRef = ref<InstanceType<typeof DynamicScroller>>()
+const scrollbarRef = ref<ScrollbarInstance>()
+const contentRef = ref<HTMLElement>()
+
+/**
+ * 获取滚动容器元素（el-scrollbar 的 wrapRef）
+ */
+function getScrollElement(): HTMLElement | undefined {
+  return scrollbarRef.value?.wrapRef
+}
 
 // ========== 滚动状态管理（基于 ID + Offset 锚点方案） ==========
 
@@ -204,7 +201,7 @@ const newMessageCount = computed(() => scrollState.value.newMessageCount)
  * 策略：找到视口 30% 位置的 item 作为锚点（更靠上，高度变化时更稳定）
  */
 function computeScrollAnchor(): ScrollAnchor | null {
-  const el = scrollerRef.value?.$el as HTMLElement | undefined
+  const el = getScrollElement()
   if (!el || displayMessages.value.length === 0) return null
 
   const clientHeight = el.clientHeight
@@ -258,7 +255,7 @@ function computeScrollAnchor(): ScrollAnchor | null {
  * 策略：通过 ID 找到 item -> 估算滚动 -> 等待渲染 -> 微调
  */
 async function restoreScrollPosition(anchor: ScrollAnchor): Promise<void> {
-  const el = scrollerRef.value?.$el as HTMLElement | undefined
+  const el = getScrollElement()
   if (!el) return
 
   // 1. 通过 ID 找到当前 index
@@ -274,9 +271,7 @@ async function restoreScrollPosition(anchor: ScrollAnchor): Promise<void> {
   const estimatedScrollTop = index * 100 - anchor.offsetFromViewportTop
   el.scrollTop = Math.max(0, estimatedScrollTop)
 
-  // 3. 等待 DynamicScroller 渲染
-  await nextTick()
-  scrollerRef.value?.forceUpdate?.()
+  // 3. 等待渲染
   await nextTick()
   await new Promise(resolve => requestAnimationFrame(resolve))
 
@@ -484,11 +479,11 @@ function handleWheel(e: WheelEvent) {
   }
 }
 
-// 添加滚轮事件监听器（需要在 DynamicScroller 渲染后调用）
+// 添加滚轮事件监听器（需要在 el-scrollbar 渲染后调用）
 let scrollListenersAdded = false
 function addScrollListeners() {
   if (scrollListenersAdded) return
-  const el = scrollerRef.value?.$el as HTMLElement | undefined
+  const el = getScrollElement()
   if (el) {
     el.addEventListener('wheel', handleWheel, { passive: true })
     scrollListenersAdded = true
@@ -500,7 +495,7 @@ onMounted(() => {
   if (props.isStreaming) {
     startTimer()
   }
-  // 延迟添加事件监听，确保 scrollerRef 已挂载
+  // 延迟添加事件监听，确保 scrollbarRef 已挂载
   nextTick(() => {
     addScrollListeners()
   })
@@ -529,7 +524,7 @@ function handleBeforeTabSwitch(oldTabId: string) {
 
 onUnmounted(() => {
   stopTimer()
-  const el = scrollerRef.value?.$el as HTMLElement | undefined
+  const el = getScrollElement()
   if (el) {
     el.removeEventListener('wheel', handleWheel)
   }
@@ -578,7 +573,7 @@ watch(
       } else {
         // browse 模式但无锚点：保持当前滚动位置，不强制切换模式
         // 这种情况发生在：用户刚退出跟随模式但还没滚动过
-        const el = scrollerRef.value?.$el as HTMLElement | undefined
+        const el = getScrollElement()
         if (el) {
           lastScrollTop.value = el.scrollTop
         }
@@ -586,12 +581,10 @@ watch(
       }
     } else {
       // follow 模式：滚动到底部
-      // 先强制更新虚拟列表，确保所有项目都已渲染
-      forceUpdateScroller()
       await nextTick()
-      // 使用可靠的滚动方法，因为虚拟列表可能还没完全渲染
+      // 使用可靠的滚动方法
       await scrollToBottomReliably()
-      const el = scrollerRef.value?.$el as HTMLElement | undefined
+      const el = getScrollElement()
       if (el) {
         lastScrollTop.value = el.scrollTop
       }
@@ -663,34 +656,25 @@ watch(() => displayMessages.value.length, async (newCount, oldCount) => {
   if (added > 0) {
     if (scrollState.value.mode === 'browse') {
       // browse 模式：保持位置（newMessageCount 由 useSessionTab 统一管理）
-      const el = scrollerRef.value?.$el as HTMLElement | undefined
+      const el = getScrollElement()
       const savedScrollTop = el?.scrollTop ?? 0
       await nextTick()
-      forceUpdateScroller()
       // 恢复滚动位置
       await nextTick()
       if (el) el.scrollTop = savedScrollTop
     } else {
       // follow 模式：自动滚动到底部
-      // 先更新虚拟列表，再滚动（顺序很重要！）
       await nextTick()
-      forceUpdateScroller()
       await nextTick()
       scrollToBottomSilent()
     }
-  } else {
-    // 消息数量没有增加（可能是更新），正常更新 scroller
-    await nextTick()
-    forceUpdateScroller()
   }
 })
 
 
-// 强制 DynamicScroller 重新计算所有项目尺寸
+// el-scrollbar 不需要强制更新（DOM 始终存在），保留空函数以兼容调用
 function forceUpdateScroller() {
-  if (scrollerRef.value) {
-    scrollerRef.value.forceUpdate?.()
-  }
+  // No-op: el-scrollbar 不需要强制更新
 }
 
 watch(() => props.isLoading, async (newValue, oldValue) => {
@@ -705,7 +689,7 @@ watch(() => props.isLoading, async (newValue, oldValue) => {
     if (historyLoadInProgress.value) {
       // 历史分页加载完成：保持滚动位置
       await nextTick()
-      const el = scrollerRef.value?.$el as HTMLElement | undefined
+      const el = getScrollElement()
       if (el) {
         const delta = el.scrollHeight - historyScrollHeightBefore.value
         el.scrollTop = historyScrollTopBefore.value + delta
@@ -748,13 +732,11 @@ function handleScroll() {
 }
 
 function handleScrollCore() {
-  if (!scrollerRef.value) return
+  const el = getScrollElement()
+  if (!el) return
 
   // Tab 切换中，不处理滚动事件（防止模式被意外切换）
   if (isTabSwitching.value) return
-
-  const el = scrollerRef.value.$el as HTMLElement
-  if (!el) return
 
   const scrollTop = el.scrollTop
   const scrollHeight = el.scrollHeight
@@ -812,10 +794,9 @@ function handleScrollCore() {
  * 无需标志位，因为退出 follow 模式只通过 wheel 事件判断
  */
 function scrollToBottomSilent() {
-  if (scrollerRef.value) {
-    scrollerRef.value.scrollToBottom()
-  } else if (wrapperRef.value) {
-    wrapperRef.value.scrollTop = wrapperRef.value.scrollHeight
+  const el = getScrollElement()
+  if (el) {
+    el.scrollTop = el.scrollHeight
   }
 }
 
@@ -833,8 +814,8 @@ function scrollToBottom() {
  * 检查是否有滚动条（视口是否被填满）
  */
 function hasScrollbar(): boolean {
-  if (!scrollerRef.value) return false
-  const el = scrollerRef.value.$el as HTMLElement
+  const el = getScrollElement()
+  if (!el) return false
   return el.scrollHeight > el.clientHeight
 }
 
@@ -843,8 +824,9 @@ function hasScrollbar(): boolean {
  * 无需标志位，因为退出 follow 模式只通过 wheel 事件判断
  */
 async function scrollToBottomReliably(): Promise<void> {
-  if (!scrollerRef.value) return
-  scrollerRef.value.scrollToBottom()
+  const el = getScrollElement()
+  if (!el) return
+  el.scrollTop = el.scrollHeight
   await nextTick()
 }
 
@@ -908,22 +890,25 @@ async function ensureScrollable(): Promise<void> {
 .message-list {
   flex: 1;
   min-height: 0; /* 关键：防止 flex 子元素溢出 */
-  overflow-y: auto !important;
+  height: 100%;
+}
+
+/* el-scrollbar 内部滚动区域样式 */
+.message-list :deep(.el-scrollbar__wrap) {
   overflow-x: hidden;
-  padding: 4px 6px 4px 6px; /* 减少底部留白 */
-  /* 滚动优化 */
   -webkit-overflow-scrolling: touch; /* iOS 惯性滚动 */
   overscroll-behavior: contain; /* 防止滚动穿透 */
-  scrollbar-color: var(--theme-scrollbar-thumb, #d1d5da) transparent;
 }
 
-/* 修复 vue-virtual-scroller 的默认样式可能导致的内容截断 */
-.message-list :deep(.vue-recycle-scroller__item-wrapper) {
-  overflow: visible !important;
+/* 消息内容容器 */
+.message-content {
+  padding: 4px 6px 4px 6px; /* 减少底部留白 */
 }
 
-.message-list :deep(.vue-recycle-scroller__item-view) {
-  overflow: visible !important;
+/* 消息项：使用 content-visibility 优化渲染性能 */
+.message-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 100px; /* auto 记住实际高度，100px 为初始估算 */
 }
 
 .empty-state {
@@ -1057,32 +1042,23 @@ async function ensureScrollable(): Promise<void> {
   }
 }
 
-/* 滚动条样式 */
-.message-list::-webkit-scrollbar {
+/* el-scrollbar 滚动条主题样式 */
+.message-list :deep(.el-scrollbar__bar.is-vertical) {
   width: 8px;
-}
-
-.message-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.message-list-wrapper:hover .message-list::-webkit-scrollbar-track,
-.message-list::-webkit-scrollbar-track:hover {
-  background: var(--theme-scrollbar-track-hover, rgba(0, 0, 0, 0.06));
-}
-
-.message-list::-webkit-scrollbar-thumb {
-  background: var(--theme-scrollbar-thumb, #d1d5da);
+  right: 2px;
+  opacity: 1; /* 始终可见 */
+  background-color: var(--theme-scrollbar-track);
   border-radius: 4px;
 }
 
-.message-list::-webkit-scrollbar-thumb:hover {
-  background: var(--theme-scrollbar-thumb-hover, #959da5);
+.message-list :deep(.el-scrollbar__thumb) {
+  background-color: var(--theme-scrollbar-thumb);
+  border-radius: 4px;
+  opacity: 1; /* 始终可见 */
 }
 
-.message-list-wrapper:hover .message-list {
-  scrollbar-color: var(--theme-scrollbar-thumb-hover, #959da5)
-    var(--theme-scrollbar-track-hover, rgba(0, 0, 0, 0.06));
+.message-list :deep(.el-scrollbar__thumb:hover) {
+  background-color: var(--theme-scrollbar-thumb-hover);
 }
 
 /* 回到底部按钮 */
