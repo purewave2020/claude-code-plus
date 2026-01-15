@@ -87,6 +87,10 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var gitGenerateTools: String = "[]",          // Git Generate 允许的工具列表（JSON）
         var gitGenerateModel: String = "",            // Git Generate 使用的模型（空=使用默认模型）
         var gitGenerateSaveSession: Boolean = false,  // Git Generate 是否保存会话到历史（默认不保存）
+        var gitGenerateEnabled: Boolean = false,      // Git Generate 是否启用
+        var gitGenerateBackend: String = MCP_BACKEND_CLAUDE, // Git Generate 后端（claude/codex）
+        var gitGenerateClaudeThinkingLevelId: String = "ultra", // Git Generate Claude 思考级别
+        var gitGenerateCodexReasoningEffort: String = "xhigh",  // Git Generate Codex 推理强度
 
         // 默认启用 ByPass 权限（前端自动应用）
         var defaultBypassPermissions: Boolean = false,
@@ -187,6 +191,9 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         migrateLegacyModelIds()
         migrateOldExternalDirsConfig()  // 迁移旧版外部目录配置
         this.state.defaultBackendType = normalizeBackendType(this.state.defaultBackendType)
+        this.state.gitGenerateBackend = normalizeGitGenerateBackend(this.state.gitGenerateBackend)
+        this.state.gitGenerateClaudeThinkingLevelId = normalizeGitGenerateThinkingLevelId(this.state.gitGenerateClaudeThinkingLevelId)
+        this.state.gitGenerateCodexReasoningEffort = normalizeCodexReasoningEffort(this.state.gitGenerateCodexReasoningEffort)
     }
 
     // ==================== 监听器管理 ====================
@@ -219,6 +226,15 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
             MCP_BACKEND_CODEX -> MCP_BACKEND_CODEX
             else -> MCP_BACKEND_CLAUDE
         }
+    }
+
+    private fun normalizeGitGenerateBackend(value: String): String {
+        return normalizeBackendType(value)
+    }
+
+    private fun normalizeGitGenerateThinkingLevelId(value: String?): String {
+        val normalized = value?.trim()?.lowercase().orEmpty().ifBlank { "ultra" }
+        return getAllThinkingLevels().firstOrNull { it.id == normalized }?.id ?: "ultra"
     }
 
     var defaultBackendType: String
@@ -945,20 +961,71 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         get() = state.gitGenerateModel
         set(value) { state.gitGenerateModel = value }
 
+    /** Git Generate 是否启用 */
+    var gitGenerateEnabled: Boolean
+        get() = state.gitGenerateEnabled
+        set(value) { state.gitGenerateEnabled = value }
+
+    /** Git Generate 后端类型 */
+    var gitGenerateBackend: String
+        get() = normalizeGitGenerateBackend(state.gitGenerateBackend)
+        set(value) { state.gitGenerateBackend = normalizeGitGenerateBackend(value) }
+
+    /** Git Generate Claude 思考级别 */
+    var gitGenerateClaudeThinkingLevelId: String
+        get() = normalizeGitGenerateThinkingLevelId(state.gitGenerateClaudeThinkingLevelId)
+        set(value) { state.gitGenerateClaudeThinkingLevelId = normalizeGitGenerateThinkingLevelId(value) }
+
+    /** Git Generate Codex 推理强度 */
+    var gitGenerateCodexReasoningEffort: String
+        get() = normalizeCodexReasoningEffort(state.gitGenerateCodexReasoningEffort)
+        set(value) { state.gitGenerateCodexReasoningEffort = normalizeCodexReasoningEffort(value) }
+
+    /** Git Generate 后端提供者 */
+    fun getGitGenerateBackendProvider(): AiAgentProvider {
+        return if (gitGenerateBackend == MCP_BACKEND_CODEX) {
+            AiAgentProvider.CODEX
+        } else {
+            AiAgentProvider.CLAUDE
+        }
+    }
+
     /**
      * 获取 Git Generate 的有效模型 ID
      * 如果配置的模型不存在，则 fallback 到第一个内置模型
      */
     val effectiveGitGenerateModelId: String
         get() {
+            val backend = gitGenerateBackend
             val configuredModelId = state.gitGenerateModel
             if (configuredModelId.isBlank()) {
-                return effectiveDefaultModelId  // 使用全局默认模型
+                return if (backend == MCP_BACKEND_CODEX) {
+                    effectiveCodexDefaultModelId
+                } else {
+                    effectiveDefaultModelId
+                }
             }
-            // 检查模型是否存在
+            if (backend == MCP_BACKEND_CODEX) {
+                val modelInfo = getCodexModelById(configuredModelId)
+                return modelInfo?.modelId ?: getCodexBuiltInModels().first().modelId
+            }
             val modelInfo = getModelById(normalizeClaudeModelId(configuredModelId))
-            return modelInfo?.modelId ?: builtInClaudeModels.first().modelId  // fallback 到第一个内置模型
+            return modelInfo?.modelId ?: builtInClaudeModels.first().modelId
         }
+
+    /** 获取 Git Generate Claude 思考级别（有效值） */
+    val effectiveGitGenerateClaudeThinkingLevelId: String
+        get() = normalizeGitGenerateThinkingLevelId(state.gitGenerateClaudeThinkingLevelId)
+
+    /** 获取 Git Generate Claude 思考 token 上限 */
+    val effectiveGitGenerateClaudeThinkingTokens: Int
+        get() = getThinkingLevelById(effectiveGitGenerateClaudeThinkingLevelId)?.tokens ?: state.ultraTokens
+
+    /** 获取 Git Generate Codex 推理强度（有效值） */
+    val effectiveGitGenerateCodexReasoningEffort: String
+        get() = normalizeCodexReasoningEffort(
+            state.gitGenerateCodexReasoningEffort.ifBlank { state.codexDefaultReasoningEffort }
+        )
 
     /** Git Generate 是否保存会话到历史 */
     var gitGenerateSaveSession: Boolean

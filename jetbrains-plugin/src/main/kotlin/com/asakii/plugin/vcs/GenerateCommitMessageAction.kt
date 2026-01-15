@@ -34,6 +34,12 @@ class GenerateCommitMessageAction : AnAction(
             return
         }
 
+        val settings = com.asakii.settings.AgentSettingsService.getInstance()
+        if (!settings.gitGenerateEnabled) {
+            e.presentation.isEnabledAndVisible = false
+            return
+        }
+
         // 检查是否有选中的变更
         val accessor = CommitPanelAccessor.getInstance(project)
         val hasChanges = accessor.getSelectedChanges()?.isNotEmpty() == true ||
