@@ -445,6 +445,14 @@ watch(
 watch(
   () => scrollState.value.mode,
   async (newMode, oldMode) => {
+    if (newMode === 'browse' && !scrollState.value.anchor && !isTabSwitching.value) {
+      await nextTick()
+      const anchor = computeScrollAnchor()
+      if (anchor) {
+        scrollState.value = { ...scrollState.value, anchor }
+        console.log(`💾 [Scroll] Saved anchor on browse mode: item=${anchor.itemId}`)
+      }
+    }
     if (newMode === 'follow' && oldMode === 'browse') {
       console.log('🔄 [Scroll] Mode changed to follow, scrolling to bottom')
       await nextTick()
