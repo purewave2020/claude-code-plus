@@ -4,8 +4,7 @@ import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.asakii.plugin.logging.*
-import com.intellij.ui.JBColor
-import com.intellij.util.ui.UIUtil
+import com.intellij.util.messages.MessageBusConnection
 import javax.swing.UIManager
 
 /**
@@ -18,6 +17,11 @@ class IdeaThemeAdapter {
 
     companion object {
         private val logger = Logger.getInstance(IdeaThemeAdapter::class.java)
+        
+        /**
+         * 保持 MessageBus 连接的强引用，防止 GC 回收导致监听器失效
+         */
+        private var messageBusConnection: MessageBusConnection? = null
 
         /**
          * 获取当前 IDEA 主题名称
@@ -36,7 +40,14 @@ class IdeaThemeAdapter {
          */
         fun registerThemeChangeListener(onChange: (Boolean) -> Unit) {
             try {
+                // 断开之前的连接（如果存在）
+                messageBusConnection?.disconnect()
+                
+                // 创建新连接（不指定 parent，手动保持强引用来管理生命周期）
                 val connection = ApplicationManager.getApplication().messageBus.connect()
+                
+                // 保持强引用，防止 GC 回收
+                messageBusConnection = connection
 
                 connection.subscribe(LafManagerListener.TOPIC, LafManagerListener {
                     val themeName = getCurrentThemeName()

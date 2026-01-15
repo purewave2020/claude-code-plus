@@ -349,17 +349,22 @@ export function mapContentBlockFromProtoAsClass(proto: any): RpcContentBlockClas
 // ==================== Delta 映射 ====================
 
 export function mapDeltaFromProto(proto: any): any {
-  if (!proto?.delta) {
+  // proto 是 ContentBlockDeltaEvent 类型
+  // proto.delta 是 Delta 类型
+  // proto.delta.delta 是 oneof 字段（包含 case 和 value）
+  if (!proto?.delta?.delta) {
     return { type: 'unknown' }
   }
 
-  switch (proto.delta.case) {
+  const deltaData = proto.delta.delta
+
+  switch (deltaData.case) {
     case 'textDelta':
-      return { type: 'text_delta', text: proto.delta.value.text }
+      return { type: 'text_delta', text: deltaData.value.text }
     case 'thinkingDelta':
-      return { type: 'thinking_delta', thinking: proto.delta.value.thinking }
+      return { type: 'thinking_delta', thinking: deltaData.value.thinking }
     case 'inputJsonDelta':
-      return { type: 'input_json_delta', partial_json: proto.delta.value.partialJson }
+      return { type: 'input_json_delta', partial_json: deltaData.value.partialJson }
     default:
       return { type: 'unknown' }
   }
@@ -478,51 +483,56 @@ export function mapRpcMessageFromProto(proto: any): RpcMessage {
 // ==================== StreamEvent 映射 ====================
 
 export function mapStreamEventFromProto(proto: any): StreamEventData {
-  if (!proto.event) {
+  // proto 是 StreamEvent 类型
+  // proto.event 是 StreamEventData 类型
+  // proto.event.event 是 oneof 字段（包含 case 和 value）
+  if (!proto.event?.event) {
     return new UnknownEvent({ type: 'unknown', raw: proto })
   }
 
-  switch (proto.event.case) {
+  const eventData = proto.event.event
+
+  switch (eventData.case) {
     case 'messageStart':
       return new MessageStartEvent({
         type: 'message_start',
         message: {
-          id: proto.event.value.message?.id,
-          role: proto.event.value.message?.role,
-          content: proto.event.value.message?.content?.map(mapContentBlockFromProtoAsClass) || []
+          id: eventData.value.message?.id,
+          role: eventData.value.message?.role,
+          content: eventData.value.message?.content?.map(mapContentBlockFromProtoAsClass) || []
         }
       })
 
     case 'contentBlockStart':
       return new ContentBlockStartEvent({
         type: 'content_block_start',
-        index: proto.event.value.index,
-        content_block: mapContentBlockFromProtoAsClass(proto.event.value.contentBlock)
+        index: eventData.value.index,
+        content_block: mapContentBlockFromProtoAsClass(eventData.value.contentBlock)
       })
 
     case 'contentBlockDelta':
       return new ContentBlockDeltaEvent({
         type: 'content_block_delta',
-        index: proto.event.value.index,
-        delta: mapDeltaFromProto(proto.event.value)
+        index: eventData.value.index,
+        delta: mapDeltaFromProto(eventData.value)
       })
 
     case 'contentBlockStop':
       return new ContentBlockStopEvent({
         type: 'content_block_stop',
-        index: proto.event.value.index
+        index: eventData.value.index
       })
 
     case 'messageDelta':
       return new MessageDeltaEvent({
         type: 'message_delta',
         delta: {
-          stop_reason: proto.event.value.delta?.stopReason,
-          stop_sequence: proto.event.value.delta?.stopSequence
+          stop_reason: eventData.value.delta?.stopReason,
+          stop_sequence: eventData.value.delta?.stopSequence
         },
-        usage: proto.event.value.usage
+        usage: eventData.value.usage
           ? {
-              output_tokens: proto.event.value.usage.outputTokens
+              output_tokens: eventData.value.usage.outputTokens
             }
           : undefined
       })
@@ -531,7 +541,7 @@ export function mapStreamEventFromProto(proto: any): StreamEventData {
       return new MessageStopEvent({ type: 'message_stop' })
 
     default:
-      return new UnknownEvent({ type: 'unknown', raw: proto.event })
+      return new UnknownEvent({ type: 'unknown', raw: eventData })
   }
 }
 

@@ -82,7 +82,8 @@ export function createMessage<T = any>(data: any): T {
 
   const Cls = registries.message.get(data.type)
   if (!Cls) {
-    console.warn(`[RPC] Unknown message type: ${data.type}`)
+    console.warn(`[RPC] Unknown message type: ${data.type}`, data)
+    console.warn('[RPC] Registered message types:', Array.from(registries.message.keys()))
     return new _RpcUnknownMessage(data) as T
   }
 
@@ -100,7 +101,8 @@ export function createBlock<T = any>(data: any): T {
 
   const Cls = registries.block.get(data.type)
   if (!Cls) {
-    console.warn(`[RPC] Unknown block type: ${data.type}`)
+    console.warn(`[RPC] Unknown block type: ${data.type}`, data)
+    console.warn('[RPC] Registered block types:', Array.from(registries.block.keys()))
     return new _UnknownBlock(data) as T
   }
 
@@ -118,7 +120,8 @@ export function createEvent<T = any>(data: any): T {
 
   const Cls = registries.event.get(data.type)
   if (!Cls) {
-    console.warn(`[RPC] Unknown event type: ${data.type}`)
+    console.warn(`[RPC] Unknown event type: ${data.type}`, data)
+    console.warn('[RPC] Registered event types:', Array.from(registries.event.keys()))
     return new _UnknownEvent(data) as T
   }
 

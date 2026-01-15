@@ -37,6 +37,9 @@ dependencies {
     // Claude Agent SDK (includes unified-logging for SLF4J logging)
     implementation(project(":claude-agent-sdk"))
 
+    // Logback - SLF4J implementation for console logging
+    implementation("ch.qos.logback:logback-classic:1.4.14")
+
     // Test dependencies
     testImplementation(kotlin("test"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")

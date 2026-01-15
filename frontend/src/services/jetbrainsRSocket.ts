@@ -113,6 +113,12 @@ function mapSessionCommandType(type: string): SessionCommand['type'] {
 
 // ========== RSocket 服务 ==========
 
+// 连接状态类型
+export type ConnectionState = 'disconnected' | 'connecting' | 'connected'
+
+// 连接状态变化处理器
+export type ConnectionStateHandler = (state: ConnectionState, error?: Error) => void
+
 class JetBrainsRSocketService {
   private client: RSocketClient | null = null
   private themeChangeHandlers: ThemeChangeHandler[] = []
@@ -120,7 +126,10 @@ class JetBrainsRSocketService {
   private settingsChangeHandlers: SettingsChangeHandler[] = []
   private activeFileChangeHandlers: ActiveFileChangeHandler[] = []
   private terminalTaskUpdateHandlers: TerminalTaskUpdateHandler[] = []
+  private connectionStateHandlers: ConnectionStateHandler[] = []
   private connected = false
+  private reconnecting = false
+  private disconnectUnsubscribe: (() => void) | null = null
 
   /**
    * 连接到 JetBrains RSocket 端点（带自动重试）
@@ -311,7 +320,23 @@ class JetBrainsRSocketService {
 
       await this.client.connect()
       this.connected = true
+      this.notifyConnectionState('connected')
       console.log('[JetBrainsRSocket] Connected')
+
+      // 订阅断开事件，实现自动重连
+      this.disconnectUnsubscribe = this.client.onDisconnect((error?: Error) => {
+        console.warn('[JetBrainsRSocket] 连接断开', error ? `原因: ${error.message}` : '')
+        this.connected = false
+        this.client = null
+        this.disconnectUnsubscribe = null
+        this.notifyConnectionState('disconnected', error)
+
+        // 自动重连（除非是主动断开）
+        if (!this.reconnecting) {
+          this.scheduleReconnect()
+        }
+      })
+
       return true
     } catch (error) {
       // 清理失败的 client
@@ -326,15 +351,62 @@ class JetBrainsRSocketService {
   }
 
   /**
-   * 断开连接
+   * 调度自动重连
+   */
+  private scheduleReconnect(): void {
+    if (this.reconnecting) return
+
+    console.log('[JetBrainsRSocket] 将在 1 秒后尝试重连...')
+    this.reconnecting = true
+
+    setTimeout(async () => {
+      try {
+        this.notifyConnectionState('connecting')
+        await this.connect()
+        console.log('[JetBrainsRSocket] 重连成功')
+      } catch (error) {
+        console.error('[JetBrainsRSocket] 重连失败:', error)
+      } finally {
+        this.reconnecting = false
+      }
+    }, 1000)
+  }
+
+  /**
+   * 通知连接状态变化
+   */
+  private notifyConnectionState(state: ConnectionState, error?: Error): void {
+    this.connectionStateHandlers.forEach(handler => {
+      try {
+        handler(state, error)
+      } catch (e) {
+        console.error('[JetBrainsRSocket] 连接状态回调执行失败:', e)
+      }
+    })
+  }
+
+  /**
+   * 断开连接（主动断开，不会触发自动重连）
    */
   disconnect(): void {
+    // 标记为正在重连，防止断开事件触发自动重连
+    this.reconnecting = true
+
+    // 取消断开事件订阅
+    if (this.disconnectUnsubscribe) {
+      this.disconnectUnsubscribe()
+      this.disconnectUnsubscribe = null
+    }
+
     if (this.client) {
       this.client.disconnect()
       this.client = null
       this.connected = false
+      this.notifyConnectionState('disconnected')
       console.log('[JetBrainsRSocket] Disconnected')
     }
+
+    this.reconnecting = false
   }
 
   /**
@@ -834,6 +906,28 @@ class JetBrainsRSocketService {
       const index = this.terminalTaskUpdateHandlers.indexOf(handler)
       if (index >= 0) this.terminalTaskUpdateHandlers.splice(index, 1)
     }
+  }
+
+  /**
+   * 添加连接状态变化监听器
+   * @param handler 状态变化处理器
+   * @returns 取消订阅函数
+   */
+  onConnectionStateChange(handler: ConnectionStateHandler): () => void {
+    this.connectionStateHandlers.push(handler)
+    return () => {
+      const index = this.connectionStateHandlers.indexOf(handler)
+      if (index >= 0) this.connectionStateHandlers.splice(index, 1)
+    }
+  }
+
+  /**
+   * 获取当前连接状态
+   */
+  getConnectionState(): ConnectionState {
+    if (this.connected) return 'connected'
+    if (this.reconnecting) return 'connecting'
+    return 'disconnected'
   }
 }
 

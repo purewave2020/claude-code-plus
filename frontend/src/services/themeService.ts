@@ -410,8 +410,9 @@ export class ThemeService {
    * 异步绑定 JetBrains 主题（用于后续更新，不阻塞初始化）
    */
   private bindJetBrainsThemeAsync() {
-    // 延迟执行，不阻塞初始渲染
-    setTimeout(async () => {
+    // 使用 queueMicrotask 立即注册监听器，不再延迟
+    // 这样可以确保不会错过任何主题变化事件
+    queueMicrotask(() => {
       try {
         // 订阅主题变化（无需再获取当前主题，已从 URL 获取）
         this._unsubscribeTheme = jetbrainsBridge.onThemeChange((theme) => {
@@ -426,7 +427,7 @@ export class ThemeService {
       } catch (error) {
         console.warn('🎨 [IDE] Failed to bind theme listener:', error)
       }
-    }, 100)
+    })
   }
 
   /**

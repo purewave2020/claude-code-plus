@@ -5,13 +5,13 @@
  */
 
 import { MessageType, createBlocks, createEvent, type RpcProvider } from './base'
+import { StreamEventData } from './stream-event'
 import {
   ContentBlock,
   TextBlock,
   ThinkingBlock,
   ToolUseBlock
 } from './content-block'
-import type { StreamEventData } from './stream-event'
 
 // ==================== 消息内容 ====================
 
@@ -191,7 +191,10 @@ export class RpcStreamEventMessage extends RpcMessage {
     super(data)
     this.uuid = data?.uuid ?? ''
     this.session_id = data?.session_id ?? ''
-    this.event = createEvent<StreamEventData>(data?.event)
+    // 如果 data.event 已经是 StreamEventData 实例，直接使用；否则调用 createEvent
+    this.event = data?.event instanceof StreamEventData
+      ? data.event
+      : createEvent<StreamEventData>(data?.event)
     this.parentToolUseId = data?.parentToolUseId
   }
 
