@@ -1,5 +1,6 @@
 package com.asakii.plugin.mcp
 
+import com.asakii.ai.agent.sdk.McpSystemPromptContext
 import com.asakii.claude.agent.sdk.mcp.McpServer
 import com.asakii.claude.agent.sdk.mcp.McpServerBase
 import com.asakii.claude.agent.sdk.mcp.annotations.McpServerConfig
@@ -48,7 +49,8 @@ class TerminalMcpServerImpl(private val project: Project) : McpServerBase(), Dis
 
     override fun getSystemPromptAppendix(): String {
         val settings = AgentSettingsService.getInstance()
-        val baseInstructions = settings.effectiveTerminalInstructions
+        val provider = McpSystemPromptContext.getProvider()
+        val baseInstructions = settings.getEffectiveTerminalInstructionsForProvider(provider)
 
         val platform = if (settings.isWindows()) "Windows" else "Unix"
         val defaultShell = settings.getEffectiveDefaultShell()

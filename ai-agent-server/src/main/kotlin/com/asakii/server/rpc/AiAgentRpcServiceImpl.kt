@@ -1,6 +1,7 @@
 ﻿package com.asakii.server.rpc
 
 import com.asakii.ai.agent.sdk.AiAgentProvider
+import com.asakii.ai.agent.sdk.McpSystemPromptContext
 import com.asakii.ai.agent.sdk.capabilities.AgentCapabilities
 import com.asakii.ai.agent.sdk.capabilities.AiPermissionMode as SdkPermissionMode
 import com.asakii.ai.agent.sdk.client.AgentMessageInput
@@ -75,6 +76,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
@@ -794,7 +796,7 @@ class AiAgentRpcServiceImpl(
         provider: AiAgentProvider,
         options: RpcConnectOptions,
         serviceConfig: AiAgentServiceConfig
-    ): McpSessionSetup {
+    ): McpSessionSetup = withContext(McpSystemPromptContext.asContextElement(provider)) {
         val defaults = serviceConfig.claude
         val fallbackBackends = serviceConfig.mcpEnabledBackends
         // 使用 connectId 进行 MCP 路由（connectId 在 connect() 中已设置，回退到 sessionId）
@@ -824,6 +826,7 @@ class AiAgentRpcServiceImpl(
             ?.toLong()
             ?.times(1000)
         userInteractionServer.setTimeoutMs(userInteractionTimeoutMs)
+        userInteractionServer.setInstructionsByBackend(defaults.userInteractionInstructionsByBackend)
 
         if (defaults.enableUserInteractionMcp && isProviderAllowed(defaults.userInteractionMcpBackends)) {
             sessionServers["user_interaction"] = userInteractionServer
@@ -916,9 +919,17 @@ class AiAgentRpcServiceImpl(
             sdkLog.info("📝 [MCP] Appended built-in MCP instructions")
         }
 
+        val providerKey = provider.name.lowercase()
         val customInstructions = defaults.mcpServersConfig
-            .filter { it.enabled && !it.instructions.isNullOrBlank() && isProviderAllowed(it.enabledBackends) }
-            .map { it.instructions!! }
+            .filter { it.enabled && isProviderAllowed(it.enabledBackends) }
+            .mapNotNull { config ->
+                val byBackend = config.instructionsByBackend
+                    ?.entries
+                    ?.firstOrNull { it.key.equals(providerKey, ignoreCase = true) }
+                    ?.value
+                byBackend?.takeIf { it.isNotBlank() }
+                    ?: config.instructions?.takeIf { it.isNotBlank() }
+            }
         if (customInstructions.isNotEmpty()) {
             val customPrompt = customInstructions.joinToString("\n\n")
             mcpSystemPromptAppendix = if (mcpSystemPromptAppendix.isNotBlank()) {
@@ -947,7 +958,7 @@ class AiAgentRpcServiceImpl(
             sdkLog.info("🚫 [MCP] Codex disabled features: ${codexDisabledFeatures.joinToString()}")
         }
 
-        return McpSessionSetup(
+        McpSessionSetup(
             claudeServers = claudeServers,
             mcpSystemPromptAppendix = mcpSystemPromptAppendix,
             allowedTools = allowedTools,

@@ -434,11 +434,23 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             gitEntry?.enabledBackends != settings.getGitMcpBackendKeys() ||
             context7Entry?.apiKey != settings.context7ApiKey ||
             userInteractionEntry?.instructions != settings.userInteractionInstructions ||
+            userInteractionEntry?.instructionsClaude != settings.userInteractionInstructionsClaude ||
+            userInteractionEntry?.instructionsCodex != settings.userInteractionInstructionsCodex ||
             jetbrainsEntry?.instructions != settings.jetbrainsInstructions ||
+            jetbrainsEntry?.instructionsClaude != settings.jetbrainsInstructionsClaude ||
+            jetbrainsEntry?.instructionsCodex != settings.jetbrainsInstructionsCodex ||
             jetbrainsFileEntry?.instructions != settings.jetbrainsFileInstructions ||
+            jetbrainsFileEntry?.instructionsClaude != settings.jetbrainsFileInstructionsClaude ||
+            jetbrainsFileEntry?.instructionsCodex != settings.jetbrainsFileInstructionsCodex ||
             context7Entry?.instructions != settings.context7Instructions ||
+            context7Entry?.instructionsClaude != settings.context7InstructionsClaude ||
+            context7Entry?.instructionsCodex != settings.context7InstructionsCodex ||
             terminalEntry?.instructions != settings.terminalInstructions ||
+            terminalEntry?.instructionsClaude != settings.terminalInstructionsClaude ||
+            terminalEntry?.instructionsCodex != settings.terminalInstructionsCodex ||
             gitEntry?.instructions != settings.gitInstructions ||
+            gitEntry?.instructionsClaude != settings.gitInstructionsClaude ||
+            gitEntry?.instructionsCodex != settings.gitInstructionsCodex ||
             gitEntry?.gitCommitLanguage != settings.gitCommitLanguage ||
             terminalEntry?.terminalMaxOutputLines != settings.terminalMaxOutputLines ||
             terminalEntry?.terminalMaxOutputChars != settings.terminalMaxOutputChars ||
@@ -478,6 +490,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 saved.jsonConfig != server.jsonConfig ||
                 saved.enabled != server.enabled ||
                 saved.instructions != server.instructions ||
+                saved.instructionsClaude != server.instructionsClaude ||
+                saved.instructionsCodex != server.instructionsCodex ||
                 saved.enabledBackends != server.enabledBackends
             ) {
                 return true
@@ -504,7 +518,6 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         settings.enableJetBrainsFileMcp = jetbrainsFileEntry?.enabled ?: true
         settings.enableContext7Mcp = context7Entry?.enabled ?: false
         settings.enableGitMcp = gitEntry?.enabled ?: false
-        settings.gitInstructions = gitEntry?.instructions ?: ""
         settings.gitCommitLanguage = gitEntry?.gitCommitLanguage ?: "en"
         settings.enableTerminalMcp = terminalEntry?.enabled ?: false
         settings.setUserInteractionMcpBackendKeys(
@@ -527,10 +540,23 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         )
         settings.context7ApiKey = context7Entry?.apiKey ?: ""
         settings.userInteractionInstructions = userInteractionEntry?.instructions ?: ""
+        settings.userInteractionInstructionsClaude = userInteractionEntry?.instructionsClaude ?: ""
+        settings.userInteractionInstructionsCodex = userInteractionEntry?.instructionsCodex ?: ""
         settings.jetbrainsInstructions = jetbrainsEntry?.instructions ?: ""
+        settings.jetbrainsInstructionsClaude = jetbrainsEntry?.instructionsClaude ?: ""
+        settings.jetbrainsInstructionsCodex = jetbrainsEntry?.instructionsCodex ?: ""
         settings.jetbrainsFileInstructions = jetbrainsFileEntry?.instructions ?: ""
+        settings.jetbrainsFileInstructionsClaude = jetbrainsFileEntry?.instructionsClaude ?: ""
+        settings.jetbrainsFileInstructionsCodex = jetbrainsFileEntry?.instructionsCodex ?: ""
         settings.context7Instructions = context7Entry?.instructions ?: ""
+        settings.context7InstructionsClaude = context7Entry?.instructionsClaude ?: ""
+        settings.context7InstructionsCodex = context7Entry?.instructionsCodex ?: ""
         settings.terminalInstructions = terminalEntry?.instructions ?: ""
+        settings.terminalInstructionsClaude = terminalEntry?.instructionsClaude ?: ""
+        settings.terminalInstructionsCodex = terminalEntry?.instructionsCodex ?: ""
+        settings.gitInstructions = gitEntry?.instructions ?: ""
+        settings.gitInstructionsClaude = gitEntry?.instructionsClaude ?: ""
+        settings.gitInstructionsCodex = gitEntry?.instructionsCodex ?: ""
         settings.terminalMaxOutputLines = terminalEntry?.terminalMaxOutputLines ?: 500
         settings.terminalMaxOutputChars = terminalEntry?.terminalMaxOutputChars ?: 50000
         settings.terminalDefaultShell = terminalEntry?.terminalDefaultShell ?: ""
@@ -604,6 +630,18 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 if (server.instructions.isNotBlank()) {
                     entryMap["instructions"] = kotlinx.serialization.json.JsonPrimitive(server.instructions)
                 }
+                val instructionsByBackend = mutableMapOf<String, kotlinx.serialization.json.JsonElement>()
+                if (server.instructionsClaude.isNotBlank()) {
+                    instructionsByBackend[AgentSettingsService.MCP_BACKEND_CLAUDE] =
+                        kotlinx.serialization.json.JsonPrimitive(server.instructionsClaude)
+                }
+                if (server.instructionsCodex.isNotBlank()) {
+                    instructionsByBackend[AgentSettingsService.MCP_BACKEND_CODEX] =
+                        kotlinx.serialization.json.JsonPrimitive(server.instructionsCodex)
+                }
+                if (instructionsByBackend.isNotEmpty()) {
+                    entryMap["instructionsByBackend"] = JsonObject(instructionsByBackend)
+                }
                 // 添加超时配置（0 表示永不超时）
                 entryMap["toolTimeoutSec"] = kotlinx.serialization.json.JsonPrimitive(server.toolTimeoutSec)
                     serversMap[serverName] = JsonObject(entryMap)
@@ -639,6 +677,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             configSummary = McpBundle.message("mcp.userInteraction.description"),
             isBuiltIn = true,
             instructions = settings.userInteractionInstructions,
+            instructionsClaude = settings.userInteractionInstructionsClaude,
+            instructionsCodex = settings.userInteractionInstructionsCodex,
             defaultInstructions = McpDefaults.USER_INTERACTION_INSTRUCTIONS,
             toolTimeoutSec = settings.userInteractionMcpTimeout,
             defaultAutoApprovedTools = McpAutoApprovedDefaults.USER_INTERACTION,
@@ -652,6 +692,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             configSummary = McpBundle.message("mcp.jetbrainsIde.description"),
             isBuiltIn = true,
             instructions = settings.jetbrainsInstructions,
+            instructionsClaude = settings.jetbrainsInstructionsClaude,
+            instructionsCodex = settings.jetbrainsInstructionsCodex,
             defaultInstructions = McpDefaults.JETBRAINS_INSTRUCTIONS,
             disabledTools = listOf("Glob", "Grep"),
             toolTimeoutSec = settings.jetbrainsMcpTimeout,
@@ -666,6 +708,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             configSummary = McpBundle.message("mcp.jetbrainsFile.description"),
             isBuiltIn = true,
             instructions = settings.jetbrainsFileInstructions,
+            instructionsClaude = settings.jetbrainsFileInstructionsClaude,
+            instructionsCodex = settings.jetbrainsFileInstructionsCodex,
             defaultInstructions = McpDefaults.JETBRAINS_FILE_INSTRUCTIONS,
             disabledTools = if (settings.jetbrainsFileDisableBuiltinTools) settings.getJetbrainsFileDisabledToolsList() else emptyList(),
             codexDisabledFeatures = if (settings.jetbrainsFileDisableBuiltinTools) listOf(CodexFeatures.APPLY_PATCH_FREEFORM) else emptyList(),
@@ -684,6 +728,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             configSummary = McpBundle.message("mcp.context7.description"),
             isBuiltIn = true,
             instructions = settings.context7Instructions,
+            instructionsClaude = settings.context7InstructionsClaude,
+            instructionsCodex = settings.context7InstructionsCodex,
             apiKey = settings.context7ApiKey,
             defaultInstructions = McpDefaults.CONTEXT7_INSTRUCTIONS,
             toolTimeoutSec = settings.context7McpTimeout
@@ -696,6 +742,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             configSummary = McpBundle.message("mcp.jetbrainsTerminal.description"),
             isBuiltIn = true,
             instructions = settings.terminalInstructions,
+            instructionsClaude = settings.terminalInstructionsClaude,
+            instructionsCodex = settings.terminalInstructionsCodex,
             defaultInstructions = McpDefaults.TERMINAL_INSTRUCTIONS,
             disabledTools = if (settings.terminalDisableBuiltinBash) listOf("Bash") else emptyList(),
             codexDisabledFeatures = if (settings.terminalDisableBuiltinBash) listOf(CodexFeatures.SHELL_TOOL) else emptyList(),
@@ -717,6 +765,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
             configSummary = McpBundle.message("mcp.jetbrainsGit.description"),
             isBuiltIn = true,
             instructions = settings.gitInstructions,
+            instructionsClaude = settings.gitInstructionsClaude,
+            instructionsCodex = settings.gitInstructionsCodex,
             defaultInstructions = McpDefaults.GIT_INSTRUCTIONS,
             toolTimeoutSec = settings.gitMcpTimeout,
             gitCommitLanguage = settings.gitCommitLanguage,
@@ -771,6 +821,17 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 // 读取我们的元数据
                 val enabled = entryObj["enabled"]?.toString()?.toBooleanStrictOrNull() ?: true
                 val instructions = entryObj["instructions"]?.toString()?.trim('"') ?: ""
+                val instructionsByBackend = entryObj["instructionsByBackend"]?.jsonObject
+                val instructionsClaude = instructionsByBackend
+                    ?.get(AgentSettingsService.MCP_BACKEND_CLAUDE)
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?: ""
+                val instructionsCodex = instructionsByBackend
+                    ?.get(AgentSettingsService.MCP_BACKEND_CODEX)
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?: ""
                 val enabledBackends = parseBackendKeys(entryObj["enabledBackends"], fallbackBackends)
                 val toolTimeoutSec = entryObj["toolTimeoutSec"]?.jsonPrimitive?.intOrNull ?: 60
 
@@ -793,6 +854,8 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                     isBuiltIn = false,
                     jsonConfig = """{"$name": $pureConfig}""",
                     instructions = instructions,
+                    instructionsClaude = instructionsClaude,
+                    instructionsCodex = instructionsCodex,
                     toolTimeoutSec = toolTimeoutSec
                 )
             }

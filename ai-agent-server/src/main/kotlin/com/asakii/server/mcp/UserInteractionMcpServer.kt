@@ -1,5 +1,7 @@
 ﻿package com.asakii.server.mcp
 
+import com.asakii.ai.agent.sdk.AiAgentProvider
+import com.asakii.ai.agent.sdk.McpSystemPromptContext
 import com.asakii.claude.agent.sdk.mcp.McpServerBase
 import com.asakii.claude.agent.sdk.mcp.ToolResult
 import com.asakii.claude.agent.sdk.mcp.annotations.McpServerConfig
@@ -146,6 +148,7 @@ private val mcpLogger = getLogger("UserInteractionMcpServer")
 class UserInteractionMcpServer : McpServerBase() {
     private var clientCaller: ClientCaller? = null
     private var timeoutMs: Long? = null
+    private var instructionsByBackend: Map<String, String>? = null
 
     override val timeout: Long?
         get() = timeoutMs
@@ -153,7 +156,18 @@ class UserInteractionMcpServer : McpServerBase() {
     override fun getAllowedTools(): List<String> = listOf("AskUserQuestion")
 
     override fun getSystemPromptAppendix(): String {
-        return DEFAULT_INSTRUCTIONS
+        val provider = McpSystemPromptContext.getProvider()
+        val key = when (provider) {
+            AiAgentProvider.CODEX -> "codex"
+            AiAgentProvider.CLAUDE -> "claude"
+            else -> null
+        }
+        val override = key?.let { instructionsByBackend?.get(it) }?.trim().orEmpty()
+        return if (override.isNotBlank()) override else DEFAULT_INSTRUCTIONS
+    }
+
+    fun setInstructionsByBackend(instructions: Map<String, String>?) {
+        instructionsByBackend = instructions?.mapKeys { it.key.trim().lowercase() }
     }
 
     companion object {

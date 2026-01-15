@@ -66,11 +66,23 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
 
         // MCP 系统提示词（自定义，空字符串表示使用默认值）
         var userInteractionInstructions: String = "",
+        var userInteractionInstructionsClaude: String = "",
+        var userInteractionInstructionsCodex: String = "",
         var jetbrainsInstructions: String = "",
+        var jetbrainsInstructionsClaude: String = "",
+        var jetbrainsInstructionsCodex: String = "",
         var jetbrainsFileInstructions: String = "",
+        var jetbrainsFileInstructionsClaude: String = "",
+        var jetbrainsFileInstructionsCodex: String = "",
         var context7Instructions: String = "",
+        var context7InstructionsClaude: String = "",
+        var context7InstructionsCodex: String = "",
         var terminalInstructions: String = "",
+        var terminalInstructionsClaude: String = "",
+        var terminalInstructionsCodex: String = "",
         var gitInstructions: String = "",
+        var gitInstructionsClaude: String = "",
+        var gitInstructionsCodex: String = "",
         /** Git MCP Commit 语言 (en, zh, ja, ko, auto) */
         var gitCommitLanguage: String = "en",
 
@@ -549,17 +561,49 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         get() = state.userInteractionInstructions
         set(value) { state.userInteractionInstructions = value }
 
+    var userInteractionInstructionsClaude: String
+        get() = state.userInteractionInstructionsClaude
+        set(value) { state.userInteractionInstructionsClaude = value }
+
+    var userInteractionInstructionsCodex: String
+        get() = state.userInteractionInstructionsCodex
+        set(value) { state.userInteractionInstructionsCodex = value }
+
     var jetbrainsInstructions: String
         get() = state.jetbrainsInstructions
         set(value) { state.jetbrainsInstructions = value }
+
+    var jetbrainsInstructionsClaude: String
+        get() = state.jetbrainsInstructionsClaude
+        set(value) { state.jetbrainsInstructionsClaude = value }
+
+    var jetbrainsInstructionsCodex: String
+        get() = state.jetbrainsInstructionsCodex
+        set(value) { state.jetbrainsInstructionsCodex = value }
 
     var jetbrainsFileInstructions: String
         get() = state.jetbrainsFileInstructions
         set(value) { state.jetbrainsFileInstructions = value }
 
+    var jetbrainsFileInstructionsClaude: String
+        get() = state.jetbrainsFileInstructionsClaude
+        set(value) { state.jetbrainsFileInstructionsClaude = value }
+
+    var jetbrainsFileInstructionsCodex: String
+        get() = state.jetbrainsFileInstructionsCodex
+        set(value) { state.jetbrainsFileInstructionsCodex = value }
+
     var context7Instructions: String
         get() = state.context7Instructions
         set(value) { state.context7Instructions = value }
+
+    var context7InstructionsClaude: String
+        get() = state.context7InstructionsClaude
+        set(value) { state.context7InstructionsClaude = value }
+
+    var context7InstructionsCodex: String
+        get() = state.context7InstructionsCodex
+        set(value) { state.context7InstructionsCodex = value }
 
     var enableTerminalMcp: Boolean
         get() = state.enableTerminalMcp
@@ -580,6 +624,14 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     var terminalInstructions: String
         get() = state.terminalInstructions
         set(value) { state.terminalInstructions = value }
+
+    var terminalInstructionsClaude: String
+        get() = state.terminalInstructionsClaude
+        set(value) { state.terminalInstructionsClaude = value }
+
+    var terminalInstructionsCodex: String
+        get() = state.terminalInstructionsCodex
+        set(value) { state.terminalInstructionsCodex = value }
 
     var terminalDefaultShell: String
         get() = state.terminalDefaultShell
@@ -729,6 +781,14 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     var gitInstructions: String
         get() = state.gitInstructions
         set(value) { state.gitInstructions = value }
+
+    var gitInstructionsClaude: String
+        get() = state.gitInstructionsClaude
+        set(value) { state.gitInstructionsClaude = value }
+
+    var gitInstructionsCodex: String
+        get() = state.gitInstructionsCodex
+        set(value) { state.gitInstructionsCodex = value }
 
     /** Git MCP Commit 语言 (en, zh, ja, ko, auto) */
     var gitCommitLanguage: String
@@ -1031,6 +1091,230 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     var gitGenerateSaveSession: Boolean
         get() = state.gitGenerateSaveSession
         set(value) { state.gitGenerateSaveSession = value }
+
+    private fun resolveBackendInstruction(
+        backendKey: String,
+        claudeValue: String,
+        codexValue: String,
+        legacyValue: String
+    ): String {
+        return when (backendKey.trim().lowercase()) {
+            MCP_BACKEND_CLAUDE -> if (claudeValue.isNotBlank()) claudeValue else legacyValue
+            MCP_BACKEND_CODEX -> if (codexValue.isNotBlank()) codexValue else legacyValue
+            else -> legacyValue
+        }
+    }
+
+    private fun resolveProviderInstruction(
+        provider: AiAgentProvider?,
+        claudeValue: String,
+        codexValue: String,
+        legacyValue: String
+    ): String {
+        return when (provider) {
+            AiAgentProvider.CODEX -> if (codexValue.isNotBlank()) codexValue else legacyValue
+            AiAgentProvider.CLAUDE -> if (claudeValue.isNotBlank()) claudeValue else legacyValue
+            else -> legacyValue
+        }
+    }
+
+    private fun resolveEffectiveInstruction(
+        provider: AiAgentProvider?,
+        claudeValue: String,
+        codexValue: String,
+        legacyValue: String,
+        defaultValue: String
+    ): String {
+        val selected = resolveProviderInstruction(provider, claudeValue, codexValue, legacyValue).trim()
+        return if (selected.isNotBlank()) selected else defaultValue
+    }
+
+    private fun resolveEffectiveInstructionForBackend(
+        backendKey: String,
+        claudeValue: String,
+        codexValue: String,
+        legacyValue: String,
+        defaultValue: String
+    ): String {
+        val selected = resolveBackendInstruction(backendKey, claudeValue, codexValue, legacyValue).trim()
+        return if (selected.isNotBlank()) selected else defaultValue
+    }
+
+    private fun buildInstructionsByBackendMap(
+        claudeValue: String,
+        codexValue: String,
+        legacyValue: String,
+        defaultValue: String
+    ): Map<String, String> {
+        val effectiveClaude = resolveEffectiveInstructionForBackend(
+            MCP_BACKEND_CLAUDE,
+            claudeValue,
+            codexValue,
+            legacyValue,
+            defaultValue
+        )
+        val effectiveCodex = resolveEffectiveInstructionForBackend(
+            MCP_BACKEND_CODEX,
+            claudeValue,
+            codexValue,
+            legacyValue,
+            defaultValue
+        )
+        val result = mutableMapOf<String, String>()
+        if (effectiveClaude.isNotBlank()) result[MCP_BACKEND_CLAUDE] = effectiveClaude
+        if (effectiveCodex.isNotBlank()) result[MCP_BACKEND_CODEX] = effectiveCodex
+        return result
+    }
+
+    fun getUserInteractionInstructionsForBackend(backendKey: String): String =
+        resolveBackendInstruction(
+            backendKey,
+            state.userInteractionInstructionsClaude,
+            state.userInteractionInstructionsCodex,
+            state.userInteractionInstructions
+        )
+
+    fun getJetbrainsInstructionsForBackend(backendKey: String): String =
+        resolveBackendInstruction(
+            backendKey,
+            state.jetbrainsInstructionsClaude,
+            state.jetbrainsInstructionsCodex,
+            state.jetbrainsInstructions
+        )
+
+    fun getJetbrainsFileInstructionsForBackend(backendKey: String): String =
+        resolveBackendInstruction(
+            backendKey,
+            state.jetbrainsFileInstructionsClaude,
+            state.jetbrainsFileInstructionsCodex,
+            state.jetbrainsFileInstructions
+        )
+
+    fun getContext7InstructionsForBackend(backendKey: String): String =
+        resolveBackendInstruction(
+            backendKey,
+            state.context7InstructionsClaude,
+            state.context7InstructionsCodex,
+            state.context7Instructions
+        )
+
+    fun getTerminalInstructionsForBackend(backendKey: String): String =
+        resolveBackendInstruction(
+            backendKey,
+            state.terminalInstructionsClaude,
+            state.terminalInstructionsCodex,
+            state.terminalInstructions
+        )
+
+    fun getGitInstructionsForBackend(backendKey: String): String =
+        resolveBackendInstruction(
+            backendKey,
+            state.gitInstructionsClaude,
+            state.gitInstructionsCodex,
+            state.gitInstructions
+        )
+
+    fun getEffectiveUserInteractionInstructionsForProvider(provider: AiAgentProvider?): String =
+        resolveEffectiveInstruction(
+            provider,
+            state.userInteractionInstructionsClaude,
+            state.userInteractionInstructionsCodex,
+            state.userInteractionInstructions,
+            McpDefaults.USER_INTERACTION_INSTRUCTIONS
+        )
+
+    fun getEffectiveJetbrainsInstructionsForProvider(provider: AiAgentProvider?): String =
+        resolveEffectiveInstruction(
+            provider,
+            state.jetbrainsInstructionsClaude,
+            state.jetbrainsInstructionsCodex,
+            state.jetbrainsInstructions,
+            McpDefaults.JETBRAINS_INSTRUCTIONS
+        )
+
+    fun getEffectiveJetbrainsFileInstructionsForProvider(provider: AiAgentProvider?): String =
+        resolveEffectiveInstruction(
+            provider,
+            state.jetbrainsFileInstructionsClaude,
+            state.jetbrainsFileInstructionsCodex,
+            state.jetbrainsFileInstructions,
+            McpDefaults.JETBRAINS_FILE_INSTRUCTIONS
+        )
+
+    fun getEffectiveContext7InstructionsForProvider(provider: AiAgentProvider?): String =
+        resolveEffectiveInstruction(
+            provider,
+            state.context7InstructionsClaude,
+            state.context7InstructionsCodex,
+            state.context7Instructions,
+            McpDefaults.CONTEXT7_INSTRUCTIONS
+        )
+
+    fun getEffectiveTerminalInstructionsForProvider(provider: AiAgentProvider?): String =
+        resolveEffectiveInstruction(
+            provider,
+            state.terminalInstructionsClaude,
+            state.terminalInstructionsCodex,
+            state.terminalInstructions,
+            McpDefaults.TERMINAL_INSTRUCTIONS
+        )
+
+    fun getEffectiveGitInstructionsForProvider(provider: AiAgentProvider?): String =
+        resolveEffectiveInstruction(
+            provider,
+            state.gitInstructionsClaude,
+            state.gitInstructionsCodex,
+            state.gitInstructions,
+            McpDefaults.GIT_INSTRUCTIONS
+        )
+
+    fun getUserInteractionInstructionsByBackend(): Map<String, String> =
+        buildInstructionsByBackendMap(
+            state.userInteractionInstructionsClaude,
+            state.userInteractionInstructionsCodex,
+            state.userInteractionInstructions,
+            McpDefaults.USER_INTERACTION_INSTRUCTIONS
+        )
+
+    fun getJetbrainsInstructionsByBackend(): Map<String, String> =
+        buildInstructionsByBackendMap(
+            state.jetbrainsInstructionsClaude,
+            state.jetbrainsInstructionsCodex,
+            state.jetbrainsInstructions,
+            McpDefaults.JETBRAINS_INSTRUCTIONS
+        )
+
+    fun getJetbrainsFileInstructionsByBackend(): Map<String, String> =
+        buildInstructionsByBackendMap(
+            state.jetbrainsFileInstructionsClaude,
+            state.jetbrainsFileInstructionsCodex,
+            state.jetbrainsFileInstructions,
+            McpDefaults.JETBRAINS_FILE_INSTRUCTIONS
+        )
+
+    fun getContext7InstructionsByBackend(): Map<String, String> =
+        buildInstructionsByBackendMap(
+            state.context7InstructionsClaude,
+            state.context7InstructionsCodex,
+            state.context7Instructions,
+            McpDefaults.CONTEXT7_INSTRUCTIONS
+        )
+
+    fun getTerminalInstructionsByBackend(): Map<String, String> =
+        buildInstructionsByBackendMap(
+            state.terminalInstructionsClaude,
+            state.terminalInstructionsCodex,
+            state.terminalInstructions,
+            McpDefaults.TERMINAL_INSTRUCTIONS
+        )
+
+    fun getGitInstructionsByBackend(): Map<String, String> =
+        buildInstructionsByBackendMap(
+            state.gitInstructionsClaude,
+            state.gitInstructionsCodex,
+            state.gitInstructions,
+            McpDefaults.GIT_INSTRUCTIONS
+        )
 
     /** 获取生效的 User Interaction MCP 提示词（自定义或默认） */
     val effectiveUserInteractionInstructions: String

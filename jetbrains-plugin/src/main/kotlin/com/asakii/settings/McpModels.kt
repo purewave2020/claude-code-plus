@@ -21,6 +21,8 @@ data class McpServerEntry(
     val isBuiltIn: Boolean = false,
     val jsonConfig: String = "",
     val instructions: String = "",
+    val instructionsClaude: String = "",
+    val instructionsCodex: String = "",
     val apiKey: String = "",
     /** 启用此 MCP 时禁用的 Claude Code 内置工具列表 */
     val disabledTools: List<String> = emptyList(),

@@ -3,6 +3,7 @@ package com.asakii.plugin.mcp
 import com.asakii.claude.agent.sdk.mcp.McpServer
 import com.asakii.claude.agent.sdk.mcp.McpServerBase
 import com.asakii.claude.agent.sdk.mcp.annotations.McpServerConfig
+import com.asakii.ai.agent.sdk.McpSystemPromptContext
 import com.asakii.plugin.mcp.tools.*
 import com.asakii.server.mcp.JetBrainsMcpServerProvider
 import com.asakii.settings.AgentSettingsService
@@ -48,7 +49,8 @@ class JetBrainsMcpServerImpl(private val project: Project) : McpServerBase() {
     private lateinit var renameTool: RenameTool
 
     override fun getSystemPromptAppendix(): String {
-        return AgentSettingsService.getInstance().effectiveJetbrainsInstructions
+        val provider = McpSystemPromptContext.getProvider()
+        return AgentSettingsService.getInstance().getEffectiveJetbrainsInstructionsForProvider(provider)
     }
 
     /**

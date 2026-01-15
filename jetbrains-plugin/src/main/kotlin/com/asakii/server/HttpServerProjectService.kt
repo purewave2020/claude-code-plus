@@ -261,6 +261,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         context7McpBackends = context7Backends,
                         terminalMcpBackends = terminalBackends,
                         gitMcpBackends = gitBackends,
+                        userInteractionInstructionsByBackend = settings.getUserInteractionInstructionsByBackend(),
                         userInteractionMcpTimeoutSec = settings.userInteractionMcpTimeout,
                         mcpServersConfig = loadMcpServersConfig(settings),
                         mcpInstructions = loadMcpInstructions(settings),
@@ -437,6 +438,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                 headers = headers,
                 description = McpDefaults.Context7Server.DESCRIPTION,
                 instructions = settings.effectiveContext7Instructions,
+                instructionsByBackend = settings.getContext7InstructionsByBackend(),
                 enabledBackends = settings.getContext7McpProviders()
             ))
             logger.info { "✅ Loaded MCP Server config: context7 (type=http)" }
@@ -532,6 +534,11 @@ class HttpServerProjectService(private val project: Project) : Disposable {
 
                     // 读取元数据
                     val instructions = entryObj["instructions"]?.jsonPrimitive?.content
+                    val instructionsByBackend = entryObj["instructionsByBackend"]?.jsonObject?.entries
+                        ?.mapNotNull { (key, value) ->
+                            value.jsonPrimitive.contentOrNull?.let { key to it }
+                        }
+                        ?.toMap()
                     val enabledBackends = parseEnabledBackends(entryObj)
 
                     configs.add(McpServerConfig(
@@ -544,6 +551,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         url = url,
                         headers = headers,
                         instructions = instructions,
+                        instructionsByBackend = instructionsByBackend,
                         enabledBackends = enabledBackends
                     ))
                     logger.info { "✅ Loaded custom MCP Server: $serverName (type=$serverType)" }

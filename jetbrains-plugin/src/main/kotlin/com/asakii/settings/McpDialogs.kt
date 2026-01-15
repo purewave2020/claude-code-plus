@@ -130,6 +130,16 @@ class BuiltInMcpServerDialog(
         lineWrap = true
         wrapStyleWord = true
     }
+    private val instructionsClaudeArea = JBTextArea(entry.instructionsClaude, 10, 50).apply {
+        font = Font(Font.MONOSPACED, Font.PLAIN, 12)
+        lineWrap = true
+        wrapStyleWord = true
+    }
+    private val instructionsCodexArea = JBTextArea(entry.instructionsCodex, 10, 50).apply {
+        font = Font(Font.MONOSPACED, Font.PLAIN, 12)
+        lineWrap = true
+        wrapStyleWord = true
+    }
     private val apiKeyField = JBTextField(entry.apiKey, 25)
 
     // 禁用工具配置（标签选择）
@@ -200,27 +210,26 @@ class BuiltInMcpServerDialog(
     }
 
     override fun createCenterPanel(): JComponent {
-        val panel = JPanel(BorderLayout())
-        panel.border = JBUI.Borders.empty(10)
+        val tabbedPane = JBTabbedPane()
 
-        val topPanel = JPanel().apply {
+        val generalContent = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            border = JBUI.Borders.empty(10)
         }
 
-        // 第一行：Enable + Backend selection（合并到一行）
+        // Enable + Backend selection
         val enableBackendPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
             add(enableCheckbox)
             add(Box.createHorizontalStrut(20))
-            // 复用 backendSelection.panel 中的组件
             backendSelection.panel.components.forEach { add(it) }
         }
-        topPanel.add(enableBackendPanel)
-        topPanel.add(Box.createVerticalStrut(4))
-        topPanel.add(backendSelection.hint)
-        topPanel.add(Box.createVerticalStrut(8))
+        generalContent.add(enableBackendPanel)
+        generalContent.add(Box.createVerticalStrut(4))
+        generalContent.add(backendSelection.hint)
+        generalContent.add(Box.createVerticalStrut(8))
 
-        // 当 Enable 状态变化时，更新 Backend selection 的启用状态
+        // Toggle backend selection enabled state
         fun updateBackendSelectionState(enabled: Boolean) {
             setEnabledRecursively(backendSelection.panel, enabled)
             backendSelection.hint.isEnabled = enabled
@@ -228,7 +237,7 @@ class BuiltInMcpServerDialog(
         updateBackendSelectionState(enableCheckbox.isSelected)
         enableCheckbox.addActionListener { updateBackendSelectionState(enableCheckbox.isSelected) }
 
-        // Context7 MCP 的 API Key 配置
+        // Context7 MCP API key
         if (entry.name == "Context7 MCP") {
             val apiKeyPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
@@ -236,25 +245,208 @@ class BuiltInMcpServerDialog(
                 add(apiKeyField)
                 add(JBLabel("<html><font color='gray' size='-1'>(optional, for authenticated access)</font></html>"))
             }
-            topPanel.add(apiKeyPanel)
-            topPanel.add(Box.createVerticalStrut(6))
+            generalContent.add(apiKeyPanel)
+            generalContent.add(Box.createVerticalStrut(6))
         }
 
-        // 禁用工具配置（支持内置 MCP 的标签选择）
+        // JetBrains File MCP external access
+        if (entry.name == "JetBrains File MCP") {
+            val currentRules = try {
+                Json.decodeFromString<List<String>>(entry.fileExternalRules)
+            } catch (_: Exception) { emptyList() }
+            currentRules.forEach { externalRulesListModel.addElement(it) }
+
+            externalRulesList = JBList(externalRulesListModel).apply {
+                selectionMode = ListSelectionModel.SINGLE_SELECTION
+                visibleRowCount = 4
+            }
+
+            val listPanel = JPanel(BorderLayout())
+            val scrollPane = JBScrollPane(externalRulesList).apply {
+                preferredSize = Dimension(400, 80)
+            }
+            listPanel.add(scrollPane, BorderLayout.CENTER)
+
+            val buttonPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0))
+            buttonPanel.add(JButton("+").apply {
+                preferredSize = Dimension(36, 28)
+                toolTipText = "Add path rule"
+                addActionListener {
+                    val descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor()
+                    val chosen = FileChooser.chooseFile(descriptor, project, null)
+                    if (chosen != null) {
+                        val path = chosen.path
+                        if (!externalRulesListModel.contains(path)) {
+                            externalRulesListModel.addElement(path)
+                        }
+                    }
+                }
+            })
+            buttonPanel.add(JButton("-").apply {
+                preferredSize = Dimension(36, 28)
+                toolTipText = "Remove selected rule"
+                addActionListener {
+                    val selected = externalRulesList?.selectedIndex ?: -1
+                    if (selected >= 0) {
+                        externalRulesListModel.remove(selected)
+                    }
+                }
+            })
+            listPanel.add(buttonPanel, BorderLayout.SOUTH)
+
+            val (headerPanel, contentWrapper) = createCollapsibleSection(
+                title = "External Access",
+                contentPanel = listPanel,
+                initiallyExpanded = currentRules.isNotEmpty(),
+                extraHeaderComponents = listOf(fileAllowExternalCheckbox)
+            )
+
+            generalContent.add(headerPanel)
+            generalContent.add(contentWrapper)
+            generalContent.add(Box.createVerticalStrut(6))
+
+            updateExternalRulesState()
+            fileAllowExternalCheckbox.addActionListener { updateExternalRulesState() }
+        }
+
+        // JetBrains Terminal MCP shell configuration
+        if (entry.name == "JetBrains Terminal MCP") {
+            val configuredShells = entry.terminalAvailableShells.trim()
+                .split(",")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .toSet()
+            val useAllShells = configuredShells.isEmpty()
+
+            val shellConfigPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(JBLabel("Default Shell:"))
+                add(defaultShellCombo)
+                add(Box.createHorizontalStrut(12))
+                add(JBLabel("Shells:").apply {
+                    foreground = JBColor(0x666666, 0x999999)
+                })
+                for (shellType in allShellTypes) {
+                    val isChecked = useAllShells || configuredShells.contains(shellType)
+                    val checkbox = JBCheckBox(shellType, isChecked).apply {
+                        addActionListener { updateDefaultShellCombo() }
+                    }
+                    availableShellCheckboxes[shellType] = checkbox
+                    add(checkbox)
+                }
+            }
+            generalContent.add(shellConfigPanel)
+
+            updateDefaultShellCombo()
+            val savedDefaultShell = entry.terminalDefaultShell
+            val effectiveDefaultShell = if (savedDefaultShell.isNotBlank()) {
+                savedDefaultShell
+            } else {
+                AgentSettingsService.getInstance().getEffectiveDefaultShell()
+            }
+            if ((defaultShellCombo.model as? DefaultComboBoxModel<*>)?.getIndexOf(effectiveDefaultShell) != -1) {
+                defaultShellCombo.selectedItem = effectiveDefaultShell
+            }
+            generalContent.add(Box.createVerticalStrut(6))
+        }
+
+        // JetBrains Terminal MCP truncate and read timeout
+        if (entry.name == "JetBrains Terminal MCP") {
+            val truncateAndTimeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(JBLabel("Max lines:"))
+                add(maxOutputLinesField)
+                add(Box.createHorizontalStrut(8))
+                add(JBLabel("Max chars:"))
+                add(maxOutputCharsField)
+                add(Box.createHorizontalStrut(8))
+                add(JBLabel("Read timeout:"))
+                add(readTimeoutField)
+                add(JBLabel("sec"))
+            }
+            generalContent.add(truncateAndTimeoutPanel)
+            generalContent.add(Box.createVerticalStrut(4))
+        }
+
+        // Git MCP commit language
+        if (entry.name == McpBundle.message("mcp.jetbrainsGit.name")) {
+            val commitLangPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+                alignmentX = JPanel.LEFT_ALIGNMENT
+                add(JBLabel("Commit Message Language:"))
+                add(commitLanguageCombo)
+                add(JBLabel("<html><font color='gray' size='-1'>(AI will generate commit messages in this language)</font></html>"))
+            }
+            generalContent.add(commitLangPanel)
+            generalContent.add(Box.createVerticalStrut(4))
+        }
+
+        val toolTimeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+            add(JBLabel("Tool Call Timeout:"))
+            add(toolTimeoutField)
+            add(JBLabel("seconds"))
+            add(JBLabel("<html><font color='gray' size='-1'>(min 1s)</font></html>"))
+        }
+        generalContent.add(toolTimeoutPanel)
+        generalContent.add(Box.createVerticalStrut(6))
+
+        val resetCommonButton = JButton("Reset to Default").apply {
+            addActionListener { instructionsArea.text = entry.defaultInstructions }
+        }
+        val commonScrollPane = JBScrollPane(instructionsArea).apply {
+            minimumSize = Dimension(550, 180)
+            preferredSize = Dimension(550, 240)
+        }
+        val (commonHeader, commonContent) = createCollapsibleSection(
+            title = "Common Appended System Prompt:",
+            contentPanel = commonScrollPane,
+            initiallyExpanded = entry.instructions.isNotBlank(),
+            extraHeaderComponents = listOf(resetCommonButton)
+        )
+        generalContent.add(commonHeader)
+        generalContent.add(commonContent)
+
+        val generalPanel = JBScrollPane(generalContent).apply {
+            border = JBUI.Borders.empty()
+            preferredSize = Dimension(600, 580)
+        }
+        tabbedPane.addTab("General", generalPanel)
+
+        val claudeContent = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            border = JBUI.Borders.empty(10)
+        }
+        val claudeHeaderPanel = JPanel(BorderLayout()).apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+            add(JBLabel("Appended System Prompt (Claude Code Override):"), BorderLayout.WEST)
+            add(JButton("Use Common").apply {
+                addActionListener { instructionsClaudeArea.text = "" }
+            }, BorderLayout.EAST)
+        }
+        claudeContent.add(claudeHeaderPanel)
+        claudeContent.add(Box.createVerticalStrut(4))
+        claudeContent.add(JBLabel(
+            "<html><font color='gray' size='-1'>Leave empty to use common/default instructions.</font></html>"
+        ).apply { alignmentX = JPanel.LEFT_ALIGNMENT })
+        claudeContent.add(Box.createVerticalStrut(6))
+        val claudeScrollPane = JBScrollPane(instructionsClaudeArea).apply {
+            minimumSize = Dimension(550, 200)
+            preferredSize = Dimension(550, 300)
+        }
+        claudeContent.add(claudeScrollPane)
+        claudeContent.add(Box.createVerticalStrut(8))
+
+        // Disabled tools (Claude Code)
         if (defaultDisabledTools.isNotEmpty() || entry.hasDisableToolsToggle) {
-            // 初始化已配置的禁用工具
             disabledToolsList.addAll(entry.disabledTools)
 
-            // 标签展示区域（使用 FlowLayout 实现自动换行）
             disabledToolsPanel = JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)).apply {
                 alignmentX = JPanel.LEFT_ALIGNMENT
             }
-            // 填充已配置的标签
             entry.disabledTools.forEach { toolName ->
                 addDisabledToolTag(toolName)
             }
 
-            // 折叠式面板
             val inputField = JBTextField(20)
             inputField.addActionListener {
                 val text = inputField.text.trim()
@@ -285,12 +477,41 @@ class BuiltInMcpServerDialog(
                 contentPanel = disabledToolsPanel!!,
                 initiallyExpanded = entry.disabledTools.isNotEmpty()
             )
-            topPanel.add(headerPanel)
-            topPanel.add(contentWrapper)
-            topPanel.add(Box.createVerticalStrut(6))
+            claudeContent.add(headerPanel)
+            claudeContent.add(contentWrapper)
+            claudeContent.add(Box.createVerticalStrut(6))
         }
 
-        // Codex 禁用功能配置
+        val claudePanel = JBScrollPane(claudeContent).apply {
+            border = JBUI.Borders.empty()
+        }
+        tabbedPane.addTab("Claude Code", claudePanel)
+
+        val codexContent = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            border = JBUI.Borders.empty(10)
+        }
+        val codexHeaderPanel = JPanel(BorderLayout()).apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+            add(JBLabel("Appended System Prompt (Codex Override):"), BorderLayout.WEST)
+            add(JButton("Use Common").apply {
+                addActionListener { instructionsCodexArea.text = "" }
+            }, BorderLayout.EAST)
+        }
+        codexContent.add(codexHeaderPanel)
+        codexContent.add(Box.createVerticalStrut(4))
+        codexContent.add(JBLabel(
+            "<html><font color='gray' size='-1'>Leave empty to use common/default instructions.</font></html>"
+        ).apply { alignmentX = JPanel.LEFT_ALIGNMENT })
+        codexContent.add(Box.createVerticalStrut(6))
+        val codexScrollPane = JBScrollPane(instructionsCodexArea).apply {
+            minimumSize = Dimension(550, 200)
+            preferredSize = Dimension(550, 300)
+        }
+        codexContent.add(codexScrollPane)
+        codexContent.add(Box.createVerticalStrut(8))
+
+        // Codex disabled features
         if (defaultCodexDisabledFeatures.isNotEmpty()) {
             codexDisabledFeaturesList.addAll(entry.codexDisabledFeatures)
 
@@ -310,7 +531,6 @@ class BuiltInMcpServerDialog(
                 }
             }
 
-            // 构建 available features 列表（用于 tooltip）
             val availableFeatures = listOf(
                 CodexFeatures.SHELL_TOOL,
                 CodexFeatures.APPLY_PATCH_FREEFORM,
@@ -343,12 +563,12 @@ class BuiltInMcpServerDialog(
                 contentPanel = codexDisabledFeaturesPanel!!,
                 initiallyExpanded = entry.codexDisabledFeatures.isNotEmpty()
             )
-            topPanel.add(headerPanel)
-            topPanel.add(contentWrapper)
-            topPanel.add(Box.createVerticalStrut(6))
+            codexContent.add(headerPanel)
+            codexContent.add(contentWrapper)
+            codexContent.add(Box.createVerticalStrut(6))
         }
 
-        // Codex 自动批准工具配置
+        // Codex auto-approved tools
         if (defaultAutoApprovedTools.isNotEmpty()) {
             autoApprovedToolsList.addAll(entry.codexAutoApprovedTools)
 
@@ -389,185 +609,18 @@ class BuiltInMcpServerDialog(
                 contentPanel = autoApprovedToolsPanel!!,
                 initiallyExpanded = entry.codexAutoApprovedTools.isNotEmpty()
             )
-            topPanel.add(headerPanel)
-            topPanel.add(contentWrapper)
-            topPanel.add(Box.createVerticalStrut(6))
+            codexContent.add(headerPanel)
+            codexContent.add(contentWrapper)
+            codexContent.add(Box.createVerticalStrut(6))
         }
 
-        // JetBrains File MCP 外部访问配置（可折叠区域）
-        if (entry.name == "JetBrains File MCP") {
-            // 初始化规则列表
-            val currentRules = try {
-                Json.decodeFromString<List<String>>(entry.fileExternalRules)
-            } catch (_: Exception) { emptyList() }
-            currentRules.forEach { externalRulesListModel.addElement(it) }
-
-            // 创建规则列表
-            externalRulesList = JBList(externalRulesListModel).apply {
-                selectionMode = ListSelectionModel.SINGLE_SELECTION
-                visibleRowCount = 4
-            }
-
-            // 列表操作面板
-            val listPanel = JPanel(BorderLayout())
-            val scrollPane = JBScrollPane(externalRulesList).apply {
-                preferredSize = Dimension(400, 80)
-            }
-            listPanel.add(scrollPane, BorderLayout.CENTER)
-
-            // 操作按钮
-            val buttonPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0))
-            buttonPanel.add(JButton("+").apply {
-                preferredSize = Dimension(36, 28)
-                toolTipText = "Add path rule"
-                addActionListener {
-                    val descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor()
-                    val chosen = FileChooser.chooseFile(descriptor, project, null)
-                    if (chosen != null) {
-                        val path = chosen.path
-                        if (!externalRulesListModel.contains(path)) {
-                            externalRulesListModel.addElement(path)
-                        }
-                    }
-                }
-            })
-            buttonPanel.add(JButton("-").apply {
-                preferredSize = Dimension(36, 28)
-                toolTipText = "Remove selected rule"
-                addActionListener {
-                    val selected = externalRulesList?.selectedIndex ?: -1
-                    if (selected >= 0) {
-                        externalRulesListModel.remove(selected)
-                    }
-                }
-            })
-            listPanel.add(buttonPanel, BorderLayout.SOUTH)
-
-            // 可折叠区域
-            val (headerPanel, contentWrapper) = createCollapsibleSection(
-                title = "External Access",
-                contentPanel = listPanel,
-                initiallyExpanded = currentRules.isNotEmpty(),
-                extraHeaderComponents = listOf(fileAllowExternalCheckbox)
-            )
-
-            topPanel.add(headerPanel)
-            topPanel.add(contentWrapper)
-            topPanel.add(Box.createVerticalStrut(6))
-
-            // 初始状态
-            updateExternalRulesState()
-            fileAllowExternalCheckbox.addActionListener { updateExternalRulesState() }
+        val codexPanel = JBScrollPane(codexContent).apply {
+            border = JBUI.Borders.empty()
         }
+        tabbedPane.addTab("Codex", codexPanel)
 
-        // JetBrains Terminal MCP 的 Shell 配置（紧凑布局：合并到一行）
-        if (entry.name == "JetBrains Terminal MCP") {
-            // 解析已配置的可用 shells
-            val configuredShells = entry.terminalAvailableShells.trim()
-                .split(",")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .toSet()
-            val useAllShells = configuredShells.isEmpty()
-
-            // Shell 配置合并到一行：Default Shell + Available Shells
-            val shellConfigPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Default Shell:"))
-                add(defaultShellCombo)
-                add(Box.createHorizontalStrut(12))
-                add(JBLabel("Shells:").apply {
-                    foreground = JBColor(0x666666, 0x999999)
-                })
-                for (shellType in allShellTypes) {
-                    val isChecked = useAllShells || configuredShells.contains(shellType)
-                    val checkbox = JBCheckBox(shellType, isChecked).apply {
-                        addActionListener { updateDefaultShellCombo() }
-                    }
-                    availableShellCheckboxes[shellType] = checkbox
-                    add(checkbox)
-                }
-            }
-            topPanel.add(shellConfigPanel)
-
-            // 初始化 Default Shell 下拉框
-            updateDefaultShellCombo()
-            val savedDefaultShell = entry.terminalDefaultShell
-            val effectiveDefaultShell = if (savedDefaultShell.isNotBlank()) {
-                savedDefaultShell
-            } else {
-                AgentSettingsService.getInstance().getEffectiveDefaultShell()
-            }
-            if ((defaultShellCombo.model as? DefaultComboBoxModel<*>)?.getIndexOf(effectiveDefaultShell) != -1) {
-                defaultShellCombo.selectedItem = effectiveDefaultShell
-            }
-            topPanel.add(Box.createVerticalStrut(6))
-        }
-
-        // JetBrains Terminal MCP 的截断配置 + 超时配置（紧凑布局）
-        if (entry.name == "JetBrains Terminal MCP") {
-            // 第一行：Max lines + Max chars + Read timeout
-            val truncateAndTimeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Max lines:"))
-                add(maxOutputLinesField)
-                add(Box.createHorizontalStrut(8))
-                add(JBLabel("Max chars:"))
-                add(maxOutputCharsField)
-                add(Box.createHorizontalStrut(8))
-                add(JBLabel("Read timeout:"))
-                add(readTimeoutField)
-                add(JBLabel("sec"))
-            }
-            topPanel.add(truncateAndTimeoutPanel)
-            topPanel.add(Box.createVerticalStrut(4))
-        }
-
-        // Git MCP Commit 语言配置
-        if (entry.name == McpBundle.message("mcp.jetbrainsGit.name")) {
-            val commitLangPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
-                alignmentX = JPanel.LEFT_ALIGNMENT
-                add(JBLabel("Commit Message Language:"))
-                add(commitLanguageCombo)
-                add(JBLabel("<html><font color='gray' size='-1'>(AI will generate commit messages in this language)</font></html>"))
-            }
-            topPanel.add(commitLangPanel)
-            topPanel.add(Box.createVerticalStrut(4))
-        }
-
-        // 第二行：Tool Call Timeout
-        val toolTimeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            add(JBLabel("Tool Call Timeout:"))
-            add(toolTimeoutField)
-            add(JBLabel("seconds"))
-            add(JBLabel("<html><font color='gray' size='-1'>(min 1s)</font></html>"))
-        }
-        topPanel.add(toolTimeoutPanel)
-        topPanel.add(Box.createVerticalStrut(6))
-
-        // 系统提示词标签（与 Reset 按钮同行，更紧凑）
-        val promptHeaderPanel = JPanel(BorderLayout()).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            add(JBLabel("Appended System Prompt:"), BorderLayout.WEST)
-            add(JButton("Reset to Default").apply {
-                addActionListener { instructionsArea.text = entry.defaultInstructions }
-            }, BorderLayout.EAST)
-        }
-        topPanel.add(promptHeaderPanel)
-        topPanel.add(Box.createVerticalStrut(4))
-
-        // 中间可伸缩的提示词区域（增加最小高度，充分利用节省的空间）
-        val customScrollPane = JBScrollPane(instructionsArea).apply {
-            minimumSize = Dimension(550, 200)
-            preferredSize = Dimension(550, 300)
-        }
-
-        // 使用 BorderLayout 布局：顶部固定，中间伸缩
-        panel.add(topPanel, BorderLayout.NORTH)
-        panel.add(customScrollPane, BorderLayout.CENTER)
-        panel.preferredSize = Dimension(600, 580)
-        return panel
+        tabbedPane.preferredSize = Dimension(620, 620)
+        return tabbedPane
     }
 
     /**
@@ -874,6 +927,8 @@ class BuiltInMcpServerDialog(
         } else {
             instructionsArea.text
         }
+        val customClaudeInstructions = instructionsClaudeArea.text.trim()
+        val customCodexInstructions = instructionsCodexArea.text.trim()
 
         // 获取选中的可用 shells
         val selectedShells = if (entry.name == "JetBrains Terminal MCP") {
@@ -892,6 +947,8 @@ class BuiltInMcpServerDialog(
             enabled = enableCheckbox.isSelected,
             enabledBackends = backendSelection.getSelectedKeys(),
             instructions = customInstructions,
+            instructionsClaude = customClaudeInstructions,
+            instructionsCodex = customCodexInstructions,
             apiKey = if (entry.name == "Context7 MCP") apiKeyField.text else entry.apiKey,
             disabledTools = if (defaultDisabledTools.isNotEmpty() || entry.hasDisableToolsToggle) disabledToolsList.toList() else entry.disabledTools,
             codexDisabledFeatures = if (defaultCodexDisabledFeatures.isNotEmpty() || entry.hasDisableToolsToggle) codexDisabledFeaturesList.toList() else entry.codexDisabledFeatures,
@@ -948,6 +1005,16 @@ class McpServerDialog(
         lineWrap = true
         wrapStyleWord = true
     }
+    private val instructionsClaudeArea = JBTextArea(entry?.instructionsClaude ?: "", 2, 50).apply {
+        font = Font(Font.MONOSPACED, Font.PLAIN, 12)
+        lineWrap = true
+        wrapStyleWord = true
+    }
+    private val instructionsCodexArea = JBTextArea(entry?.instructionsCodex ?: "", 2, 50).apply {
+        font = Font(Font.MONOSPACED, Font.PLAIN, 12)
+        lineWrap = true
+        wrapStyleWord = true
+    }
     private val levelGroup = ButtonGroup()
     private val globalRadio = JBRadioButton("Global", entry?.level != McpServerLevel.PROJECT)
     private val projectRadio = JBRadioButton("Project", entry?.level == McpServerLevel.PROJECT)
@@ -963,25 +1030,24 @@ class McpServerDialog(
     }
 
     override fun createCenterPanel(): JComponent {
-        val panel = JPanel(BorderLayout())
-        panel.border = JBUI.Borders.empty(10)
+        val tabbedPane = JBTabbedPane()
 
-        val contentPanel = JPanel().apply {
+        val generalContent = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            border = JBUI.Borders.empty(10)
         }
 
-        // Enable checkbox
         val enablePanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
             add(enableCheckbox)
         }
-        contentPanel.add(enablePanel)
-        contentPanel.add(Box.createVerticalStrut(10))
+        generalContent.add(enablePanel)
+        generalContent.add(Box.createVerticalStrut(8))
 
-        contentPanel.add(backendSelection.panel)
-        contentPanel.add(Box.createVerticalStrut(4))
-        contentPanel.add(backendSelection.hint)
-        contentPanel.add(Box.createVerticalStrut(10))
+        generalContent.add(backendSelection.panel)
+        generalContent.add(Box.createVerticalStrut(4))
+        generalContent.add(backendSelection.hint)
+        generalContent.add(Box.createVerticalStrut(10))
 
         fun updateBackendSelectionState(enabled: Boolean) {
             setEnabledRecursively(backendSelection.panel, enabled)
@@ -990,7 +1056,6 @@ class McpServerDialog(
         updateBackendSelectionState(enableCheckbox.isSelected)
         enableCheckbox.addActionListener { updateBackendSelectionState(enableCheckbox.isSelected) }
 
-        // JSON 配置区域
         val jsonPanel = JPanel(BorderLayout()).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
         }
@@ -1019,11 +1084,9 @@ class McpServerDialog(
         }
         jsonPanel.add(topPanel, BorderLayout.NORTH)
 
-        // 为 JSON 区域添加 placeholder
         val placeholderText = """{"server-name": {"command": "...", "args": [...]}}"""
         val placeholderColor = JBColor(0x999999, 0x666666)
 
-        // 自定义绘制 placeholder
         val jsonAreaWithPlaceholder = object : JPanel(BorderLayout()) {
             init {
                 add(jsonArea, BorderLayout.CENTER)
@@ -1052,35 +1115,32 @@ class McpServerDialog(
         }
         jsonPanel.add(jsonScrollPane, BorderLayout.CENTER)
 
-        // 简洁的格式提示
         val hintLabel = JBLabel("<html><font color='gray' size='-1'>HTTP: {\"name\": {\"type\": \"http\", \"url\": \"https://...\"}}</font></html>").apply {
             border = JBUI.Borders.emptyTop(4)
         }
         jsonPanel.add(hintLabel, BorderLayout.SOUTH)
 
-        contentPanel.add(jsonPanel)
-        contentPanel.add(Box.createVerticalStrut(15))
+        generalContent.add(jsonPanel)
+        generalContent.add(Box.createVerticalStrut(12))
 
-        // Appended System Prompt
-        val promptLabel = JBLabel("Appended System Prompt (optional):").apply {
+        val promptLabel = JBLabel("Common Appended System Prompt (optional):").apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
         }
-        contentPanel.add(promptLabel)
-        contentPanel.add(Box.createVerticalStrut(5))
+        generalContent.add(promptLabel)
+        generalContent.add(Box.createVerticalStrut(5))
 
         val instructionsScrollPane = JBScrollPane(instructionsArea).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
-            preferredSize = Dimension(500, 60)
+            preferredSize = Dimension(500, 80)
         }
-        contentPanel.add(instructionsScrollPane)
-        contentPanel.add(Box.createVerticalStrut(15))
+        generalContent.add(instructionsScrollPane)
+        generalContent.add(Box.createVerticalStrut(12))
 
-        // Tool call timeout
         val timeoutLabel = JBLabel("Tool Call Timeout:").apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
         }
-        contentPanel.add(timeoutLabel)
-        contentPanel.add(Box.createVerticalStrut(5))
+        generalContent.add(timeoutLabel)
+        generalContent.add(Box.createVerticalStrut(5))
 
         val timeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
@@ -1090,38 +1150,94 @@ class McpServerDialog(
             add(Box.createHorizontalStrut(8))
             add(JBLabel("<html><font color='gray' size='-1'>(minimum 1 second)</font></html>"))
         }
-        contentPanel.add(timeoutPanel)
-        contentPanel.add(Box.createVerticalStrut(15))
+        generalContent.add(timeoutPanel)
+        generalContent.add(Box.createVerticalStrut(12))
 
-        // Server level
         val levelPanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
             add(JBLabel("Server level:"))
             add(globalRadio)
             add(projectRadio)
         }
-        contentPanel.add(levelPanel)
+        generalContent.add(levelPanel)
 
         val levelHintLabel = JBLabel("<html><font color='gray' size='-1'>Global: all projects | Project: current project only</font></html>").apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
             border = JBUI.Borders.emptyLeft(85)
         }
-        contentPanel.add(levelHintLabel)
-        contentPanel.add(Box.createVerticalStrut(10))
+        generalContent.add(levelHintLabel)
+        generalContent.add(Box.createVerticalStrut(10))
 
-        // 警告
         val warningPanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
             background = JBColor(0xFFF3CD, 0x3D3000)
             border = JBUI.Borders.empty(8)
-            add(JBLabel("<html><font color='#856404'>⚠ Proceed with caution and only connect to trusted servers.</font></html>"))
+            add(JBLabel("<html><font color='#856404'>Warning: Proceed with caution and only connect to trusted servers.</font></html>"))
         }
-        contentPanel.add(warningPanel)
+        generalContent.add(warningPanel)
 
-        panel.add(contentPanel, BorderLayout.CENTER)
-        panel.preferredSize = Dimension(550, panel.preferredSize.height)
+        val generalPanel = JBScrollPane(generalContent).apply {
+            border = JBUI.Borders.empty()
+            preferredSize = Dimension(550, 520)
+        }
+        tabbedPane.addTab("General", generalPanel)
 
-        return panel
+        val claudeContent = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            border = JBUI.Borders.empty(10)
+        }
+        val claudeHeaderPanel = JPanel(BorderLayout()).apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+            add(JBLabel("Appended System Prompt (Claude Code Override):"), BorderLayout.WEST)
+            add(JButton("Use Common").apply {
+                addActionListener { instructionsClaudeArea.text = "" }
+            }, BorderLayout.EAST)
+        }
+        claudeContent.add(claudeHeaderPanel)
+        claudeContent.add(Box.createVerticalStrut(4))
+        claudeContent.add(JBLabel(
+            "<html><font color='gray' size='-1'>Leave empty to use common prompt.</font></html>"
+        ).apply { alignmentX = JPanel.LEFT_ALIGNMENT })
+        claudeContent.add(Box.createVerticalStrut(6))
+        val claudeScrollPane = JBScrollPane(instructionsClaudeArea).apply {
+            preferredSize = Dimension(500, 200)
+        }
+        claudeContent.add(claudeScrollPane)
+
+        val claudePanel = JBScrollPane(claudeContent).apply {
+            border = JBUI.Borders.empty()
+        }
+        tabbedPane.addTab("Claude Code", claudePanel)
+
+        val codexContent = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            border = JBUI.Borders.empty(10)
+        }
+        val codexHeaderPanel = JPanel(BorderLayout()).apply {
+            alignmentX = JPanel.LEFT_ALIGNMENT
+            add(JBLabel("Appended System Prompt (Codex Override):"), BorderLayout.WEST)
+            add(JButton("Use Common").apply {
+                addActionListener { instructionsCodexArea.text = "" }
+            }, BorderLayout.EAST)
+        }
+        codexContent.add(codexHeaderPanel)
+        codexContent.add(Box.createVerticalStrut(4))
+        codexContent.add(JBLabel(
+            "<html><font color='gray' size='-1'>Leave empty to use common prompt.</font></html>"
+        ).apply { alignmentX = JPanel.LEFT_ALIGNMENT })
+        codexContent.add(Box.createVerticalStrut(6))
+        val codexScrollPane = JBScrollPane(instructionsCodexArea).apply {
+            preferredSize = Dimension(500, 200)
+        }
+        codexContent.add(codexScrollPane)
+
+        val codexPanel = JBScrollPane(codexContent).apply {
+            border = JBUI.Borders.empty()
+        }
+        tabbedPane.addTab("Codex", codexPanel)
+
+        tabbedPane.preferredSize = Dimension(580, 560)
+        return tabbedPane
     }
 
     /**
@@ -1246,9 +1362,10 @@ class McpServerDialog(
             isBuiltIn = false,
             jsonConfig = jsonText,
             instructions = instructionsArea.text.trim(),
+            instructionsClaude = instructionsClaudeArea.text.trim(),
+            instructionsCodex = instructionsCodexArea.text.trim(),
             toolTimeoutSec = (toolTimeoutField.text.toIntOrNull() ?: 60).coerceAtLeast(1)
         )
     }
 }
-
 

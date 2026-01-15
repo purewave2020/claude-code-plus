@@ -1,5 +1,6 @@
 ﻿package com.asakii.plugin.mcp
 
+import com.asakii.ai.agent.sdk.McpSystemPromptContext
 import com.asakii.claude.agent.sdk.mcp.McpServer
 import com.asakii.claude.agent.sdk.mcp.McpServerBase
 import com.asakii.claude.agent.sdk.mcp.annotations.McpServerConfig
@@ -57,7 +58,8 @@ class GitMcpServerImpl(private val project: Project) : McpServerBase() {
 
     override fun getSystemPromptAppendix(): String {
         val settings = AgentSettingsService.getInstance()
-        val baseInstructions = settings.effectiveGitInstructions
+        val provider = McpSystemPromptContext.getProvider()
+        val baseInstructions = settings.getEffectiveGitInstructionsForProvider(provider)
         val commitLang = settings.gitCommitLanguage
         
         // Language requirement at the very beginning (fixed, not user-editable)

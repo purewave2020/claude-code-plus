@@ -1,5 +1,6 @@
 package com.asakii.plugin.mcp
 
+import com.asakii.ai.agent.sdk.McpSystemPromptContext
 import com.asakii.claude.agent.sdk.mcp.McpServer
 import com.asakii.claude.agent.sdk.mcp.McpServerBase
 import com.asakii.claude.agent.sdk.mcp.annotations.McpServerConfig
@@ -48,7 +49,8 @@ class JetBrainsFileMcpServerImpl(private val project: Project) : McpServerBase()
     private lateinit var editFileTool: EditFileTool
 
     override fun getSystemPromptAppendix(): String {
-        return AgentSettingsService.getInstance().effectiveJetbrainsFileInstructions
+        val provider = McpSystemPromptContext.getProvider()
+        return AgentSettingsService.getInstance().getEffectiveJetbrainsFileInstructionsForProvider(provider)
     }
 
     /**

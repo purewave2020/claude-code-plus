@@ -936,18 +936,15 @@ export function useSessionMessages(
 
     // assistant 消息处理
     if (message.role === 'assistant') {
-      const latestStreamingMessage = findStreamingAssistantMessage()
-
-      // 存在流式消息且 ID 相同 → 同步 signature 后忽略（流式已组装完成）
-      if (latestStreamingMessage && latestStreamingMessage.id === message.id) {
+      // 检查最后一条 assistant 消息是否 ID 相同（流式消息已组装完成）
+      const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
+      if (lastAssistant && lastAssistant.id === message.id) {
         log.debug('[useSessionMessages] 同步完整消息中的 signature 到 displayItem')
-        // 从完整消息中提取 thinking 块的 signature，更新到 displayItem
-        // （因为流式传输不发送 signature，只有完整消息中才有）
         syncThinkingSignatures(message)
         return
       }
 
-      // ID 不同或无流式消息 → 添加新消息
+      // 消息不存在 → 添加新消息
       log.debug('[useSessionMessages] 添加新 assistant 消息')
       addMessage(message)
       touchMessages()
