@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Console Appender -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%logger{20}] %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Codex SDK loggers -->
+    <logger name="CodexAppServerClient" level="DEBUG"/>
+    <logger name="CodexAppServerProcess" level="DEBUG"/>
+    <logger name="CodexJsonRpcClient" level="DEBUG"/>
+
+    <!-- Root logger -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
