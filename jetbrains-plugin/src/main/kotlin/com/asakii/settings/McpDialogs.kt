@@ -19,6 +19,15 @@ import javax.swing.*
 import com.asakii.ai.agent.sdk.CodexFeatures
 
 /**
+ * 对话框统一间距常量
+ */
+private object DialogSpacing {
+    const val SECTION_GAP = 16      // 分组之间的间距
+    const val ITEM_GAP = 8          // 同组项目之间的间距
+    const val LABEL_GAP = 4         // 标签与内容之间的间距
+}
+
+/**
  * MCP Backend 选择组件
  * 用于选择 MCP 服务器在哪些后端中启用（All、Claude Code、Codex）
  */
@@ -214,10 +223,10 @@ class BuiltInMcpServerDialog(
 
         val generalContent = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            border = JBUI.Borders.empty(10)
+            border = JBUI.Borders.empty(12)
         }
 
-        // Enable + Backend selection
+        // ========== 基本设置组 ==========
         val enableBackendPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
             add(enableCheckbox)
@@ -225,9 +234,9 @@ class BuiltInMcpServerDialog(
             backendSelection.panel.components.forEach { add(it) }
         }
         generalContent.add(enableBackendPanel)
-        generalContent.add(Box.createVerticalStrut(4))
+        generalContent.add(Box.createVerticalStrut(DialogSpacing.LABEL_GAP))
         generalContent.add(backendSelection.hint)
-        generalContent.add(Box.createVerticalStrut(8))
+        generalContent.add(Box.createVerticalStrut(DialogSpacing.SECTION_GAP))
 
         // Toggle backend selection enabled state
         fun updateBackendSelectionState(enabled: Boolean) {
@@ -237,6 +246,7 @@ class BuiltInMcpServerDialog(
         updateBackendSelectionState(enableCheckbox.isSelected)
         enableCheckbox.addActionListener { updateBackendSelectionState(enableCheckbox.isSelected) }
 
+        // ========== 服务器特定配置组 ==========
         // Context7 MCP API key
         if (entry.name == "Context7 MCP") {
             val apiKeyPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
@@ -246,7 +256,7 @@ class BuiltInMcpServerDialog(
                 add(JBLabel("<html><font color='gray' size='-1'>(optional, for authenticated access)</font></html>"))
             }
             generalContent.add(apiKeyPanel)
-            generalContent.add(Box.createVerticalStrut(6))
+            generalContent.add(Box.createVerticalStrut(DialogSpacing.ITEM_GAP))
         }
 
         // JetBrains File MCP external access
@@ -303,7 +313,7 @@ class BuiltInMcpServerDialog(
 
             generalContent.add(headerPanel)
             generalContent.add(contentWrapper)
-            generalContent.add(Box.createVerticalStrut(6))
+            generalContent.add(Box.createVerticalStrut(DialogSpacing.ITEM_GAP))
 
             updateExternalRulesState()
             fileAllowExternalCheckbox.addActionListener { updateExternalRulesState() }
@@ -347,7 +357,7 @@ class BuiltInMcpServerDialog(
             if ((defaultShellCombo.model as? DefaultComboBoxModel<*>)?.getIndexOf(effectiveDefaultShell) != -1) {
                 defaultShellCombo.selectedItem = effectiveDefaultShell
             }
-            generalContent.add(Box.createVerticalStrut(6))
+            generalContent.add(Box.createVerticalStrut(DialogSpacing.ITEM_GAP))
         }
 
         // JetBrains Terminal MCP truncate and read timeout
@@ -365,7 +375,7 @@ class BuiltInMcpServerDialog(
                 add(JBLabel("sec"))
             }
             generalContent.add(truncateAndTimeoutPanel)
-            generalContent.add(Box.createVerticalStrut(4))
+            generalContent.add(Box.createVerticalStrut(DialogSpacing.SECTION_GAP))
         }
 
         // Git MCP commit language
@@ -377,9 +387,10 @@ class BuiltInMcpServerDialog(
                 add(JBLabel("<html><font color='gray' size='-1'>(AI will generate commit messages in this language)</font></html>"))
             }
             generalContent.add(commitLangPanel)
-            generalContent.add(Box.createVerticalStrut(4))
+            generalContent.add(Box.createVerticalStrut(DialogSpacing.SECTION_GAP))
         }
 
+        // ========== 超时设置组 ==========
         val toolTimeoutPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
             add(JBLabel("Tool Call Timeout:"))
@@ -388,7 +399,9 @@ class BuiltInMcpServerDialog(
             add(JBLabel("<html><font color='gray' size='-1'>(min 1s)</font></html>"))
         }
         generalContent.add(toolTimeoutPanel)
-        generalContent.add(Box.createVerticalStrut(6))
+        generalContent.add(Box.createVerticalStrut(DialogSpacing.SECTION_GAP))
+
+        // ========== 系统提示词组 ==========
 
         val resetCommonButton = JButton("Reset to Default").apply {
             addActionListener { instructionsArea.text = entry.defaultInstructions }
@@ -414,27 +427,29 @@ class BuiltInMcpServerDialog(
 
         val claudeContent = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            border = JBUI.Borders.empty(10)
+            border = JBUI.Borders.empty(12)
         }
         val claudeHeaderPanel = JPanel(BorderLayout()).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
-            add(JBLabel("Appended System Prompt (Claude Code Override):"), BorderLayout.WEST)
+            add(JBLabel("<html><b>Appended System Prompt (Claude Code Override)</b></html>"), BorderLayout.WEST)
             add(JButton("Use Common").apply {
+                toolTipText = "Clear this field to use common prompt"
                 addActionListener { instructionsClaudeArea.text = "" }
             }, BorderLayout.EAST)
         }
         claudeContent.add(claudeHeaderPanel)
-        claudeContent.add(Box.createVerticalStrut(4))
+        claudeContent.add(Box.createVerticalStrut(DialogSpacing.ITEM_GAP))
         claudeContent.add(JBLabel(
-            "<html><font color='gray' size='-1'>Leave empty to use common/default instructions.</font></html>"
+            "<html><font color='#6B7280' size='-1'>Leave empty to use the common system prompt defined in General tab. " +
+            "Only fill this if you need Claude Code-specific instructions.</font></html>"
         ).apply { alignmentX = JPanel.LEFT_ALIGNMENT })
-        claudeContent.add(Box.createVerticalStrut(6))
+        claudeContent.add(Box.createVerticalStrut(DialogSpacing.ITEM_GAP))
         val claudeScrollPane = JBScrollPane(instructionsClaudeArea).apply {
             minimumSize = Dimension(550, 200)
             preferredSize = Dimension(550, 300)
         }
         claudeContent.add(claudeScrollPane)
-        claudeContent.add(Box.createVerticalStrut(8))
+        claudeContent.add(Box.createVerticalStrut(DialogSpacing.SECTION_GAP))
 
         // Disabled tools (Claude Code)
         if (defaultDisabledTools.isNotEmpty() || entry.hasDisableToolsToggle) {
@@ -479,7 +494,7 @@ class BuiltInMcpServerDialog(
             )
             claudeContent.add(headerPanel)
             claudeContent.add(contentWrapper)
-            claudeContent.add(Box.createVerticalStrut(6))
+            claudeContent.add(Box.createVerticalStrut(DialogSpacing.ITEM_GAP))
         }
 
         val claudePanel = JBScrollPane(claudeContent).apply {
@@ -489,27 +504,29 @@ class BuiltInMcpServerDialog(
 
         val codexContent = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            border = JBUI.Borders.empty(10)
+            border = JBUI.Borders.empty(12)
         }
         val codexHeaderPanel = JPanel(BorderLayout()).apply {
             alignmentX = JPanel.LEFT_ALIGNMENT
-            add(JBLabel("Appended System Prompt (Codex Override):"), BorderLayout.WEST)
+            add(JBLabel("<html><b>Appended System Prompt (Codex Override)</b></html>"), BorderLayout.WEST)
             add(JButton("Use Common").apply {
+                toolTipText = "Clear this field to use common prompt"
                 addActionListener { instructionsCodexArea.text = "" }
             }, BorderLayout.EAST)
         }
         codexContent.add(codexHeaderPanel)
-        codexContent.add(Box.createVerticalStrut(4))
+        codexContent.add(Box.createVerticalStrut(DialogSpacing.ITEM_GAP))
         codexContent.add(JBLabel(
-            "<html><font color='gray' size='-1'>Leave empty to use common/default instructions.</font></html>"
+            "<html><font color='#6B7280' size='-1'>Leave empty to use the common system prompt defined in General tab. " +
+            "Only fill this if you need Codex-specific instructions.</font></html>"
         ).apply { alignmentX = JPanel.LEFT_ALIGNMENT })
-        codexContent.add(Box.createVerticalStrut(6))
+        codexContent.add(Box.createVerticalStrut(DialogSpacing.ITEM_GAP))
         val codexScrollPane = JBScrollPane(instructionsCodexArea).apply {
             minimumSize = Dimension(550, 200)
             preferredSize = Dimension(550, 300)
         }
         codexContent.add(codexScrollPane)
-        codexContent.add(Box.createVerticalStrut(8))
+        codexContent.add(Box.createVerticalStrut(DialogSpacing.SECTION_GAP))
 
         // Codex disabled features
         if (defaultCodexDisabledFeatures.isNotEmpty()) {
@@ -565,7 +582,7 @@ class BuiltInMcpServerDialog(
             )
             codexContent.add(headerPanel)
             codexContent.add(contentWrapper)
-            codexContent.add(Box.createVerticalStrut(6))
+            codexContent.add(Box.createVerticalStrut(DialogSpacing.ITEM_GAP))
         }
 
         // Codex auto-approved tools
@@ -611,7 +628,7 @@ class BuiltInMcpServerDialog(
             )
             codexContent.add(headerPanel)
             codexContent.add(contentWrapper)
-            codexContent.add(Box.createVerticalStrut(6))
+            codexContent.add(Box.createVerticalStrut(DialogSpacing.ITEM_GAP))
         }
 
         val codexPanel = JBScrollPane(codexContent).apply {
