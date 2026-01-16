@@ -33,12 +33,12 @@ private val logger = getLogger("McpHttpGateway")
 
 object McpHttpGateway {
     /**
-     * MCP 端点路由键
+     * 局部 MCP 端点路由键（每个 tab 独立）
      * @param provider AI 提供商
-     * @param connectId 前端永久连接标识（用于 MCP 路由，不随重连变化）
+     * @param connectId 前端永久连接标识（tabId）
      * @param serverName MCP 服务器名称
      */
-    private data class EndpointKey(
+    private data class SessionEndpointKey(
         val provider: AiAgentProvider,
         val connectId: String,
         val serverName: String
@@ -61,7 +61,12 @@ object McpHttpGateway {
 
     private val json = JsonTools.kotlinJson
     private val jsonMapper = JsonTools.mcpJsonMapper
-    private val endpointsByKey = ConcurrentHashMap<EndpointKey, Endpoint>()
+    
+    /** 全局 MCP 端点：所有 tab 共享，key = serverName */
+    private val globalEndpoints = ConcurrentHashMap<String, Endpoint>()
+    
+    /** 局部 MCP 端点：每个 tab 独立，key = (provider, connectId, serverName) */
+    private val sessionEndpoints = ConcurrentHashMap<SessionEndpointKey, Endpoint>()
     private val lifecycleLock = Any()
     private var jettyServer: Server? = null
     private var actualPort: Int = 0
@@ -114,9 +119,14 @@ object McpHttpGateway {
     }
 
     /**
+     * Global MCP 服务使用的 connectId 常量
+     */
+    const val GLOBAL_CONNECT_ID = "__global__"
+    
+    /**
      * 注册 MCP 服务器
      * @param provider AI 提供商
-     * @param connectId 前端永久连接标识（用于 MCP 路由）
+     * @param connectId 前端永久连接标识（全局服务传 GLOBAL_CONNECT_ID，局部服务传 tabId）
      * @param serverName MCP 服务器名称
      * @param server MCP 服务器实例
      * @param permissionRequester 权限请求器（仅 Codex 需要）
@@ -131,22 +141,31 @@ object McpHttpGateway {
         allowedTools: Set<String> = emptySet()
     ): String {
         ensureStarted()
-        val key = EndpointKey(provider, connectId, serverName)
+        val isGlobal = (connectId == GLOBAL_CONNECT_ID)
         
-        // 如果已存在旧端点，先清理（不再复用，确保每次 connect 创建新的 transport）
-        // 这解决了 CLI 重连时 SDK session 不匹配的问题
-        endpointsByKey[key]?.let { oldEndpoint ->
-            logger.info { "[MCP] Replacing existing endpoint for key=$key" }
-            runCatching { oldEndpoint.server.closeGracefully() }
-                .onFailure { logger.warn(it) { "[MCP] Failed to close old endpoint" } }
-            endpointsByKey.remove(key)
+        // 全局服务：所有 tab 共享，只用 serverName 作为 key
+        if (isGlobal) {
+            val existing = globalEndpoints[serverName]
+            if (existing != null) {
+                logger.info { "[MCP] Reusing global endpoint: $serverName" }
+                return buildUrl(existing.path)
+            }
+        } else {
+            // 局部服务：每个 tab 独立，替换旧端点
+            val key = SessionEndpointKey(provider, connectId, serverName)
+            sessionEndpoints[key]?.let { oldEndpoint ->
+                logger.info { "[MCP] Replacing session endpoint: $key" }
+                runCatching { oldEndpoint.server.closeGracefully() }
+                    .onFailure { logger.warn(it) { "[MCP] Failed to close old endpoint" } }
+                sessionEndpoints.remove(key)
+            }
         }
 
         val endpointPath = buildEndpointPath(serverName)
         val transport = HttpServletStreamableServerTransportProvider.builder()
             .jsonMapper(jsonMapper)
             .mcpEndpoint(endpointPath)
-            .keepAliveInterval(Duration.ofMinutes(1))  // Keep SSE connections alive
+            .keepAliveInterval(Duration.ofMinutes(1))
             .build()
 
         val serverBuilder = OfficialMcpServer.sync(transport)
@@ -173,39 +192,51 @@ object McpHttpGateway {
         registerTools(syncServer, server, permissionContext)
 
         val endpoint = Endpoint(endpointPath, syncServer, transport)
-        endpointsByKey[key] = endpoint
-        logger.info { "[MCP] Registered endpoint $endpointPath (provider=$provider, connectId=$connectId, key=$key)" }
+        
+        if (isGlobal) {
+            globalEndpoints[serverName] = endpoint
+            logger.info { "[MCP] Registered global endpoint: $serverName" }
+        } else {
+            val key = SessionEndpointKey(provider, connectId, serverName)
+            sessionEndpoints[key] = endpoint
+            logger.info { "[MCP] Registered session endpoint: $key" }
+        }
+        
         return buildUrl(endpointPath)
     }
 
     /**
-     * 注销指定 connectId 的所有 MCP 端点
+     * 注销指定 connectId 的所有局部 MCP 端点
+     * 注意：全局端点不会被注销（所有 tab 共享）
      */
     fun unregisterSession(connectId: String) {
-        val keys = endpointsByKey.keys.filter { it.connectId == connectId }
-        keys.forEach { unregister(it) }
+        // 只清理局部端点，全局端点保留
+        val keys = sessionEndpoints.keys.filter { it.connectId == connectId }
+        keys.forEach { unregisterSessionEndpoint(it) }
     }
 
     /**
-     * 注销指定 provider 和 connectId 的所有 MCP 端点
+     * 注销指定 provider 和 connectId 的所有局部 MCP 端点
      */
     fun unregisterProviderSession(provider: AiAgentProvider, connectId: String) {
-        val keys = endpointsByKey.keys.filter { it.connectId == connectId && it.provider == provider }
-        keys.forEach { unregister(it) }
+        val keys = sessionEndpoints.keys.filter { it.connectId == connectId && it.provider == provider }
+        keys.forEach { unregisterSessionEndpoint(it) }
     }
 
-    private fun unregister(key: EndpointKey) {
-        val endpoint = endpointsByKey.remove(key) ?: return
-        logger.info { "[MCP] Unregistering endpoint (key=$key)" }
+    private fun unregisterSessionEndpoint(key: SessionEndpointKey) {
+        val endpoint = sessionEndpoints.remove(key) ?: return
+        logger.info { "[MCP] Unregistering session endpoint: $key" }
         runCatching { endpoint.server.closeGracefully() }
             .onFailure { logger.warn(it) { "[MCP] Failed to close endpoint ${endpoint.path}" } }
     }
 
     /**
-     * 根据请求中的 X-Session-Id（实际为 connectId）和 X-Provider 解析 transport。
+     * 根据请求解析 transport。
      * URL 格式: /mcp/{serverName}
-     *
-     * 注意：HTTP 头 X-Session-Id 的值实际上是前端的 connectId（永久连接标识）
+     * 
+     * 路由优先级：
+     * 1. 先查局部端点（需要 connectId 和 provider）
+     * 2. 再查全局端点（只需要 serverName）
      */
     private fun resolveTransportByRequest(
         path: String,
@@ -213,24 +244,34 @@ object McpHttpGateway {
         providerName: String?
     ): HttpServletStreamableServerTransportProvider? {
         val normalized = path.trimEnd('/')
-        // 从 /mcp/{serverName} 提取 serverName
         val serverName = normalized.removePrefix("/mcp/").takeIf { it.isNotBlank() } ?: return null
 
-        // 如果没有路由信息，无法路由
-        if (connectId.isNullOrBlank() || providerName.isNullOrBlank()) {
-            logger.warn { "[MCP] Missing required routing info: connectId=$connectId, provider=$providerName" }
-            return null
+        // 1. 尝试查找局部端点
+        if (!connectId.isNullOrBlank() && !providerName.isNullOrBlank()) {
+            val provider = try {
+                AiAgentProvider.valueOf(providerName.uppercase())
+            } catch (e: IllegalArgumentException) {
+                logger.warn { "[MCP] Invalid provider: $providerName" }
+                null
+            }
+            
+            if (provider != null) {
+                val key = SessionEndpointKey(provider, connectId, serverName)
+                sessionEndpoints[key]?.let { 
+                    logger.debug { "[MCP] Resolved session endpoint: $key" }
+                    return it.transport 
+                }
+            }
         }
 
-        val provider = try {
-            AiAgentProvider.valueOf(providerName.uppercase())
-        } catch (e: IllegalArgumentException) {
-            logger.warn { "[MCP] Invalid provider: $providerName" }
-            return null
+        // 2. 查找全局端点
+        globalEndpoints[serverName]?.let {
+            logger.debug { "[MCP] Resolved global endpoint: $serverName" }
+            return it.transport
         }
 
-        val key = EndpointKey(provider, connectId, serverName)
-        return endpointsByKey[key]?.transport
+        logger.warn { "[MCP] No endpoint found for serverName=$serverName, connectId=$connectId, provider=$providerName" }
+        return null
     }
 
     private suspend fun registerTools(

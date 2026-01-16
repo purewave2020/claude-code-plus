@@ -133,7 +133,6 @@ class AiAgentRpcServiceImpl(
     }
 
     private companion object {
-        private const val GLOBAL_MCP_SESSION_ID = "__global__"
         private val GLOBAL_MCP_PROVIDER = AiAgentProvider.CLAUDE
     }
 
@@ -894,7 +893,7 @@ class AiAgentRpcServiceImpl(
         // 注意：global servers 也需要使用当前 provider 注册，以便 Codex 模式下进行权限检查
         // session servers 使用 connectId 进行路由（不随重连变化）
         globalServers.forEach { (name, server) ->
-            registerMcpServer(name, server, provider, GLOBAL_MCP_SESSION_ID, "global")
+            registerMcpServer(name, server, provider, McpHttpGateway.GLOBAL_CONNECT_ID, "global")
         }
         sessionServers.forEach { (name, server) ->
             registerMcpServer(name, server, provider, effectiveConnectId, "session")
