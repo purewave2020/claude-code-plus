@@ -210,6 +210,15 @@ class AiAgentRpcServiceImpl(
         sdkLog.info { "[connect] connectId=$connectId (from options=${normalizedOptions.connectId != null})" }
 
         val connectOptions = buildConnectOptions(normalizedOptions)
+
+        // 清理该 tabId 对应的旧 MCP 端点，确保新 CLI 的 initialize 创建新 session
+        // 这解决了 transport 复用但 SDK session 不匹配的问题
+        runCatching {
+            McpHttpGateway.unregisterProviderSession(connectOptions.provider, connectId!!)
+            sdkLog.info { "[connect] Cleared old MCP endpoints for connectId=$connectId, provider=${connectOptions.provider}" }
+        }.onFailure { e ->
+            sdkLog.warn { "[connect] Failed to clear old MCP endpoints: ${e.message}" }
+        }
         currentProvider = connectOptions.provider
         sdkLog.info { "[connect] provider=${connectOptions.provider}, model=${connectOptions.model ?: "default"}" }
 
@@ -687,8 +696,20 @@ class AiAgentRpcServiceImpl(
     }
 
     private suspend fun disconnectInternal() {
-        // 仅断开客户端，保留 MCP 资源以支持重连
-        // 完整清理由 disposeSession() 负责
+        // 断开客户端并清理 MCP 资源
+        // 确保下次 connect 时能创建新的 MCP session
+        
+        // 先清理 MCP 资源
+        connectId?.let { cid ->
+            runCatching {
+                McpHttpGateway.unregisterProviderSession(currentProvider, cid)
+                sdkLog.info { "[disconnect] Cleared MCP endpoints for connectId=$cid" }
+            }.onFailure { e ->
+                sdkLog.warn { "[disconnect] Failed to clear MCP endpoints: ${e.message}" }
+            }
+        }
+        
+        // 断开 CLI
         try {
             client?.disconnect()
         } catch (t: Throwable) {

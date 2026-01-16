@@ -132,7 +132,15 @@ object McpHttpGateway {
     ): String {
         ensureStarted()
         val key = EndpointKey(provider, connectId, serverName)
-        endpointsByKey[key]?.let { return buildUrl(it.path) }
+        
+        // 如果已存在旧端点，先清理（不再复用，确保每次 connect 创建新的 transport）
+        // 这解决了 CLI 重连时 SDK session 不匹配的问题
+        endpointsByKey[key]?.let { oldEndpoint ->
+            logger.info { "[MCP] Replacing existing endpoint for key=$key" }
+            runCatching { oldEndpoint.server.closeGracefully() }
+                .onFailure { logger.warn(it) { "[MCP] Failed to close old endpoint" } }
+            endpointsByKey.remove(key)
+        }
 
         val endpointPath = buildEndpointPath(serverName)
         val transport = HttpServletStreamableServerTransportProvider.builder()
