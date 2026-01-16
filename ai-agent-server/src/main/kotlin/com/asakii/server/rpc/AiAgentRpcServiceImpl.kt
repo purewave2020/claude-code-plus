@@ -121,8 +121,11 @@ class AiAgentRpcServiceImpl(
     private var client: UnifiedAgentClient? = null
     private var currentProvider: AiAgentProvider = AiAgentProvider.CLAUDE  // 默认值，connect 时会根据配置更新
     private var lastConnectOptions: RpcConnectOptions? = null
-    /** 前端永久连接标识，用于 MCP 路由（不随重连变化）。若前端未提供则回退到 sessionId */
-    private var connectId: String? = null
+    /** 
+     * 前端永久连接标识，用于 MCP 路由（不随重连变化）
+     * 初始化为 sessionId，connect 时若前端提供了 connectId 则覆盖
+     */
+    private var effectiveConnectId: String = sessionId
 
     // 🔧 追踪当前 query 的完成状态，用于 interrupt 同步等待
     private var queryCompletion: CompletableDeferred<Unit>? = null
@@ -203,18 +206,17 @@ class AiAgentRpcServiceImpl(
 
         disconnectInternal()
 
-        // 保存 connectId（前端永久连接标识），用于 MCP 路由
-        // 若前端未提供，则回退到内部 sessionId
-        connectId = normalizedOptions.connectId ?: sessionId
-        sdkLog.info { "[connect] connectId=$connectId (from options=${normalizedOptions.connectId != null})" }
+        // 更新 effectiveConnectId：若前端提供了 connectId 则使用，否则保持初始值 sessionId
+        normalizedOptions.connectId?.let { effectiveConnectId = it }
+        sdkLog.info { "[connect] effectiveConnectId=$effectiveConnectId (from options=${normalizedOptions.connectId != null})" }
 
         val connectOptions = buildConnectOptions(normalizedOptions)
 
         // 清理该 tabId 对应的旧 MCP 端点，确保新 CLI 的 initialize 创建新 session
         // 这解决了 transport 复用但 SDK session 不匹配的问题
         runCatching {
-            McpHttpGateway.unregisterProviderSession(connectOptions.provider, connectId!!)
-            sdkLog.info { "[connect] Cleared old MCP endpoints for connectId=$connectId, provider=${connectOptions.provider}" }
+            McpHttpGateway.unregisterProviderSession(connectOptions.provider, effectiveConnectId)
+            sdkLog.info { "[connect] Cleared old MCP endpoints for connectId=$effectiveConnectId, provider=${connectOptions.provider}" }
         }.onFailure { e ->
             sdkLog.warn { "[connect] Failed to clear old MCP endpoints: ${e.message}" }
         }
@@ -290,8 +292,8 @@ class AiAgentRpcServiceImpl(
             status = RpcSessionStatus.CONNECTED,
             capabilities = capabilities,
             cwd = projectCwd,
-            // 回显 connectId 供前端确认
-            connectId = connectId
+            // 回显 effectiveConnectId 供前端确认
+            connectId = effectiveConnectId
         )
     }
 
@@ -699,13 +701,11 @@ class AiAgentRpcServiceImpl(
         // 确保下次 connect 时能创建新的 MCP session
         
         // 先清理 MCP 资源
-        connectId?.let { cid ->
-            runCatching {
-                McpHttpGateway.unregisterProviderSession(currentProvider, cid)
-                sdkLog.info { "[disconnect] Cleared MCP endpoints for connectId=$cid" }
-            }.onFailure { e ->
-                sdkLog.warn { "[disconnect] Failed to clear MCP endpoints: ${e.message}" }
-            }
+        runCatching {
+            McpHttpGateway.unregisterProviderSession(currentProvider, effectiveConnectId)
+            sdkLog.info { "[disconnect] Cleared MCP endpoints for connectId=$effectiveConnectId" }
+        }.onFailure { e ->
+            sdkLog.warn { "[disconnect] Failed to clear MCP endpoints: ${e.message}" }
         }
         
         // 断开 CLI
@@ -719,19 +719,10 @@ class AiAgentRpcServiceImpl(
     }
 
     override suspend fun disposeSession(): RpcStatusResult {
-        // 使用 connectId 进行清理（与注册时一致）
-        val effectiveConnectId = connectId ?: sessionId
         sdkLog.info { "🗑️ [SDK] 销毁会话: connectId=$effectiveConnectId, sessionId=$sessionId" }
 
-        // 先断开客户端
+        // 先断开客户端（内部已清理 MCP 端点）
         disconnectInternal()
-
-        // 清理 MCP HTTP Gateway 端点（使用 connectId，与注册时一致）
-        runCatching {
-            McpHttpGateway.unregisterProviderSession(currentProvider, effectiveConnectId)
-        }.onFailure { e ->
-            sdkLog.warn { "[MCP] Failed to unregister session endpoints: ${e.message}" }
-        }
 
         // 清理 Terminal MCP session（仍使用 sessionId，因为终端是按 AI session 关联的）
         runCatching {
@@ -819,8 +810,6 @@ class AiAgentRpcServiceImpl(
     ): McpSessionSetup = withContext(McpSystemPromptContext.asContextElement(provider)) {
         val defaults = serviceConfig.claude
         val fallbackBackends = serviceConfig.mcpEnabledBackends
-        // 使用 connectId 进行 MCP 路由（connectId 在 connect() 中已设置，回退到 sessionId）
-        val effectiveConnectId = connectId ?: sessionId
         sdkLog.info(
             "[MCP] prepareMcpSession: provider=$provider, connectId=$effectiveConnectId, sessionId=$sessionId, fallbackBackends=${fallbackBackends.joinToString()}"
         )
