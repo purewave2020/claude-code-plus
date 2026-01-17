@@ -908,61 +908,26 @@ export function useSessionMessages(
   }
 
   /**
-   * 同步新增的内容块到 displayItems
-   * 当收到完整消息时，可能包含之前流式消息中不存在的内容块（如 text）
-   *
-   * 按块实例（index + type + id）去重，而不仅按类型去重
+   * 同步新增的内容块到 displayItems（仅用于非流式模式）
+   * 
+   * 注意：流式模式下不会调用此函数，因为 content_block_start 已经创建了 displayItem
    */
   function syncNewContentBlocks(newMessage: Message, existingMessage: Message): void {
     if (newMessage.role !== 'assistant') return
 
-    // 构建现有块的指纹集合（使用 index + type + id）
-    const existingFingerprints = new Set<string>()
-    existingMessage.content.forEach((block, idx) => {
-      const blockId = (block as any).id || ''
-      const fp = `${idx}_${block.type}_${blockId}`
-      existingFingerprints.add(fp)
-    })
-
-    // 找出新消息中存在但旧消息中不存在的内容块
-    const newBlocksWithIndex: { block: ContentBlock; index: number }[] = []
-    newMessage.content.forEach((block, idx) => {
-      const blockId = (block as any).id || ''
-      const fp = `${idx}_${block.type}_${blockId}`
-      if (!existingFingerprints.has(fp)) {
-        newBlocksWithIndex.push({ block, index: idx })
-      }
-    })
-
-    if (newBlocksWithIndex.length === 0) {
-      log.debug('[useSessionMessages] 没有新增的内容块需要同步')
-      return
-    }
-
-    const newBlocks = newBlocksWithIndex.map(item => item.block)
-    log.info(`[useSessionMessages] 同步新增内容块: ${newBlocks.map(b => b.type).join(', ')}`)
-
-    // 更新现有消息的 content（合并新内容块，保持正确位置）
-    newBlocksWithIndex.forEach(({ block, index }) => {
-      if (index < existingMessage.content.length) {
-        // 如果位置已有内容，插入到后面
-        existingMessage.content.splice(index, 0, block)
-      } else {
-        existingMessage.content.push(block)
-      }
-    })
-
-    // 为新增的内容块创建 displayItems
-    // 创建一个临时消息，只包含新增的内容块，用于转换
-    const tempMessage: Message = {
-      ...newMessage,
-      content: newBlocks
-    }
-    const newDisplayItems = convertMessageToDisplayItems(tempMessage, tools.pendingToolCalls)
-
+    // 使用 convertMessageToDisplayItems 为新消息创建 displayItems
+    const newDisplayItems = convertMessageToDisplayItems(newMessage, tools.pendingToolCalls)
+    
     if (newDisplayItems.length > 0) {
-      pushDisplayItems(newDisplayItems)
-      log.debug(`[useSessionMessages] 添加了 ${newDisplayItems.length} 个新 displayItems`)
+      // 过滤掉已存在的 displayItem
+      const filteredItems = newDisplayItems.filter(
+        item => !displayItems.find(existing => existing.id === item.id)
+      )
+      
+      if (filteredItems.length > 0) {
+        pushDisplayItems(filteredItems)
+        log.debug(`[useSessionMessages] 添加了 ${filteredItems.length} 个新 displayItems`)
+      }
     }
   }
 
@@ -1029,7 +994,14 @@ export function useSessionMessages(
         }
         // 同步 thinking signature
         syncThinkingSignatures(message)
-        // 同步新增的内容块（如 text）到 displayItems
+        // 流式模式下，检查消息 ID 是否与当前正在处理的消息一致
+        // 如果一致，说明流式消息已经创建了 displayItem，跳过
+        const streamingMessageId = stats.getCurrentTracker()?.currentStreamingMessageId
+        if (streamingMessageId && streamingMessageId === message.id) {
+          log.debug('[useSessionMessages] 流式模式，消息 ID 一致，跳过 syncNewContentBlocks')
+          return
+        }
+        // 非流式模式，或者消息 ID 不一致，同步内容块
         syncNewContentBlocks(message, existingAssistant)
         return
       }
@@ -1591,11 +1563,38 @@ export function useSessionMessages(
   }
 
   /**
+   * 检查消息是否已存在（基于 id 或 uuid）
+   */
+  function isMessageExists(msg: Message): boolean {
+    // 基于 ID 检查
+    if (messages.some(m => m.id === msg.id)) {
+      return true
+    }
+    // 基于 uuid 检查（如果消息有 uuid）
+    const msgUuid = (msg as any).uuid
+    if (msgUuid && messages.some(m => (m as any).uuid === msgUuid)) {
+      return true
+    }
+    return false
+  }
+
+  /**
    * 批量前插消息（用于历史回放）
    */
   function prependMessagesBatch(msgs: Message[]): void {
     if (msgs.length === 0) return
-    const displayBatch = msgs.flatMap(m => convertMessageToDisplayItems(m, tools.pendingToolCalls))
+    
+    // 过滤掉已存在的消息
+    const newMsgs = msgs.filter(m => !isMessageExists(m))
+    if (newMsgs.length === 0) {
+      log.debug('[useSessionMessages] prependMessagesBatch: 所有消息已存在，跳过')
+      return
+    }
+    if (newMsgs.length < msgs.length) {
+      log.debug(`[useSessionMessages] prependMessagesBatch: 过滤掉 ${msgs.length - newMsgs.length} 条重复消息`)
+    }
+    
+    const displayBatch = newMsgs.flatMap(m => convertMessageToDisplayItems(m, tools.pendingToolCalls))
     // 历史消息中的用户消息设置 hint 样式（禁止编辑，md 渲染）
     displayBatch.forEach(item => {
       if (isDisplayUserMessage(item)) {
@@ -1604,8 +1603,8 @@ export function useSessionMessages(
     })
     prependDisplayItems(displayBatch)
     // 再更新 messages 状态（保持原顺序）
-    for (let i = msgs.length - 1; i >= 0; i -= 1) {
-      messages.unshift(msgs[i])
+    for (let i = newMsgs.length - 1; i >= 0; i -= 1) {
+      messages.unshift(newMsgs[i])
     }
   }
 
@@ -1614,7 +1613,18 @@ export function useSessionMessages(
    */
   function appendMessagesBatch(msgs: Message[]): void {
     if (msgs.length === 0) return
-    const displayBatch = msgs.flatMap(m => convertMessageToDisplayItems(m, tools.pendingToolCalls))
+    
+    // 过滤掉已存在的消息
+    const newMsgs = msgs.filter(m => !isMessageExists(m))
+    if (newMsgs.length === 0) {
+      log.debug('[useSessionMessages] appendMessagesBatch: 所有消息已存在，跳过')
+      return
+    }
+    if (newMsgs.length < msgs.length) {
+      log.debug(`[useSessionMessages] appendMessagesBatch: 过滤掉 ${msgs.length - newMsgs.length} 条重复消息`)
+    }
+    
+    const displayBatch = newMsgs.flatMap(m => convertMessageToDisplayItems(m, tools.pendingToolCalls))
     // 历史/后端消息中的用户消息设置 hint 样式（禁止编辑，md 渲染）
     displayBatch.forEach(item => {
       if (isDisplayUserMessage(item)) {
@@ -1622,7 +1632,7 @@ export function useSessionMessages(
       }
     })
     pushDisplayItems(displayBatch)
-    messages.push(...msgs)
+    messages.push(...newMsgs)
   }
 
   /**
