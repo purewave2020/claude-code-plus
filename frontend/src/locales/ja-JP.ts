@@ -30,6 +30,12 @@ export default {
     expand: '展開',
     collapse: '折りたたむ'
   },
+  contextMenu: {
+    copy: 'コピー',
+    paste: '貼り付け',
+    cut: '切り取り',
+    selectAll: 'すべて選択'
+  },
   chat: {
     placeholder: '',
     placeholderWithShortcuts: '',

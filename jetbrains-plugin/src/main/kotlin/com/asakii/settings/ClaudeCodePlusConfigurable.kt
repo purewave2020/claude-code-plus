@@ -2,17 +2,16 @@ package com.asakii.settings
 
 import com.intellij.openapi.options.SearchableConfigurable
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.ui.components.JBLabel
-import com.intellij.util.ui.JBUI
-import java.awt.BorderLayout
+import com.intellij.ui.dsl.builder.panel
+import java.awt.Font
 import javax.swing.*
 
 /**
  * Claude Code Plus 主配置页
  *
- * 作为父配置页，包含两个子页面（在 plugin.xml 中注册）�?
+ * 作为父配置页，包含两个子页面（在 plugin.xml 中注册）：
  * - MCP: MCP 服务器配置（内置 + 自定义）
- * - Claude Code: 通用配置（Node.js、模型、思考级别、权限、Agents�?
+ * - Claude Code: 通用配置（Node.js、模型、思考级别、权限、Agents）
  */
 class ClaudeCodePlusConfigurable : SearchableConfigurable {
 
@@ -33,74 +32,43 @@ class ClaudeCodePlusConfigurable : SearchableConfigurable {
     override fun getDisplayName(): String = "Claude Code Plus"
 
     override fun createComponent(): JComponent {
-        mainPanel = JPanel(BorderLayout())
-        mainPanel!!.border = JBUI.Borders.empty(20)
-
-        val contentPanel = JPanel()
-        contentPanel.layout = BoxLayout(contentPanel, BoxLayout.Y_AXIS)
-
-        // 标题
-        val titleLabel = JBLabel("<html><h2>Claude Code Plus</h2></html>")
-        titleLabel.alignmentX = JPanel.LEFT_ALIGNMENT
-        contentPanel.add(titleLabel)
-        contentPanel.add(Box.createVerticalStrut(20))
-
-        val settings = AgentSettingsService.getInstance()
-
-        val backendPanel = JPanel()
-        backendPanel.layout = BoxLayout(backendPanel, BoxLayout.Y_AXIS)
-        backendPanel.alignmentX = JPanel.LEFT_ALIGNMENT
-
-        val backendTitle = JBLabel("<html><b>Default Backend</b></html>")
-        backendTitle.alignmentX = JPanel.LEFT_ALIGNMENT
-        backendPanel.add(backendTitle)
-        backendPanel.add(Box.createVerticalStrut(6))
-
-        val backendRow = JPanel()
-        backendRow.layout = BoxLayout(backendRow, BoxLayout.X_AXIS)
-        backendRow.alignmentX = JPanel.LEFT_ALIGNMENT
-        backendRow.add(JBLabel("Use for new sessions:"))
-        backendRow.add(Box.createHorizontalStrut(8))
         defaultBackendCombo = ComboBox(DefaultComboBoxModel(backendOptions.toTypedArray()))
-        defaultBackendCombo!!.alignmentX = JPanel.LEFT_ALIGNMENT
-        backendRow.add(defaultBackendCombo)
-        backendPanel.add(backendRow)
-        backendPanel.add(Box.createVerticalStrut(6))
 
-        val backendHint = JBLabel("Applies when initializing or creating new sessions.")
-        backendHint.alignmentX = JPanel.LEFT_ALIGNMENT
-        backendPanel.add(backendHint)
+        mainPanel = panel {
+            row {
+                label("Claude Code Plus").applyToComponent {
+                    font = font.deriveFont(Font.BOLD, 18f)
+                }
+            }
 
-        selectBackend(settings.defaultBackendType)
+            group("Default Backend") {
+                row("Use for new sessions:") {
+                    cell(defaultBackendCombo!!)
+                }
+                row {
+                    comment("Applies when initializing or creating new sessions.")
+                }
+            }
 
-        contentPanel.add(backendPanel)
-        contentPanel.add(Box.createVerticalStrut(20))
+            group("") {
+                row {
+                    text("""
+                        Welcome to Claude Code Plus settings!<br><br>
+                        Configure the plugin using the sub-pages:<br>
+                        <ul>
+                            <li><b>MCP</b> - MCP server configuration (built-in and custom servers)</li>
+                            <li><b>Claude Code</b> - Runtime settings, agents, and permissions</li>
+                            <li><b>Codex</b> - Codex CLI path and runtime configuration</li>
+                            <li><b>Git Generate</b> - AI-powered commit message generation</li>
+                        </ul>
+                        <br>
+                        Select a sub-page from the left panel to configure specific settings.
+                    """.trimIndent())
+                }
+            }
+        }
 
-        // 说明
-        val descriptionLabel = JBLabel("""
-            <html>
-            <body style='width: 500px'>
-            <p>Welcome to Claude Code Plus settings!</p>
-            <br>
-            <p>Configure the plugin using the sub-pages:</p>
-            <ul>
-                <li><b>MCP</b> - MCP server configuration (built-in and custom servers)</li>
-                <li><b>Claude Code</b> - Runtime settings, agents, and permissions</li>
-                <li><b>Codex</b> - Codex CLI path and runtime configuration</li>
-                <li><b>Git Generate</b> - AI-powered commit message generation</li>
-            </ul>
-            <br>
-            <p>Select a sub-page from the left panel to configure specific settings.</p>
-            </body>
-            </html>
-        """.trimIndent())
-        descriptionLabel.alignmentX = JPanel.LEFT_ALIGNMENT
-        contentPanel.add(descriptionLabel)
-
-        contentPanel.add(Box.createVerticalGlue())
-
-        mainPanel!!.add(contentPanel, BorderLayout.NORTH)
-
+        reset()
         return mainPanel!!
     }
 
@@ -139,4 +107,3 @@ class ClaudeCodePlusConfigurable : SearchableConfigurable {
         defaultBackendCombo?.selectedItem = target
     }
 }
-

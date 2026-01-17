@@ -32,6 +32,12 @@ export default {
     enabled: 'Enabled',
     disabled: 'Disabled'
   },
+  contextMenu: {
+    copy: 'Copy',
+    paste: 'Paste',
+    cut: 'Cut',
+    selectAll: 'Select All'
+  },
   chat: {
     placeholder: '',
     placeholderWithShortcuts: '',

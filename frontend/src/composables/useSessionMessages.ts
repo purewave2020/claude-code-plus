@@ -908,6 +908,65 @@ export function useSessionMessages(
   }
 
   /**
+   * 同步新增的内容块到 displayItems
+   * 当收到完整消息时，可能包含之前流式消息中不存在的内容块（如 text）
+   *
+   * 按块实例（index + type + id）去重，而不仅按类型去重
+   */
+  function syncNewContentBlocks(newMessage: Message, existingMessage: Message): void {
+    if (newMessage.role !== 'assistant') return
+
+    // 构建现有块的指纹集合（使用 index + type + id）
+    const existingFingerprints = new Set<string>()
+    existingMessage.content.forEach((block, idx) => {
+      const blockId = (block as any).id || ''
+      const fp = `${idx}_${block.type}_${blockId}`
+      existingFingerprints.add(fp)
+    })
+
+    // 找出新消息中存在但旧消息中不存在的内容块
+    const newBlocksWithIndex: { block: ContentBlock; index: number }[] = []
+    newMessage.content.forEach((block, idx) => {
+      const blockId = (block as any).id || ''
+      const fp = `${idx}_${block.type}_${blockId}`
+      if (!existingFingerprints.has(fp)) {
+        newBlocksWithIndex.push({ block, index: idx })
+      }
+    })
+
+    if (newBlocksWithIndex.length === 0) {
+      log.debug('[useSessionMessages] 没有新增的内容块需要同步')
+      return
+    }
+
+    const newBlocks = newBlocksWithIndex.map(item => item.block)
+    log.info(`[useSessionMessages] 同步新增内容块: ${newBlocks.map(b => b.type).join(', ')}`)
+
+    // 更新现有消息的 content（合并新内容块，保持正确位置）
+    newBlocksWithIndex.forEach(({ block, index }) => {
+      if (index < existingMessage.content.length) {
+        // 如果位置已有内容，插入到后面
+        existingMessage.content.splice(index, 0, block)
+      } else {
+        existingMessage.content.push(block)
+      }
+    })
+
+    // 为新增的内容块创建 displayItems
+    // 创建一个临时消息，只包含新增的内容块，用于转换
+    const tempMessage: Message = {
+      ...newMessage,
+      content: newBlocks
+    }
+    const newDisplayItems = convertMessageToDisplayItems(tempMessage, tools.pendingToolCalls)
+
+    if (newDisplayItems.length > 0) {
+      pushDisplayItems(newDisplayItems)
+      log.debug(`[useSessionMessages] 添加了 ${newDisplayItems.length} 个新 displayItems`)
+    }
+  }
+
+  /**
    * 处理普通消息（assistant/user 消息）
    */
   function handleNormalMessage(message: Message): void {
@@ -936,11 +995,42 @@ export function useSessionMessages(
 
     // assistant 消息处理
     if (message.role === 'assistant') {
-      // 检查最后一条 assistant 消息是否 ID 相同（流式消息已组装完成）
-      const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
-      if (lastAssistant && lastAssistant.id === message.id) {
-        log.debug('[useSessionMessages] 同步完整消息中的 signature 到 displayItem')
+      // 优先使用追踪的流式消息 ID 来查找
+      const streamingId = stats.getCurrentTracker()?.currentStreamingMessageId
+      let existingAssistant: Message | undefined
+
+      // 1. 先按流式 ID 查找
+      if (streamingId) {
+        existingAssistant = messages.find(m => m.id === streamingId && m.role === 'assistant')
+      }
+
+      // 2. 再按消息 ID 查找（可能 ID 已更新）
+      if (!existingAssistant) {
+        existingAssistant = messages.find(m => m.id === message.id && m.role === 'assistant')
+      }
+
+      // 3. 如果正在生成中，检查最后一条 streaming 的 assistant 消息
+      if (!existingAssistant && isGenerating.value) {
+        const lastStreaming = [...messages].reverse().find(m => m.role === 'assistant' && m.isStreaming)
+        if (lastStreaming) {
+          existingAssistant = lastStreaming
+          log.info('[useSessionMessages] 通过 isStreaming 状态找到现有消息:', lastStreaming.id)
+        }
+      }
+
+      // 4. 如果是同一个消息，同步内容
+      if (existingAssistant) {
+        log.debug('[useSessionMessages] 同步完整消息到现有 assistant 消息, existing:', existingAssistant.id, 'incoming:', message.id)
+        // 更新消息 ID（如果不同）
+        if (existingAssistant.id !== message.id) {
+          const oldId = existingAssistant.id
+          existingAssistant.id = message.id
+          renameDisplayItemsForMessage(oldId, message.id)
+        }
+        // 同步 thinking signature
         syncThinkingSignatures(message)
+        // 同步新增的内容块（如 text）到 displayItems
+        syncNewContentBlocks(message, existingAssistant)
         return
       }
 
@@ -1165,6 +1255,13 @@ export function useSessionMessages(
     log.info('[useSessionMessages] 📤 startGenerating，用户消息 ID:', userMessageId)
     isGenerating.value = true
     log.info('[useSessionMessages] ✅ isGenerating 已设置为 true')
+
+    // 🧹 清理已完成的工具调用（避免旧记录影响新请求）
+    // 使用较短的 maxAge（0）立即清理所有已完成的工具调用
+    const cleaned = tools.cleanupCompletedToolCalls(0)
+    if (cleaned > 0) {
+      log.info(`[useSessionMessages] 🧹 清理了 ${cleaned} 个已完成的工具调用`)
+    }
 
     // 更新 displayItem 的 isStreaming 状态
     const displayItemIndex = displayItems.findIndex(

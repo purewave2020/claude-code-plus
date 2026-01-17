@@ -6,6 +6,7 @@
  */
 
 import type { Message, ToolResultContent } from '@/types/message'
+import { ToolCallStatus } from '@/types/display'
 
 export type ToolStatus = 'running' | 'success' | 'error'
 
@@ -114,13 +115,13 @@ export function extractToolUseIds(messages: Message[]): string[] {
  * 将 ToolStatus 转换为 ToolCallStatus 枚举
  * 用于兼容现有的 ToolCallStatus 类型
  */
-export function toToolCallStatus(status: ToolStatus): 'RUNNING' | 'SUCCESS' | 'FAILED' {
+export function toToolCallStatus(status: ToolStatus): ToolCallStatus {
   switch (status) {
     case 'running':
-      return 'RUNNING'
+      return ToolCallStatus.RUNNING
     case 'success':
-      return 'SUCCESS'
+      return ToolCallStatus.SUCCESS
     case 'error':
-      return 'FAILED'
+      return ToolCallStatus.FAILED
   }
 }

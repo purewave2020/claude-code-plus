@@ -11,7 +11,7 @@ import {onMounted, ref, watch} from 'vue'
 import {useI18n} from '@/composables/useI18n'
 import {markdownService} from '@/services/markdownService'
 import {highlightService} from '@/services/highlightService'
-import {ideaBridge} from '@/services/ideaBridge'
+import {handleLinkClickFromEvent} from '@/utils/browserSecurity'
 
 const { t } = useI18n()
 
@@ -124,13 +124,12 @@ function handleClick(event: MouseEvent) {
     return
   }
 
-  // 处理文件链接点击
-  if (target.tagName === 'A') {
-    const href = target.getAttribute('href')
-    if (href && (href.startsWith('/') || href.startsWith('file://'))) {
+  // 处理链接点击 - 委托给 browserSecurity 统一处理（使用 main.ts 中注册的全局回调）
+  if (target.tagName === 'A' || target.closest('a')) {
+    const handled = handleLinkClickFromEvent(event)
+    if (handled) {
       event.preventDefault()
-      const filePath = href.replace('file://', '')
-      ideaBridge.query('ide.openFile', { filePath })
+      event.stopPropagation()
     }
   }
 }

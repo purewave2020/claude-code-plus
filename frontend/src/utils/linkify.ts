@@ -1,14 +1,41 @@
 /**
  * 链接识别和渲染工具
- * 支持 HTTP URL、@文件路径、绝对路径
+ *
+ * 职责：
+ * 1. 识别文本中的链接（URL、文件路径）
+ * 2. 将纯文本转换为带链接的 HTML
+ *
+ * 注意：链接点击处理统一由 browserSecurity.ts 负责
  */
+
+import {
+  handleLinkClick as securityHandleLinkClick,
+  type LinkType as SecurityLinkType,
+} from './browserSecurity'
+
+// ==================== 类型定义 ====================
 
 export interface LinkifyResult {
   html: string
   hasLinks: boolean
 }
 
-// HTML 转义并保留换行
+/** 内部链接类型（用于识别） */
+type InternalLinkType = 'url' | 'file'
+
+interface LinkMatch {
+  start: number
+  end: number
+  text: string
+  href: string
+  type: InternalLinkType
+}
+
+// ==================== 工具函数 ====================
+
+/**
+ * HTML 转义并保留换行
+ */
 function escapeHtml(text: string): string {
   const map: Record<string, string> = {
     '&': '&amp;',
@@ -18,17 +45,6 @@ function escapeHtml(text: string): string {
     "'": '&#039;',
   }
   return text.replace(/[&<>"']/g, (m) => map[m]).replace(/\n/g, '<br>')
-}
-
-// 链接类型
-type LinkType = 'url' | 'file'
-
-interface LinkMatch {
-  start: number
-  end: number
-  text: string
-  href: string
-  type: LinkType
 }
 
 /**
@@ -94,6 +110,8 @@ function findLinks(text: string): LinkMatch[] {
   return matches
 }
 
+// ==================== 公共 API ====================
+
 /**
  * 将纯文本转换为带链接的 HTML
  * 用于消息气泡显示
@@ -142,38 +160,35 @@ export function linkifyText(text: string): LinkifyResult {
 }
 
 /**
- * 处理链接点击事件
- * @param href 链接地址
- * @param type 链接类型
- * @param openFile 打开文件的回调函数
- */
-export function handleLinkClick(
-  href: string,
-  type: LinkType,
-  openFile?: (path: string) => void
-): void {
-  if (type === 'url') {
-    // 打开外部 URL
-    window.open(href, '_blank', 'noopener,noreferrer')
-  } else if (type === 'file' && openFile) {
-    // 打开文件
-    openFile(href)
-  }
-}
-
-/**
  * 从点击事件中提取链接信息
  */
 export function getLinkFromEvent(
   event: MouseEvent
-): { href: string; type: LinkType } | null {
+): { href: string; type: InternalLinkType } | null {
   const target = event.target as HTMLElement
   if (target.tagName !== 'A') return null
 
   const href = target.getAttribute('href')
-  const type = (target.getAttribute('data-link-type') as LinkType) || 'url'
+  const type = (target.getAttribute('data-link-type') as InternalLinkType) || 'url'
 
   if (!href) return null
 
   return { href, type }
+}
+
+/**
+ * 处理链接点击事件
+ * 委托给 browserSecurity.ts 统一处理
+ *
+ * @param href 链接地址
+ * @param type 链接类型（'url' 或 'file'）
+ * @param openFile 打开文件的回调函数（可选，用于覆盖全局回调）
+ */
+export function handleLinkClick(
+  href: string,
+  type: InternalLinkType,
+  openFile?: (path: string) => void
+): void {
+  // 委托给 browserSecurity 统一处理
+  securityHandleLinkClick(href, { openFile })
 }

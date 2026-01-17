@@ -38,9 +38,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { Message } from '@/types/message'
-import type { EnhancedMessage } from '@/types/enhancedMessage'
+import type { EnhancedMessage, MessageTimelineItem } from '@/types/enhancedMessage'
 import { MessageRole, MessageStatus } from '@/types/enhancedMessage'
-import { ToolCallStatus } from '@/types/display'
+import { ToolCallStatus, type ToolCall } from '@/types/display'
 import UserMessageBubble from './UserMessageBubble.vue'
 import AssistantMessageDisplay from './AssistantMessageDisplay.vue'
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer.vue'
@@ -80,21 +80,15 @@ const enhancedMessage = computed((): EnhancedMessage => {
   const toolResults = msg.content.filter(block => block.type === 'tool_result')
 
   // 构造 orderedElements（按原始顺序遍历）
-  const orderedElements: any[] = []
+  const orderedElements: MessageTimelineItem[] = []
   let allTextContent = '' // 用于 EnhancedMessage.content 字段
 
   // 按原始顺序遍历 content 数组
-  console.log(`🔍 [MessageDisplay] 处理消息内容，共 ${msg.content.length} 个块`)
-  console.log(`🔍 [MessageDisplay] 完整 content 数据:`, JSON.stringify(msg.content, null, 2))
   msg.content.forEach((block: any, index: number) => {
-    console.log(`  [${index}] type="${block.type}"`)
-    console.log(`  [${index}] 块数据:`, block)
-
     if (block.type === 'text') {
       // 文本块：添加到 orderedElements
-      console.log(`    ✅ 添加文本块，长度=${block.text?.length || 0}`)
       orderedElements.push({
-        type: 'content',
+        displayType: 'content',
         content: block.text,
         timestamp: msg.timestamp
       })
@@ -111,11 +105,9 @@ const enhancedMessage = computed((): EnhancedMessage => {
       // 1. 通用格式: type="tool_use"
       // 2. 具体工具格式: type="todo_write_tool_use", "write_tool_use" 等
       const result = toolResults.find((r: any) => r.tool_use_id === block.id)
-      console.log(`    🔧 添加工具调用: toolName=${block.toolName}, id=${block.id}, type=${block.type}, hasResult=${!!result}`)
 
       // 🎯 构建 ViewModel
       const viewModel = buildToolViewModel(block)
-      console.log(`    ✅ 构建 viewModel: toolType=${viewModel.toolDetail?.toolType}, summary="${viewModel.compactSummary}"`)
 
       // 🔧 使用 resolveToolStatus 从消息列表实时计算工具状态
       const statusInfo = resolveToolStatus(block.id, messages)
@@ -129,39 +121,33 @@ const enhancedMessage = computed((): EnhancedMessage => {
         toolCall: {
           id: block.id,
           toolName: block.toolName,
+          toolType: (block as any).toolType || 'GENERIC',
+          input: (block as any).input || {},
           viewModel: viewModel, // ✅ 使用构建的 ViewModel
           displayName: block.toolName,
           status: status, // ✅ 使用 store 中的实时状态
           result: toolResult ? {
-            type: status === ToolCallStatus.FAILED ? 'failure' : 'success', // ✅ 添加 type 字段以符合 ToolResult 类型定义
-            output: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
-            error: status === ToolCallStatus.FAILED ? (typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult)) : undefined
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
+            is_error: status === ToolCallStatus.FAILED
           } : undefined,
           startTime: msg.timestamp,
           endTime: toolResult ? msg.timestamp : undefined
-        },
+        } as ToolCall,
         timestamp: msg.timestamp
       })
     } else if (block.type === 'thinking') {
       // 思考链块：添加到 orderedElements
       const thinkingContent = (block as any).thinking || ''
-      console.log(`    💭 添加思考链块，长度=${thinkingContent.length}`)
-      console.log(`    💭 思考内容预览: "${thinkingContent.substring(0, 100)}${thinkingContent.length > 100 ? '...' : ''}"`)
       orderedElements.push({
-        type: 'thinking',
+        displayType: 'thinking',
         content: thinkingContent,
         timestamp: msg.timestamp
       })
-    } else if (block.type === 'tool_result') {
-      // 🔧 tool_result 块：跳过，因为已经包含在 tool_use 的 result 中
-      console.log(`    ⏭️ 跳过 tool_result 块: tool_use_id=${block.tool_use_id}`)
-    } else {
-      console.log(`    ⚠️ 未知块类型: ${block.type}`)
     }
-    // tool_result 块不需要单独渲染，已经包含在 tool_use 的 result 中
+    // tool_result 块和未知块类型不需要单独渲染
   })
-
-  console.log(`📊 [MessageDisplay] 构造完成，orderedElements 共 ${orderedElements.length} 个元素`)
 
   const roleMap: Record<string, MessageRole> = {
     user: MessageRole.USER,

@@ -71,6 +71,8 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -129,6 +131,11 @@ class AiAgentRpcServiceImpl(
 
     // 🔧 追踪当前 query 的完成状态，用于 interrupt 同步等待
     private var queryCompletion: CompletableDeferred<Unit>? = null
+
+    // 🔧 全局事件流（广播给所有订阅者，实现 Query/Result 分离）
+    private val globalEventFlow = MutableSharedFlow<RpcMessage>(
+        extraBufferCapacity = 64  // 缓冲区，避免阻塞发送者
+    )
 
     // 用户交互 MCP Server（仅包含 AskUserQuestion，权限走 canUseTool 回调）
     private val userInteractionServer = UserInteractionMcpServer().apply {
@@ -327,6 +334,18 @@ class AiAgentRpcServiceImpl(
         }
     }
 
+    override fun subscribeGlobalEvents(): Flow<RpcMessage> {
+        sdkLog.info { "📡 [subscribeGlobalEvents] 新订阅者加入全局事件流 (sessionId=$sessionId)" }
+        return globalEventFlow.asSharedFlow()
+            .onCompletion { cause ->
+                if (cause == null) {
+                    sdkLog.info { "📡 [subscribeGlobalEvents] 订阅者正常断开 (sessionId=$sessionId)" }
+                } else {
+                    sdkLog.warn { "📡 [subscribeGlobalEvents] 订阅者异常断开: ${cause.message}" }
+                }
+            }
+    }
+
     override suspend fun interrupt(): RpcStatusResult {
         sdkLog.info { "⏹️ [SDK] 中断当前回合" }
         // 直接调用 SDK 的 interrupt，不再等待 query 流的完成信号
@@ -511,6 +530,7 @@ class AiAgentRpcServiceImpl(
                             try {
                                 val rpcProvider = currentProvider.toRpcProvider()
                                 send(rpcEvent)
+                                globalEventFlow.emit(rpcEvent)  // 广播到全局事件流
                                 sdkLog.info("[executeTurn] event #$eventCount ($eventType) sent")
 
                                 when (event) {
@@ -523,6 +543,7 @@ class AiAgentRpcServiceImpl(
                                         val stopEvent = wrapAsStreamEvent(RpcMessageStopEvent(), rpcProvider)
                                         messageHistory.add(stopEvent)
                                         send(stopEvent)
+                                        globalEventFlow.emit(stopEvent)  // 广播到全局事件流
                                         sdkLog.info("[executeTurn] appended message_stop")
                                     }
 
@@ -541,6 +562,7 @@ class AiAgentRpcServiceImpl(
                                         )
                                         messageHistory.add(toolResultMessage)
                                         send(toolResultMessage)
+                                        globalEventFlow.emit(toolResultMessage)  // 广播到全局事件流
                                         sdkLog.info("[executeTurn] tool result message sent toolId=${event.toolId}, parentToolUseId=${event.parentToolUseId}")
                                     }
 

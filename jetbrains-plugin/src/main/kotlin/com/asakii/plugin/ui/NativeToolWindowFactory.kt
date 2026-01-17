@@ -38,7 +38,10 @@ import java.io.IOException
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import org.cef.browser.CefBrowser
+import org.cef.browser.CefFrame
 import org.cef.handler.CefDisplayHandlerAdapter
+import org.cef.handler.CefRequestHandlerAdapter
+import org.cef.network.CefRequest
 import javax.swing.JComponent
 
 /**
@@ -124,6 +127,48 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
                     else -> frontendLogger.info(logMessage)
                 }
                 return false  // 继续默认处理
+            }
+        }, browser.cefBrowser)
+
+        // 🔒 拦截所有导航请求，只允许初始页面加载
+        val allowedOrigin = serverUrl.substringBefore("?").trimEnd('/')
+        browser.jbCefClient.addRequestHandler(object : CefRequestHandlerAdapter() {
+            override fun onBeforeBrowse(
+                cefBrowser: CefBrowser,
+                frame: CefFrame,
+                request: CefRequest,
+                userGesture: Boolean,
+                isRedirect: Boolean
+            ): Boolean {
+                val url = request.url ?: return false
+                
+                // 允许同源请求（我们的前端页面）
+                if (url.startsWith(allowedOrigin)) {
+                    return false // false = 允许导航
+                }
+                
+                // 允许 about:blank（某些内部操作需要）
+                if (url == "about:blank") {
+                    return false
+                }
+                
+                // 允许 devtools
+                if (url.startsWith("devtools://")) {
+                    return false
+                }
+                
+                // 拦截所有其他导航，通过系统浏览器打开外部链接
+                logger.info { "🔒 [Navigation] Blocked: $url (userGesture=$userGesture, isRedirect=$isRedirect)" }
+                if (url.startsWith("http://") || url.startsWith("https://")) {
+                    // 在系统浏览器中打开外部链接
+                    try {
+                        BrowserUtil.browse(url)
+                        logger.info { "🌐 [Navigation] Opened in system browser: $url" }
+                    } catch (e: Exception) {
+                        logger.warn { "⚠️ [Navigation] Failed to open in browser: ${e.message}" }
+                    }
+                }
+                return true // true = 取消导航
             }
         }, browser.cefBrowser)
 

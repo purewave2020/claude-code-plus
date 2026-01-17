@@ -1,20 +1,15 @@
 package com.asakii.settings
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionToolbarPosition
 import com.intellij.openapi.components.service
-import com.intellij.openapi.fileChooser.FileChooser
-import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.SearchableConfigurable
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.ComboBox
-import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
 import com.intellij.ui.JBColor
 import com.intellij.ui.ToolbarDecorator
-import com.intellij.ui.components.*
+import com.intellij.ui.dsl.builder.Align
+import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.table.JBTable
-import com.intellij.util.ui.JBUI
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -58,39 +53,50 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
     override fun getDisplayName(): String = "MCP"
 
     override fun createComponent(): JComponent {
-        mainPanel = JPanel(BorderLayout())
+        initTable()
 
-        // 顶部区域（说明 + 通知）
-        val topPanel = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            border = JBUI.Borders.empty(0, 0, 10, 0)
+        // 工具栏装饰器
+        val decorator = ToolbarDecorator.createDecorator(table!!)
+            .setToolbarPosition(ActionToolbarPosition.TOP)
+            .setAddAction { addServer() }
+            .setRemoveAction { removeServer() }
+            .setEditAction { editServer(table!!.selectedRow) }
+            .setEditActionUpdater {
+                val row = table?.selectedRow ?: -1
+                row >= 0 && !isBuiltInServer(row)
+            }
+            .setRemoveActionUpdater {
+                val row = table?.selectedRow ?: -1
+                row >= 0 && !isBuiltInServer(row)
+            }
+
+        val tablePanel = decorator.createPanel()
+
+        mainPanel = panel {
+            row {
+                text("Configure MCP (Model Context Protocol) servers. <a href=\"https://modelcontextprotocol.io\">Learn more</a>")
+            }
+            row {
+                comment(ClaudeCodePlusBundle.message("mcp.settings.notice"))
+            }
+
+            row {
+                cell(tablePanel)
+                    .align(Align.FILL)
+            }.resizableRow()
+
+            row {
+                label("<html><font color='#B07800'>\u26a0 Proceed with caution and only connect to trusted servers.</font></html>")
+            }
         }
 
-        // 说明
-        val descPanel = JPanel(BorderLayout()).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            val label = JBLabel("""
-                <html>
-                Configure MCP (Model Context Protocol) servers.
-                <a href="https://modelcontextprotocol.io">Learn more</a>
-                </html>
-            """.trimIndent())
-            add(label, BorderLayout.WEST)
-        }
-        topPanel.add(descPanel)
-        topPanel.add(Box.createVerticalStrut(8))
+        // 加载配置
+        reset()
 
-        // 通知：仅对插件生效
-        val noticePanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            val noticeLabel = JBLabel("<html><font color='gray'>${ClaudeCodePlusBundle.message("mcp.settings.notice")}</font></html>")
-            add(noticeLabel)
-        }
-        topPanel.add(noticePanel)
+        return mainPanel!!
+    }
 
-        mainPanel!!.add(topPanel, BorderLayout.NORTH)
-
-        // 创建表格
+    private fun initTable() {
         tableModel = McpServerTableModel()
         table = JBTable(tableModel).apply {
             setShowGrid(false)
@@ -100,33 +106,21 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
 
             // Status 列渲染器（显示启用状态）
             columnModel.getColumn(0).apply {
-                preferredWidth = 50
-                maxWidth = 60
                 cellRenderer = StatusCellRenderer()
-            }
-
-            // Name 列
-            columnModel.getColumn(1).apply {
-                preferredWidth = 180
             }
 
             // Configuration 列
             columnModel.getColumn(2).apply {
-                preferredWidth = 300
                 cellRenderer = ConfigurationCellRenderer()
             }
 
             // Backends 列
             columnModel.getColumn(3).apply {
-                preferredWidth = 120
-                maxWidth = 160
                 cellRenderer = BackendCellRenderer()
             }
 
             // Level 列
             columnModel.getColumn(4).apply {
-                preferredWidth = 80
-                maxWidth = 100
                 cellRenderer = LevelCellRenderer()
             }
 
@@ -150,39 +144,6 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 }
             })
         }
-
-        // 工具栏装饰器
-        val decorator = ToolbarDecorator.createDecorator(table!!)
-            .setToolbarPosition(ActionToolbarPosition.TOP)
-            .setAddAction { addServer() }
-            .setRemoveAction { removeServer() }
-            .setEditAction { editServer(table!!.selectedRow) }
-            .setEditActionUpdater {
-                val row = table?.selectedRow ?: -1
-                row >= 0 && !isBuiltInServer(row)
-            }
-            .setRemoveActionUpdater {
-                val row = table?.selectedRow ?: -1
-                row >= 0 && !isBuiltInServer(row)
-            }
-
-        val tablePanel = decorator.createPanel()
-        mainPanel!!.add(tablePanel, BorderLayout.CENTER)
-
-        // 底部提示
-        val bottomPanel = JPanel(BorderLayout()).apply {
-            border = JBUI.Borders.emptyTop(10)
-            val warningLabel = JBLabel(
-                "<html><font color='#B07800'>⚠ Proceed with caution and only connect to trusted servers.</font></html>"
-            )
-            add(warningLabel, BorderLayout.WEST)
-        }
-        mainPanel!!.add(bottomPanel, BorderLayout.SOUTH)
-
-        // 加载配置
-        reset()
-
-        return mainPanel!!
     }
 
     /**
@@ -600,15 +561,6 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
 
     /**
      * 构建 MCP 服务器 JSON 配置
-     *
-     * 存储格式：
-     * {
-     *   "server-name": {
-     *     "config": { "command": "...", "args": [...] },  // 纯净的 MCP 配置
-     *     "enabled": true,                                 // 我们的元数据
-     *     "instructions": "..."                            // 我们的元数据
-     *   }
-     * }
      */
     private fun buildMcpServersJson(servers: List<McpServerEntry>): String {
         if (servers.isEmpty()) return ""
@@ -620,30 +572,30 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
                 // 直接从顶层读取服务器配置
                 for ((serverName, serverConfig) in parsed) {
                     // 构建包含 config + 元数据的完整条目
-                val entryMap = mutableMapOf<String, kotlinx.serialization.json.JsonElement>()
-                entryMap["config"] = serverConfig  // 纯净的 MCP 配置
-                entryMap["enabled"] = kotlinx.serialization.json.JsonPrimitive(server.enabled)
-                entryMap["enabledBackends"] = kotlinx.serialization.json.JsonArray(
-                    normalizeBackendKeys(server.enabledBackends)
-                        .map { kotlinx.serialization.json.JsonPrimitive(it) }
-                )
-                if (server.instructions.isNotBlank()) {
-                    entryMap["instructions"] = kotlinx.serialization.json.JsonPrimitive(server.instructions)
-                }
-                val instructionsByBackend = mutableMapOf<String, kotlinx.serialization.json.JsonElement>()
-                if (server.instructionsClaude.isNotBlank()) {
-                    instructionsByBackend[AgentSettingsService.MCP_BACKEND_CLAUDE] =
-                        kotlinx.serialization.json.JsonPrimitive(server.instructionsClaude)
-                }
-                if (server.instructionsCodex.isNotBlank()) {
-                    instructionsByBackend[AgentSettingsService.MCP_BACKEND_CODEX] =
-                        kotlinx.serialization.json.JsonPrimitive(server.instructionsCodex)
-                }
-                if (instructionsByBackend.isNotEmpty()) {
-                    entryMap["instructionsByBackend"] = JsonObject(instructionsByBackend)
-                }
-                // 添加超时配置（0 表示永不超时）
-                entryMap["toolTimeoutSec"] = kotlinx.serialization.json.JsonPrimitive(server.toolTimeoutSec)
+                    val entryMap = mutableMapOf<String, kotlinx.serialization.json.JsonElement>()
+                    entryMap["config"] = serverConfig  // 纯净的 MCP 配置
+                    entryMap["enabled"] = kotlinx.serialization.json.JsonPrimitive(server.enabled)
+                    entryMap["enabledBackends"] = kotlinx.serialization.json.JsonArray(
+                        normalizeBackendKeys(server.enabledBackends)
+                            .map { kotlinx.serialization.json.JsonPrimitive(it) }
+                    )
+                    if (server.instructions.isNotBlank()) {
+                        entryMap["instructions"] = kotlinx.serialization.json.JsonPrimitive(server.instructions)
+                    }
+                    val instructionsByBackend = mutableMapOf<String, kotlinx.serialization.json.JsonElement>()
+                    if (server.instructionsClaude.isNotBlank()) {
+                        instructionsByBackend[AgentSettingsService.MCP_BACKEND_CLAUDE] =
+                            kotlinx.serialization.json.JsonPrimitive(server.instructionsClaude)
+                    }
+                    if (server.instructionsCodex.isNotBlank()) {
+                        instructionsByBackend[AgentSettingsService.MCP_BACKEND_CODEX] =
+                            kotlinx.serialization.json.JsonPrimitive(server.instructionsCodex)
+                    }
+                    if (instructionsByBackend.isNotEmpty()) {
+                        entryMap["instructionsByBackend"] = JsonObject(instructionsByBackend)
+                    }
+                    // 添加超时配置（0 表示永不超时）
+                    entryMap["toolTimeoutSec"] = kotlinx.serialization.json.JsonPrimitive(server.toolTimeoutSec)
                     serversMap[serverName] = JsonObject(entryMap)
                 }
             } catch (_: Exception) {
@@ -787,15 +739,6 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
 
     /**
      * 解析自定义服务器配置
-     *
-     * 存储格式：
-     * {
-     *   "server-name": {
-     *     "config": { "command": "...", "args": [...] },  // 纯净的 MCP 配置
-     *     "enabled": true,                                 // 我们的元数据
-     *     "instructions": "..."                            // 我们的元数据
-     *   }
-     * }
      */
     private fun parseCustomServers(
         jsonStr: String,
@@ -1018,4 +961,3 @@ class McpConfigurable(private val project: Project? = null) : SearchableConfigur
         }
     }
 }
-

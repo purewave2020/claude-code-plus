@@ -9,24 +9,20 @@ import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
+import com.intellij.ui.dsl.builder.Align
+import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.table.JBTable
-import com.intellij.util.ui.JBUI
-import java.awt.BorderLayout
-import java.awt.Dimension
-import java.awt.FlowLayout
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
-import java.awt.Insets
-import javax.swing.Box
-import javax.swing.BoxLayout
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JOptionPane
 import javax.swing.JPanel
-import javax.swing.JSeparator
 import javax.swing.ListSelectionModel
 import javax.swing.table.DefaultTableModel
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
+import java.awt.Insets
 
 class CodexConfigurable : SearchableConfigurable {
 
@@ -50,34 +46,86 @@ class CodexConfigurable : SearchableConfigurable {
     override fun getDisplayName(): String = "Codex"
 
     override fun createComponent(): JComponent {
-        mainPanel = JPanel(BorderLayout())
+        initComponents()
+        
+        mainPanel = panel {
+            group("Default Permissions") {
+                row {
+                    cell(defaultBypassPermissionsCheckbox!!)
+                }
+                row {
+                    comment("Skip confirmation dialogs for file edits and bash commands. Use with caution.")
+                }
+                row {
+                    cell(defaultAutoCleanupContextsCheckbox!!)
+                }
+                row {
+                    comment("Enabled contexts are cleared after send; disabled contexts stay.")
+                }
+            }
 
-        val contentPanel = JPanel()
-        contentPanel.layout = BoxLayout(contentPanel, BoxLayout.Y_AXIS)
-        contentPanel.border = JBUI.Borders.empty(8, 10, 8, 10)
+            group("Runtime Settings") {
+                row("Codex path:") {
+                    cell(codexPathField!!)
+                        .align(AlignX.FILL)
+                        .resizableColumn()
+                        .comment("Path to Codex executable. Leave empty to auto-detect from system PATH.")
+                }
+                row {
+                    cell(webSearchCheckBox!!)
+                        .comment("Allow Codex to request web searches (features.web_search_request).")
+                }
+            }
 
-        contentPanel.add(createSectionTitle("Default Permissions"))
-        contentPanel.add(createDescription("Configure default permission behavior for new sessions."))
+            group("Model Settings") {
+                row("Default model:") {
+                    cell(defaultModelCombo!!)
+                        .comment("gpt-5.2-codex = Codex optimized | gpt-5.2 = Base model")
+                }
+            }
 
+            collapsibleGroup("Custom Models") {
+                row {
+                    cell(JBScrollPane(customModelsTable))
+                        .align(Align.FILL)
+                }.resizableRow()
+                row {
+                    cell(addModelButton!!)
+                    cell(editModelButton!!)
+                    cell(removeModelButton!!)
+                }
+            }
+
+            group("Session Defaults") {
+                row("Reasoning effort:") {
+                    cell(defaultReasoningEffortCombo!!)
+                        .comment("Controls reasoning depth for Codex responses.")
+                }
+                row("Reasoning summary:") {
+                    cell(defaultReasoningSummaryCombo!!)
+                        .comment("Summary style for reasoning output when supported.")
+                }
+                row("Sandbox mode:") {
+                    cell(defaultSandboxModeCombo!!)
+                        .comment("Controls file system and network access permissions.")
+                }
+            }
+        }
+
+        reset()
+        return mainPanel!!
+    }
+
+    private fun initComponents() {
+        // Default Permissions
         defaultBypassPermissionsCheckbox = JBCheckBox("Default bypass permissions").apply {
             toolTipText = "When enabled, new sessions will automatically use bypass permissions mode"
-            alignmentX = JPanel.LEFT_ALIGNMENT
         }
-        contentPanel.add(defaultBypassPermissionsCheckbox)
-        contentPanel.add(createDescription("  Skip confirmation dialogs for file edits and bash commands. Use with caution."))
-
         defaultAutoCleanupContextsCheckbox = JBCheckBox("Default auto cleanup contexts").apply {
             toolTipText = "When enabled, new sessions will auto clear enabled contexts after sending"
-            alignmentX = JPanel.LEFT_ALIGNMENT
         }
-        contentPanel.add(defaultAutoCleanupContextsCheckbox)
-        contentPanel.add(createDescription("  Enabled contexts are cleared after send; disabled contexts stay."))
-        contentPanel.add(Box.createVerticalStrut(8))
 
-        contentPanel.add(createSectionTitle("Runtime Settings"))
-        contentPanel.add(createDescription("Configure Codex CLI location for the backend."))
-        contentPanel.add(Box.createVerticalStrut(8))
-
+        // Runtime Settings
         val descriptor = FileChooserDescriptorFactory.createSingleFileNoJarsDescriptor()
         codexPathField = TextFieldWithBrowseButton().apply {
             BrowseButtonCompat.addBrowseFolderListener(
@@ -88,7 +136,6 @@ class CodexConfigurable : SearchableConfigurable {
                 descriptor
             )
             toolTipText = "Leave empty to auto-detect from system PATH"
-            preferredSize = Dimension(450, preferredSize.height)
             (textField as? JBTextField)?.let { tf ->
                 tf.emptyText.text = "Detecting Codex..."
                 com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
@@ -102,47 +149,21 @@ class CodexConfigurable : SearchableConfigurable {
             }
         }
 
-        contentPanel.add(createLabeledRow("Codex path:", codexPathField!!))
-        contentPanel.add(createDescription("  Path to Codex executable. Leave empty to auto-detect from system PATH."))
-        contentPanel.add(Box.createVerticalStrut(8))
+        webSearchCheckBox = JBCheckBox("Enable web search")
 
-        webSearchCheckBox = JBCheckBox("Enable web search").apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-        }
-        contentPanel.add(webSearchCheckBox)
-        contentPanel.add(createDescription("  Allow Codex to request web searches (features.web_search_request)."))
-        contentPanel.add(Box.createVerticalStrut(8))
-
-        contentPanel.add(createSeparator())
-        contentPanel.add(createSectionTitle("Model Settings"))
-        contentPanel.add(createDescription("Configure default model and custom models for Codex."))
-
+        // Model Settings
         defaultModelCombo = ComboBox<ModelInfo>().apply {
             renderer = ModelInfoRenderer()
             toolTipText = "Default model for new Codex sessions"
         }
-        refreshModelCombo()
-        contentPanel.add(createLabeledRow("Default model:", defaultModelCombo!!))
-        contentPanel.add(createDescription("  gpt-5.2-codex = Codex optimized | gpt-5.2 = Base model"))
-        contentPanel.add(Box.createVerticalStrut(8))
 
-        contentPanel.add(createSectionTitle("Custom Models"))
-        contentPanel.add(createDescription("Add custom models with display name and model ID."))
-        contentPanel.add(Box.createVerticalStrut(4))
-
+        // Custom Models Table
         customModelsTableModel = object : DefaultTableModel(arrayOf("Display Name", "Model ID"), 0) {
             override fun isCellEditable(row: Int, column: Int) = false
         }
         customModelsTable = JBTable(customModelsTableModel).apply {
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
             tableHeader.reorderingAllowed = false
-            columnModel.getColumn(0).preferredWidth = 150
-            columnModel.getColumn(1).preferredWidth = 300
-        }
-
-        val tableScrollPane = JBScrollPane(customModelsTable).apply {
-            preferredSize = Dimension(500, 100)
-            minimumSize = Dimension(400, 80)
         }
 
         addModelButton = JButton("Add").apply {
@@ -189,40 +210,18 @@ class CodexConfigurable : SearchableConfigurable {
             }
         }
 
-        val buttonPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0))
-        buttonPanel.add(addModelButton)
-        buttonPanel.add(editModelButton)
-        buttonPanel.add(removeModelButton)
-
-        val customModelsPanel = JPanel(BorderLayout(0, 4)).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            add(tableScrollPane, BorderLayout.CENTER)
-            add(buttonPanel, BorderLayout.SOUTH)
-        }
-        contentPanel.add(customModelsPanel)
-        contentPanel.add(Box.createVerticalStrut(8))
-
-        contentPanel.add(createSeparator())
-        contentPanel.add(createSectionTitle("Session Defaults"))
-        contentPanel.add(createDescription("Configure reasoning and sandbox defaults for Codex sessions."))
-
+        // Session Defaults
         defaultReasoningEffortCombo = ComboBox(
             DefaultComboBoxModel(arrayOf("minimal", "low", "medium", "high", "xhigh"))
         ).apply {
             toolTipText = "Default reasoning effort for new Codex sessions"
         }
-        contentPanel.add(createLabeledRow("Reasoning effort:", defaultReasoningEffortCombo!!))
-        contentPanel.add(createDescription("  Controls reasoning depth for Codex responses."))
-        contentPanel.add(Box.createVerticalStrut(8))
 
         defaultReasoningSummaryCombo = ComboBox(
             DefaultComboBoxModel(arrayOf("auto", "concise", "detailed", "none"))
         ).apply {
             toolTipText = "Default reasoning summary behavior for Codex sessions"
         }
-        contentPanel.add(createLabeledRow("Reasoning summary:", defaultReasoningSummaryCombo!!))
-        contentPanel.add(createDescription("  Summary style for reasoning output when supported."))
-        contentPanel.add(Box.createVerticalStrut(8))
 
         defaultSandboxModeCombo = ComboBox(
             DefaultComboBoxModel(
@@ -236,15 +235,8 @@ class CodexConfigurable : SearchableConfigurable {
             renderer = SandboxOptionRenderer()
             toolTipText = "Default sandbox mode for new Codex sessions"
         }
-        contentPanel.add(createLabeledRow("Sandbox mode:", defaultSandboxModeCombo!!))
-        contentPanel.add(createDescription("  Controls file system and network access permissions."))
-        contentPanel.add(Box.createVerticalStrut(8))
-        contentPanel.add(Box.createVerticalGlue())
 
-        mainPanel!!.add(contentPanel, BorderLayout.NORTH)
-
-        reset()
-        return mainPanel!!
+        refreshModelCombo()
     }
 
     override fun isModified(): Boolean {
@@ -350,34 +342,6 @@ class CodexConfigurable : SearchableConfigurable {
                 text = value.label
             }
             return component
-        }
-    }
-
-    private fun createSectionTitle(text: String): JComponent {
-        return JBLabel("<html><b>$text</b></html>").apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            border = JBUI.Borders.emptyTop(5)
-        }
-    }
-
-    private fun createDescription(text: String): JComponent {
-        return JBLabel("<html><font color='gray' size='-1'>$text</font></html>").apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-        }
-    }
-
-    private fun createSeparator(): JComponent {
-        return JSeparator().apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            maximumSize = Dimension(Int.MAX_VALUE, 1)
-        }
-    }
-
-    private fun createLabeledRow(label: String, component: JComponent): JPanel {
-        return JPanel(FlowLayout(FlowLayout.LEFT, 5, 2)).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            add(JBLabel(label))
-            add(component)
         }
     }
 

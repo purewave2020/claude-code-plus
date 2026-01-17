@@ -18,8 +18,18 @@ import { i18n, getLocale } from '@/i18n'
 import { initJetBrainsIntegration } from '@/services/jetbrainsApi'
 import { initToolShowInterceptor } from '@/services/toolShowInterceptor'
 import { initScrollBoost } from '@/utils/scrollBoost'
+import { initBrowserSecurity, registerOpenFileCallback, setTranslateFunction } from '@/utils/browserSecurity'
+import { ideaBridge } from '@/services/ideaBridge'
 
 console.log('🚀 Initializing Vue application...')
+
+// 🔒 初始化浏览器安全限制（禁止跳转、禁用默认右键菜单）
+initBrowserSecurity()
+
+// 📂 注册全局文件打开回调（用于处理文件链接点击）
+registerOpenFileCallback((filePath) => {
+  ideaBridge.query('ide.openFile', { filePath })
+})
 
 // 在 IDE 嵌入式浏览器中首次渲染时，100vh 可能无法正确计算，使用 JS 动态设置实际高度
 const updateViewportHeight = () => {
@@ -101,6 +111,9 @@ async function initApp() {
   })
 
   app.mount('#app')
+
+  // 🌐 设置 browserSecurity 的翻译函数（与 Vue i18n 集成）
+  setTranslateFunction((key: string) => i18n.global.t(key) as string)
 
   console.log('✅ Vue application mounted with locale:', locale)
   if (jetbrainsEnabled) {

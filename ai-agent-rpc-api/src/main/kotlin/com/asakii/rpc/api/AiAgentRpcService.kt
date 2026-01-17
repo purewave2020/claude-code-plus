@@ -37,6 +37,25 @@ interface AiAgentRpcService {
     fun queryWithContent(content: List<RpcContentBlock>): Flow<RpcMessage>
 
     /**
+     * 订阅全局事件流
+     *
+     * 返回一个永不自动结束的 Flow，持续推送所有 SDK 事件。
+     * 只有在断开连接或手动取消订阅时才会结束。
+     *
+     * 使用方式：
+     * 1. 前端连接后调用此方法订阅全局事件
+     * 2. 所有 SDK 事件（包括 query 的响应）都会通过此流推送
+     * 3. 可以配合 query 使用，实现 Query/Result 分离模式
+     *
+     * 注意：
+     * - 如果同时使用 query() 返回的流和此全局流，会收到重复事件
+     * - 如果没有订阅者，事件会被丢弃（SharedFlow 语义）
+     *
+     * @return 持续的事件流
+     */
+    fun subscribeGlobalEvents(): Flow<RpcMessage>
+
+    /**
      * 中断当前操作
      */
     suspend fun interrupt(): RpcStatusResult

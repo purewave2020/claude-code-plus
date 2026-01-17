@@ -56,6 +56,10 @@ export class RSocketSession {
     private errorHandlers = new Set<ErrorHandler>()
     private _cancelStream: (() => void) | null = null
     private wsUrl: string
+    /** 全局事件流订阅取消函数 */
+    private _globalEventsCancel: (() => void) | null = null
+    /** 是否已订阅全局事件流 */
+    private _isGlobalEventsSubscribed = false
     /** 等待连接后注册的 handlers */
     private pendingHandlers = new Map<string, (params: any) => Promise<any>>()
     /** 连接断开事件处理器 */
@@ -381,7 +385,10 @@ export class RSocketSession {
      */
     disconnect(): void {
         if (this._isConnected && this.client) {
-            // 先取消订阅，避免 client.disconnect() 触发 handleConnectionLost
+            // 先取消全局事件订阅
+            this.unsubscribeGlobalEvents()
+
+            // 取消订阅，避免 client.disconnect() 触发 handleConnectionLost
             if (this.unsubscribeClientDisconnect) {
                 this.unsubscribeClientDisconnect()
                 this.unsubscribeClientDisconnect = null
@@ -394,6 +401,80 @@ export class RSocketSession {
 
             log.info('[RSocketSession] 已断开连接')
         }
+    }
+
+    /**
+     * 订阅全局事件流
+     *
+     * 订阅后，所有 SDK 事件会自动通过 onMessage 监听器推送。
+     * 只需调用一次，连接期间持续有效。
+     *
+     * 使用方式:
+     * ```typescript
+     * session.onMessage((msg) => console.log(msg))  // 注册监听器
+     * session.subscribeGlobalEvents()               // 订阅全局流
+     * session.sendMessage("hello")                  // 发送消息
+     * ```
+     *
+     * @returns 取消订阅函数
+     */
+    subscribeGlobalEvents(): () => void {
+        if (!this._isConnected || !this.client) {
+            throw new Error('Session not connected')
+        }
+
+        if (this._isGlobalEventsSubscribed) {
+            log.warn('[RSocketSession] 全局事件流已订阅')
+            return () => this.unsubscribeGlobalEvents()
+        }
+
+        log.info('[RSocketSession] 订阅全局事件流')
+
+        this._globalEventsCancel = this.client.requestStream('agent.events', undefined, {
+            onNext: (responseData) => {
+                try {
+                    const rpcMessage = ProtoCodec.decodeRpcMessage(responseData)
+                    // 只打印完整消息，不打印 stream_event
+                    if (rpcMessage.type !== 'stream_event') {
+                        log.debug('[RSocketSession] 全局事件:', JSON.stringify(rpcMessage, null, 2))
+                    }
+                    this.notifyMessageHandlers(rpcMessage)
+                } catch (error) {
+                    log.error('[RSocketSession] 解析全局事件失败:', error)
+                }
+            },
+            onError: (error) => {
+                log.error('[RSocketSession] 全局事件流错误:', error)
+                this._isGlobalEventsSubscribed = false
+                this.handleError(error)
+            },
+            onComplete: () => {
+                log.info('[RSocketSession] 全局事件流结束')
+                this._isGlobalEventsSubscribed = false
+            }
+        })
+
+        this._isGlobalEventsSubscribed = true
+        return () => this.unsubscribeGlobalEvents()
+    }
+
+    /**
+     * 取消订阅全局事件流
+     */
+    unsubscribeGlobalEvents(): void {
+        if (this._globalEventsCancel) {
+            log.info('[RSocketSession] 取消全局事件流订阅')
+            this._globalEventsCancel()
+            this._globalEventsCancel = null
+            this._isGlobalEventsSubscribed = false
+        }
+    }
+
+    /**
+     * 是否已订阅全局事件流
+     */
+    get isGlobalEventsSubscribed(): boolean {
+        return this._isGlobalEventsSubscribed
     }
 
     /**

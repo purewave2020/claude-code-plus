@@ -30,6 +30,12 @@ export default {
     expand: '펼치기',
     collapse: '접기'
   },
+  contextMenu: {
+    copy: '복사',
+    paste: '붙여넣기',
+    cut: '잘라내기',
+    selectAll: '모두 선택'
+  },
   chat: {
     placeholder: '',
     placeholderWithShortcuts: '',

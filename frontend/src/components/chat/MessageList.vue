@@ -69,7 +69,7 @@
         >
           <component
             :is="messageComponent"
-            :source="item"
+            :source="(item as any)"
           />
         </div>
 
@@ -464,12 +464,11 @@ watch(
 )
 
 /**
- * 监听用户滚轮事件 - 退出 follow 模式的【唯一入口】
+ * 监听用户滚轮事件 - 快速退出 follow 模式
  * 
  * 设计原理：
- * - wheel 事件只有用户滚轮操作才会触发
- * - 程序调用 scrollTop=xxx 或 scrollToBottom() 不会触发 wheel 事件
- * - 因此可以 100% 准确区分用户滚动和程序滚动
+ * - wheel 事件响应更快，可以在 scroll 事件之前处理
+ * - handleScrollCore 也会处理退出逻辑（支持拖动滚动条）
  */
 function handleWheel(e: WheelEvent) {
   // Tab 切换中，不处理滚轮事件
@@ -781,10 +780,21 @@ function handleScrollCore() {
   lastScrollTop.value = scrollTop
 
   // 模式切换逻辑：
-  // - 退出 follow → browse：只通过 handleWheel 处理（用户滚轮向上）
+  // - 退出 follow → browse：用户向上滚动（滚轮或拖动滚动条）
   // - 恢复 browse → follow：滚动到底部时自动恢复
 
-  if (scrollState.value.mode === 'browse') {
+  if (scrollState.value.mode === 'follow') {
+    // follow 模式下，如果用户向上滚动且不在底部，退出 follow 模式
+    if (isScrollingUp && !nearBottom) {
+      const anchor = computeScrollAnchor()
+      scrollState.value = {
+        mode: 'browse',
+        anchor,
+        newMessageCount: 0
+      }
+      console.log('🔄 [Scroll] Switched to browse mode (user scroll up)')
+    }
+  } else if (scrollState.value.mode === 'browse') {
     if (nearBottom && !isScrollingUp) {
       // 向下滚动到底部，切换回 follow
       scrollState.value = { mode: 'follow', anchor: null, newMessageCount: 0 }
@@ -794,12 +804,11 @@ function handleScrollCore() {
       debouncedSaveAnchor()
     }
   }
-  // follow 模式：不在此处理退出逻辑，由 handleWheel 统一处理
 }
 
 /**
  * 程序调用的滚动到底部（follow 模式下使用）
- * 无需标志位，因为退出 follow 模式只通过 wheel 事件判断
+ * 程序滚动是向下滚动，不会触发向上滚动的退出逻辑
  */
 function scrollToBottomSilent() {
   const el = getScrollElement()

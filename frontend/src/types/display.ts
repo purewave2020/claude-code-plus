@@ -239,6 +239,18 @@ export interface BaseToolCall extends BaseDisplayItem {
   subagentMessages?: DisplayItem[]
   /** 子代理名称/类型（如 general-purpose） */
   agentName?: string
+  /** 工具 ViewModel（用于 UI 展示） */
+  viewModel?: {
+    toolType?: string
+    compactSummary?: string
+    toolDetail?: {
+      parameters?: Record<string, any>
+      toolType?: string
+    }
+    toolResult?: unknown
+  }
+  /** 工具显示名称（别名） */
+  displayName?: string
 }
 
 /**

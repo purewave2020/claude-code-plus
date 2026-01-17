@@ -32,6 +32,12 @@ export default {
     enabled: '已啟用',
     disabled: '已停用'
   },
+  contextMenu: {
+    copy: '複製',
+    paste: '貼上',
+    cut: '剪下',
+    selectAll: '全選'
+  },
   chat: {
     placeholder: '',
     placeholderWithShortcuts: '',

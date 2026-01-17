@@ -136,6 +136,7 @@ class RSocketHandler(
                 when (route) {
                     "agent.query" -> handleQuery(dataBytes, rpcService)
                     "agent.queryWithContent" -> handleQueryWithContent(dataBytes, rpcService)
+                    "agent.events" -> handleGlobalEvents(rpcService)
                     else -> throw IllegalArgumentException("Unknown route: $route")
                 }
             }
@@ -365,6 +366,23 @@ class RSocketHandler(
             .mapToPayloadWithLogging("queryWithContent")
             .catch { e ->
                 wsLog.error("❌ [RSocket] queryWithContent 错误: ${e.message}")
+                throw e
+            }
+    }
+
+    /**
+     * 处理全局事件流订阅
+     * 
+     * 返回一个持续的事件流，不会自动结束。
+     * 所有 SDK 事件都会通过此流推送给订阅者。
+     */
+    private fun handleGlobalEvents(rpcService: AiAgentRpcService): Flow<Payload> {
+        wsLog.info("📡 [RSocket] 全局事件流订阅 [$connectionId]")
+        
+        return rpcService.subscribeGlobalEvents()
+            .mapToPayloadWithLogging("events")
+            .catch { e ->
+                wsLog.error("❌ [RSocket] 全局事件流错误: ${e.message}")
                 throw e
             }
     }

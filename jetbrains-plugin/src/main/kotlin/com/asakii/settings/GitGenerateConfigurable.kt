@@ -2,13 +2,12 @@ package com.asakii.settings
 
 import com.intellij.openapi.options.SearchableConfigurable
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
-import com.intellij.util.ui.JBUI
-import java.awt.*
+import com.intellij.ui.dsl.builder.Align
+import com.intellij.ui.dsl.builder.panel
+import java.awt.CardLayout
+import java.awt.Font
 import javax.swing.*
-import javax.swing.DefaultListCellRenderer
 
 /**
  * Git Generate 独立配置页面
@@ -39,33 +38,89 @@ class GitGenerateConfigurable : SearchableConfigurable {
     override fun getDisplayName(): String = "Git Generate"
 
     override fun createComponent(): JComponent {
-        mainPanel = JPanel(BorderLayout())
+        initComponents()
 
-        val contentPanel = JPanel()
-        contentPanel.layout = BoxLayout(contentPanel, BoxLayout.Y_AXIS)
-        contentPanel.border = JBUI.Borders.empty(8, 10, 8, 10)
+        mainPanel = panel {
+            row {
+                comment("Configure AI-powered Git commit message generation.")
+            }
+            row {
+                cell(enableCheckbox!!)
+            }
+            row {
+                comment("Git Generate uses built-in Git MCP and default permissions automatically.")
+            }
 
-        // 标题说明
-        contentPanel.add(createDescription("Configure AI-powered Git commit message generation."))
-        contentPanel.add(Box.createVerticalStrut(8))
+            separator()
 
-        enableCheckbox = JCheckBox("Enable Git Generate").apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            toolTipText = "Show Git Generate in the commit message toolbar"
+            row("Backend:") {
+                cell(backendCombo!!)
+            }
+            row("Model:") {
+                cell(modelCombo!!)
+            }
+
+            group("Thinking") {
+                row {
+                    cell(thinkingPanel!!)
+                }
+            }
+
+            row {
+                cell(saveSessionCheckbox!!)
+            }
+
+            separator()
+
+            group("System Prompt") {
+                row {
+                    comment("Instructions for the AI on how to generate commit messages.")
+                }
+                row {
+                    scrollCell(systemPromptArea!!)
+                        .align(Align.FILL)
+                }.resizableRow()
+            }
+
+            group("User Prompt") {
+                row {
+                    comment("Runtime prompt sent with the code changes. Customize analysis focus here.")
+                }
+                row {
+                    scrollCell(userPromptArea!!)
+                        .align(Align.FILL)
+                }.resizableRow()
+            }
+
+            row {
+                button("Reset to Default") {
+                    val defaults = AgentSettingsService.getInstance()
+                    systemPromptArea?.text = GitGenerateDefaults.SYSTEM_PROMPT
+                    userPromptArea?.text = GitGenerateDefaults.USER_PROMPT
+                    enableCheckbox?.isSelected = false
+                    selectBackendOption(AgentSettingsService.MCP_BACKEND_CLAUDE)
+                    refreshModelCombo(AgentSettingsService.MCP_BACKEND_CLAUDE, null, useSettingsFallback = false)
+                    claudeThinkingCombo?.selectedItem = defaults.getThinkingLevelById("ultra")
+                    codexReasoningEffortCombo?.selectedItem = "xhigh"
+                    saveSessionCheckbox?.isSelected = false
+                }
+            }
         }
-        contentPanel.add(enableCheckbox)
-        contentPanel.add(Box.createVerticalStrut(8))
 
-        contentPanel.add(createDescription("Git Generate uses built-in Git MCP and default permissions automatically."))
-        contentPanel.add(Box.createVerticalStrut(16))
+        backendCombo?.addActionListener { updateBackendSpecificUi() }
 
+        reset()
+        return mainPanel!!
+    }
+
+    private fun initComponents() {
         val settings = AgentSettingsService.getInstance()
 
-        // Backend 选择器
-        val backendPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
+        enableCheckbox = JCheckBox("Enable Git Generate").apply {
+            toolTipText = "Show Git Generate in the commit message toolbar"
         }
-        backendPanel.add(JBLabel("Backend: "))
+
+        // Backend 选择器
         val backendOptions = arrayOf(
             BackendOption(AgentSettingsService.MCP_BACKEND_CLAUDE, "Claude"),
             BackendOption(AgentSettingsService.MCP_BACKEND_CODEX, "Codex")
@@ -86,41 +141,20 @@ class GitGenerateConfigurable : SearchableConfigurable {
                     return component
                 }
             }
-            preferredSize = Dimension(200, preferredSize.height)
             toolTipText = "Select backend for Git Generate"
         }
-        backendPanel.add(backendCombo)
-        contentPanel.add(backendPanel)
-        contentPanel.add(Box.createVerticalStrut(8))
 
         // Model 选择器
-        val modelPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-        }
-        modelPanel.add(JBLabel("Model: "))
         modelCombo = ComboBox<ModelInfo>().apply {
             renderer = ModelInfoRenderer()
-            preferredSize = Dimension(240, preferredSize.height)
             toolTipText = "Select the model to use for commit message generation"
         }
-        modelPanel.add(modelCombo)
-        contentPanel.add(modelPanel)
-        contentPanel.add(Box.createVerticalStrut(8))
 
-        // Thinking 设置
-        contentPanel.add(createSectionTitle("Thinking"))
-        contentPanel.add(createDescription("Configure thinking level for the selected backend."))
-        contentPanel.add(Box.createVerticalStrut(4))
-        thinkingPanel = JPanel().apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            thinkingCardLayout = CardLayout()
-            layout = thinkingCardLayout
-        }
+        // Thinking 设置 - 使用 CardLayout 切换
+        thinkingCardLayout = CardLayout()
+        thinkingPanel = JPanel(thinkingCardLayout)
 
-        val claudeThinkingPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-        }
-        claudeThinkingPanel.add(JBLabel("Claude thinking level: "))
+        // Claude thinking panel
         claudeThinkingCombo = ComboBox<ThinkingLevelConfig>().apply {
             renderer = object : DefaultListCellRenderer() {
                 override fun getListCellRendererComponent(
@@ -137,107 +171,48 @@ class GitGenerateConfigurable : SearchableConfigurable {
                     return component
                 }
             }
-            preferredSize = Dimension(200, preferredSize.height)
             toolTipText = "Select thinking level for Claude"
+            model = DefaultComboBoxModel(settings.getAllThinkingLevels().toTypedArray())
         }
-        claudeThinkingCombo?.model = DefaultComboBoxModel(settings.getAllThinkingLevels().toTypedArray())
-        claudeThinkingPanel.add(claudeThinkingCombo)
+        val claudePanel = panel {
+            row("Claude thinking level:") {
+                cell(claudeThinkingCombo!!)
+            }
+        }
 
-        val codexThinkingPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-        }
-        codexThinkingPanel.add(JBLabel("Codex reasoning effort: "))
+        // Codex reasoning panel
         codexReasoningEffortCombo = ComboBox(
             DefaultComboBoxModel(arrayOf("minimal", "low", "medium", "high", "xhigh"))
         ).apply {
-            preferredSize = Dimension(200, preferredSize.height)
             toolTipText = "Select reasoning effort for Codex"
         }
-        codexThinkingPanel.add(codexReasoningEffortCombo)
+        val codexPanel = panel {
+            row("Codex reasoning effort:") {
+                cell(codexReasoningEffortCombo!!)
+            }
+        }
 
-        thinkingPanel!!.add(claudeThinkingPanel, AgentSettingsService.MCP_BACKEND_CLAUDE)
-        thinkingPanel!!.add(codexThinkingPanel, AgentSettingsService.MCP_BACKEND_CODEX)
-        contentPanel.add(thinkingPanel)
-        contentPanel.add(Box.createVerticalStrut(16))
+        thinkingPanel!!.add(claudePanel, AgentSettingsService.MCP_BACKEND_CLAUDE)
+        thinkingPanel!!.add(codexPanel, AgentSettingsService.MCP_BACKEND_CODEX)
 
         // Save Session 复选框
         saveSessionCheckbox = JCheckBox("Save session to history").apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
             toolTipText = "When enabled, the generation session will be saved and visible in Claude Code session history"
         }
-        contentPanel.add(saveSessionCheckbox)
-        contentPanel.add(Box.createVerticalStrut(16))
 
         // System Prompt 区域
-        contentPanel.add(createSectionTitle("System Prompt"))
-        contentPanel.add(createDescription("Instructions for the AI on how to generate commit messages."))
-        contentPanel.add(Box.createVerticalStrut(4))
-
         systemPromptArea = JBTextArea(10, 70).apply {
             font = Font(Font.MONOSPACED, Font.PLAIN, 12)
             lineWrap = true
             wrapStyleWord = true
         }
-        val systemPromptScrollPane = JBScrollPane(systemPromptArea).apply {
-            preferredSize = Dimension(700, 200)
-            alignmentX = JPanel.LEFT_ALIGNMENT
-        }
-        contentPanel.add(systemPromptScrollPane)
-        contentPanel.add(Box.createVerticalStrut(16))
 
         // User Prompt 区域
-        contentPanel.add(createSectionTitle("User Prompt"))
-        contentPanel.add(createDescription("Runtime prompt sent with the code changes. Customize analysis focus here."))
-        contentPanel.add(Box.createVerticalStrut(4))
-
         userPromptArea = JBTextArea(5, 70).apply {
             font = Font(Font.MONOSPACED, Font.PLAIN, 12)
             lineWrap = true
             wrapStyleWord = true
         }
-        val userPromptScrollPane = JBScrollPane(userPromptArea).apply {
-            preferredSize = Dimension(700, 100)
-            alignmentX = JPanel.LEFT_ALIGNMENT
-        }
-        contentPanel.add(userPromptScrollPane)
-        contentPanel.add(Box.createVerticalStrut(16))
-
-        // 按钮行
-        val buttonPanel = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-        }
-
-        val resetButton = JButton("Reset to Default").apply {
-            toolTipText = "Reset all fields to their default values"
-        }
-        resetButton.addActionListener {
-            val defaults = AgentSettingsService.getInstance()
-            systemPromptArea?.text = GitGenerateDefaults.SYSTEM_PROMPT
-            userPromptArea?.text = GitGenerateDefaults.USER_PROMPT
-            enableCheckbox?.isSelected = false
-            selectBackendOption(AgentSettingsService.MCP_BACKEND_CLAUDE)
-            refreshModelCombo(AgentSettingsService.MCP_BACKEND_CLAUDE, null, useSettingsFallback = false)
-            claudeThinkingCombo?.selectedItem = defaults.getThinkingLevelById("ultra")
-            codexReasoningEffortCombo?.selectedItem = "xhigh"
-            saveSessionCheckbox?.isSelected = false
-        }
-        buttonPanel.add(resetButton)
-
-        contentPanel.add(buttonPanel)
-        contentPanel.add(Box.createVerticalGlue())
-
-        // 包装滚动面板
-        val scrollPane = JBScrollPane(contentPanel).apply {
-            border = null
-            verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
-        }
-
-        mainPanel!!.add(scrollPane, BorderLayout.CENTER)
-
-        backendCombo?.addActionListener { updateBackendSpecificUi() }
-
-        reset()
-        return mainPanel!!
     }
 
     private fun getSelectedBackendId(): String {
@@ -273,19 +248,6 @@ class GitGenerateConfigurable : SearchableConfigurable {
             .firstOrNull { it.id == backendId }
             ?: model.getElementAt(0)
         backendCombo?.selectedItem = option
-    }
-
-    private fun createSectionTitle(text: String): JComponent {
-        return JBLabel("<html><b>$text</b></html>").apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-            font = font.deriveFont(13f)
-        }
-    }
-
-    private fun createDescription(text: String): JComponent {
-        return JBLabel("<html><font color='#6B7280'>$text</font></html>").apply {
-            alignmentX = JPanel.LEFT_ALIGNMENT
-        }
     }
 
     override fun isModified(): Boolean {
