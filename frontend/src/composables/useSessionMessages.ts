@@ -196,6 +196,20 @@ export function useSessionMessages(
    */
   const lastError = ref<string | null>(null)
 
+  /**
+   * 是否包含分片消息（connect 时设置）
+   * 当为 true 时，流式过程中会收到完整的 assistant 消息，需要忽略以避免重复
+   */
+  const includePartialMessages = ref(false)
+
+  /**
+   * 设置是否包含分片消息
+   */
+  function setIncludePartialMessages(value: boolean): void {
+    includePartialMessages.value = value
+    log.debug(`[useSessionMessages] includePartialMessages 设置为: ${value}`)
+  }
+
   // ========== 函数注入 ==========
 
   /**
@@ -960,18 +974,38 @@ export function useSessionMessages(
 
     // assistant 消息处理
     if (message.role === 'assistant') {
+      // 🔑 分片模式下，流式阶段收到的完整 assistant 消息直接跳过
+      // 因为 content_block_start 已经创建了 displayItems
+      if (includePartialMessages.value && isGenerating.value) {
+        log.info('[useSessionMessages] 分片模式+流式中，跳过完整 assistant 消息处理')
+        // 仅同步 thinking signature（用于验证）
+        syncThinkingSignatures(message)
+        return
+      }
+
       // 优先使用追踪的流式消息 ID 来查找
       const streamingId = stats.getCurrentTracker()?.currentStreamingMessageId
       let existingAssistant: Message | undefined
 
+      // 🔍 调试：显示查找上下文
+      log.info('[useSessionMessages] 查找 existingAssistant:', {
+        incomingMessageId: message.id,
+        streamingId,
+        isGenerating: isGenerating.value,
+        messagesCount: messages.length,
+        assistantMessages: messages.filter(m => m.role === 'assistant').map(m => ({ id: m.id, isStreaming: m.isStreaming }))
+      })
+
       // 1. 先按流式 ID 查找
       if (streamingId) {
         existingAssistant = messages.find(m => m.id === streamingId && m.role === 'assistant')
+        log.info('[useSessionMessages] 按 streamingId 查找结果:', existingAssistant?.id || '未找到')
       }
 
       // 2. 再按消息 ID 查找（可能 ID 已更新）
       if (!existingAssistant) {
         existingAssistant = messages.find(m => m.id === message.id && m.role === 'assistant')
+        log.info('[useSessionMessages] 按 message.id 查找结果:', existingAssistant?.id || '未找到')
       }
 
       // 3. 如果正在生成中，检查最后一条 streaming 的 assistant 消息
@@ -980,28 +1014,31 @@ export function useSessionMessages(
         if (lastStreaming) {
           existingAssistant = lastStreaming
           log.info('[useSessionMessages] 通过 isStreaming 状态找到现有消息:', lastStreaming.id)
+        } else {
+          log.info('[useSessionMessages] isGenerating=true 但没有找到 isStreaming 的 assistant 消息')
         }
       }
 
       // 4. 如果是同一个消息，同步内容
       if (existingAssistant) {
-        log.debug('[useSessionMessages] 同步完整消息到现有 assistant 消息, existing:', existingAssistant.id, 'incoming:', message.id)
+        log.info('[useSessionMessages] 同步完整消息到现有 assistant 消息, existing:', existingAssistant.id, 'incoming:', message.id)
         // 更新消息 ID（如果不同）
         if (existingAssistant.id !== message.id) {
           const oldId = existingAssistant.id
           existingAssistant.id = message.id
           renameDisplayItemsForMessage(oldId, message.id)
+          // 同步更新 streamingMessageId，确保后续消息能正确找到
+          stats.setStreamingMessageId(message.id)
         }
         // 同步 thinking signature
         syncThinkingSignatures(message)
-        // 流式模式下，检查消息 ID 是否与当前正在处理的消息一致
-        // 如果一致，说明流式消息已经创建了 displayItem，跳过
-        const streamingMessageId = stats.getCurrentTracker()?.currentStreamingMessageId
-        if (streamingMessageId && streamingMessageId === message.id) {
-          log.debug('[useSessionMessages] 流式模式，消息 ID 一致，跳过 syncNewContentBlocks')
+        // 分片模式下，流式阶段的 content_block_start 已经创建了 displayItems，跳过
+        log.info('[useSessionMessages] 检查分片模式: includePartialMessages=', includePartialMessages.value, 'isGenerating=', isGenerating.value)
+        if (includePartialMessages.value && isGenerating.value) {
+          log.info('[useSessionMessages] 分片模式+流式中，跳过 syncNewContentBlocks')
           return
         }
-        // 非流式模式，或者消息 ID 不一致，同步内容块
+        // 非分片模式或非流式模式，同步内容块（历史消息加载等场景）
         syncNewContentBlocks(message, existingAssistant)
         return
       }
@@ -1754,6 +1791,7 @@ export function useSessionMessages(
     // 设置方法
     setBeforeProcessQueueFn,
     setProcessQueueFn,
+    setIncludePartialMessages,
     appendMessagesBatch,
     prependMessagesBatch,
 

@@ -806,6 +806,11 @@ export function useSessionTab(initialOrder: number = 0) {
 
     /**
      * 连接到后端
+     * 
+     * 会话 ID 统一使用 sessionId.value：
+     * - 新会话：sessionId.value 为空
+     * - 历史会话恢复：先设置 sessionId.value，再调用 connect
+     * - 断开重连：sessionId.value 已有值
      */
     async function connect(options: TabConnectOptions = {}): Promise<void> {
         const resolvedOptions: TabConnectOptions = {...(initialConnectOptions.value || {}), ...options}
@@ -814,6 +819,9 @@ export function useSessionTab(initialOrder: number = 0) {
             log.warn(`[Tab ${tabId}] 正在连接中（${connectionState.status}），请勿重复连接`)
             return
         }
+
+        // 保存当前 sessionId，用于重连时恢复会话（在清空前保存）
+        const resumeId = sessionId.value
 
         // 如果已有连接，先断开旧连接
         if (rsocketSession.value) {
@@ -825,11 +833,6 @@ export function useSessionTab(initialOrder: number = 0) {
 
         connectionState.status = ConnectionStatus.CONNECTING
         connectionState.lastError = null
-
-        // 不覆盖 ref 值！
-        // 初始值已在 setInitialConnectOptions 中设置
-        // 用户修改通过 setPendingSetting 直接更新 ref
-        // connect 直接使用当前 ref 值构建请求
 
         try {
             // 创建新的 RSocketSession 实例
@@ -857,8 +860,9 @@ export function useSessionTab(initialOrder: number = 0) {
                 // 始终为 false，让权限检查走前端 RequestPermission 处理器
                 // 这样前端的 skipPermissions 动态切换才能生效
                 dangerouslySkipPermissions: false,
-                continueConversation: resolvedOptions.continueConversation,
-                resumeSessionId: resolvedOptions.resumeSessionId,
+                // 统一使用 sessionId.value 作为恢复会话的 ID
+                continueConversation: !!resumeId,
+                resumeSessionId: resumeId || undefined,
                 // 固定开启重放用户消息
                 replayUserMessages: true,
                 // 统一协议：传递 provider 参数，后端根据此参数路由到对应的 AI Agent
@@ -883,6 +887,9 @@ export function useSessionTab(initialOrder: number = 0) {
 
             // 连接并获取 sessionId（包含 agent.connect RPC）
             const newSessionId = await session.connect(connectOptions)
+
+            // 记录分片消息模式，用于 handleNormalMessage 判断是否忽略完整消息
+            messagesHandler.setIncludePartialMessages(connectOptions.includePartialMessages ?? true)
 
             // 连接成功后，设置具体的思考级别（如果启用了思考且 provider 支持）
             if (thinkingLevel.value > 0 && session.capabilities?.canThink) {
@@ -935,6 +942,25 @@ export function useSessionTab(initialOrder: number = 0) {
             }
 
             log.info(`[Tab ${tabId}] 连接成功: sessionId=${newSessionId}`)
+
+            // 场景区分（基于 resumeId，在清空 sessionId.value 前已保存）：
+            // 1. 新会话：resumeId 为空 → 不加载历史
+            // 2. 历史会话恢复：resumeId 有值 且 displayItems 为空 → 加载历史
+            // 3. 断开重连：resumeId 有值 且 displayItems 不为空 → 不加载历史（消息还在内存）
+            if (resumeId && messagesHandler.displayItems.length === 0) {
+                log.info(`[Tab ${tabId}] 历史会话恢复，加载历史记录 (resumeId=${resumeId})`)
+                try {
+                    await loadHistory({
+                        sessionId: newSessionId,
+                        projectPath: projectPath.value ?? undefined
+                    })
+                    log.info(`[Tab ${tabId}] 历史记录加载完成`)
+                } catch (e) {
+                    log.warn(`[Tab ${tabId}] 历史记录加载失败:`, e)
+                }
+            } else if (resumeId) {
+                log.info(`[Tab ${tabId}] 断开重连，跳过历史加载`)
+            }
 
             // 连接成功后，处理队列中的消息
             processNextQueuedMessage()
