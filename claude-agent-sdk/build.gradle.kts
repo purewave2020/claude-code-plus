@@ -589,8 +589,10 @@ val verifyPatches = tasks.register("verifyPatches") {
         println("========================================")
 
         val checks = listOf(
-            "run_in_background" to "控制命令",
-            "__sdkBackgroundResolver" to "全局 background resolver"
+            "run_to_background" to "统一后台控制命令",
+            "agent_run_to_background" to "Agent后台控制命令",
+            "__parentUuid" to "parentUuid支持(编辑重发)",
+            "get_chrome_status" to "Chrome状态查询"
         )
 
         var passed = 0
