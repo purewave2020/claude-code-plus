@@ -35,7 +35,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.json.JsonPrimitive
 import com.asakii.logging.*
 import java.nio.file.Paths
 import java.util.UUID
@@ -101,12 +100,6 @@ class GenerateCommitMessageService(private val project: Project) {
                         "jetbrains_git",
                         gitMcpServer
                     )
-                    val threadOverrides = mapOf(
-                        "mcp_servers.jetbrains_git.http_headers.${McpHttpGateway.HEADER_SESSION_ID}" to
-                            JsonPrimitive(connectId),
-                        "mcp_servers.jetbrains_git.http_headers.${McpHttpGateway.HEADER_PROVIDER}" to
-                            JsonPrimitive(AiAgentProvider.CODEX.name)
-                    )
                     val codexPath = settings.codexPath.takeIf { it.isNotBlank() }
                         ?.let { Paths.get(it) }
                         ?: AgentSettingsService.detectCodexPath().trim().takeIf { it.isNotBlank() }
@@ -128,7 +121,6 @@ class GenerateCommitMessageService(private val project: Project) {
                         approvalPolicy = ApprovalMode.NEVER,
                         developerInstructions = configuredSystemPrompt,
                         mcpServers = mapOf("jetbrains_git" to mcpUrl),
-                        threadConfigOverrides = threadOverrides
                     )
                     AiAgentConnectOptions(
                         provider = AiAgentProvider.CODEX,

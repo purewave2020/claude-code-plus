@@ -25,14 +25,11 @@ import org.eclipse.jetty.server.ServerConnector
 
 class CodexHttpMcpQueryIntegrationTest {
     private data class RequestSnapshot(
-        val query: String?,
-        val sessionHeader: String?,
-        val providerHeader: String?,
-        val customHeader: String?
+        val query: String?
     )
 
     @Test
-    fun codexUsesHttpHeadersForHttpMcp() = runBlocking {
+    fun codexCanConnectToHttpMcpUrlWithQueryRouting() = runBlocking {
         val captured = CompletableDeferred<RequestSnapshot>()
         val endpointPath = "/mcp/test"
 
@@ -58,10 +55,7 @@ class CodexHttpMcpQueryIntegrationTest {
                         if (!captured.isCompleted && req.requestURI.startsWith(endpointPath)) {
                             captured.complete(
                                 RequestSnapshot(
-                                    query = req.queryString,
-                                    sessionHeader = req.getHeader("X-Session-Id"),
-                                    providerHeader = req.getHeader("X-Provider"),
-                                    customHeader = req.getHeader("X-Test")
+                                    query = req.queryString
                                 )
                             )
                         }
@@ -75,14 +69,12 @@ class CodexHttpMcpQueryIntegrationTest {
         jetty.start()
 
         val port = connector.localPort
-        val url = "http://127.0.0.1:$port$endpointPath"
+        val url = "http://127.0.0.1:$port$endpointPath?connectId=sid-123&provider=CODEX"
 
         val client = try {
             CodexAppServerClient.create(
                 configOverrides = mapOf(
                     "mcp_servers.test.url" to "\"$url\"",
-                    "mcp_servers.test.http_headers.X-Session-Id" to "\"sid-123\"",
-                    "mcp_servers.test.http_headers.X-Provider" to "\"CODEX\"",
                     "mcp_servers.test.startup_timeout_sec" to "10"
                 )
             )
@@ -99,87 +91,10 @@ class CodexHttpMcpQueryIntegrationTest {
 
             val snapshot = withTimeout(10.seconds) { captured.await() }
             println(
-                "Captured MCP request: query=${snapshot.query}, " +
-                    "X-Session-Id=${snapshot.sessionHeader}, " +
-                    "X-Provider=${snapshot.providerHeader}"
+                "Captured MCP request: query=${snapshot.query}"
             )
-            assertTrue(snapshot.query.isNullOrBlank())
-            assertTrue(snapshot.sessionHeader == "sid-123")
-            assertTrue(snapshot.providerHeader == "CODEX")
-        } finally {
-            client.close()
-            jetty.stop()
-        }
-    }
-
-    @Test
-    fun codexSendsHttpHeadersToMcpServer() = runBlocking {
-        val captured = CompletableDeferred<RequestSnapshot>()
-        val endpointPath = "/mcp/test"
-
-        val transport = HttpServletStreamableServerTransportProvider.builder()
-            .jsonMapper(JsonTools.mcpJsonMapper)
-            .mcpEndpoint(endpointPath)
-            .build()
-
-        createMcpServer(transport)
-
-        val jetty = Server()
-        val connector = ServerConnector(jetty).apply {
-            host = "127.0.0.1"
-            port = 0
-        }
-        jetty.addConnector(connector)
-
-        val context = ServletContextHandler(ServletContextHandler.NO_SESSIONS).apply {
-            contextPath = "/"
-            addServlet(
-                ServletHolder(object : HttpServlet() {
-                    override fun service(req: HttpServletRequest, resp: HttpServletResponse) {
-                        if (!captured.isCompleted && req.requestURI.startsWith(endpointPath)) {
-                            captured.complete(
-                                RequestSnapshot(
-                                    query = req.queryString,
-                                    sessionHeader = req.getHeader("X-Session-Id"),
-                                    providerHeader = req.getHeader("X-Provider"),
-                                    customHeader = req.getHeader("X-Test")
-                                )
-                            )
-                        }
-                        transport.service(req, resp)
-                    }
-                }),
-                "/mcp/*"
-            )
-        }
-        jetty.handler = context
-        jetty.start()
-
-        val port = connector.localPort
-        val url = "http://127.0.0.1:$port$endpointPath"
-
-        val client = try {
-            CodexAppServerClient.create(
-                configOverrides = mapOf(
-                    "mcp_servers.test.url" to "\"$url\"",
-                    "mcp_servers.test.http_headers.X-Test" to "\"hello\"",
-                    "mcp_servers.test.startup_timeout_sec" to "10"
-                )
-            )
-        } catch (e: CodexAppServerException) {
-            println("Codex not found: ${e.message}")
-            println("Please install: npm install -g @openai/codex")
-            jetty.stop()
-            return@runBlocking
-        }
-
-        try {
-            client.initialize(clientName = "codex-mcp-header-integration-test")
-            client.listMcpServerStatus()
-
-            val snapshot = withTimeout(10.seconds) { captured.await() }
-            println("Captured MCP header: X-Test=${snapshot.customHeader}")
-            assertTrue(snapshot.customHeader == "hello")
+            assertTrue(snapshot.query?.contains("connectId=sid-123") == true)
+            assertTrue(snapshot.query?.contains("provider=CODEX") == true)
         } finally {
             client.close()
             jetty.stop()

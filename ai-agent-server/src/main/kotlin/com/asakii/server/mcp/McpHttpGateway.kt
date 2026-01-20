@@ -25,6 +25,8 @@ import org.eclipse.jetty.ee10.servlet.ServletContextHandler
 import org.eclipse.jetty.ee10.servlet.ServletHolder
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.server.ServerConnector
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
@@ -71,22 +73,25 @@ object McpHttpGateway {
     private var jettyServer: Server? = null
     private var actualPort: Int = 0
 
-    /** HTTP 头名称：连接标识（值为前端 connectId，用于 MCP 路由） */
-    const val HEADER_SESSION_ID = "X-Session-Id"
-    const val HEADER_PROVIDER = "X-Provider"
+    /** MCP 路由参数名称（会话级路由信息通过 query 参数传递） */
+    const val QUERY_CONNECT_ID = "connectId"
+    const val QUERY_PROVIDER = "provider"
 
     private class GatewayServlet(
         private val resolver: (String, String?, String?) -> HttpServletStreamableServerTransportProvider?
     ) : HttpServlet() {
         override fun service(req: HttpServletRequest, resp: HttpServletResponse) {
             val path = req.requestURI ?: ""
-            // 从 X-Session-Id 头获取 connectId（用于 MCP 路由）
-            val connectId = req.getHeader(HEADER_SESSION_ID)?.takeIf { it.isNotBlank() }
-            val providerName = req.getHeader(HEADER_PROVIDER)?.takeIf { it.isNotBlank() }
+            // MCP 会话级路由信息：只通过 query 参数传递（避免依赖客户端支持自定义 header）。
+            val connectId = req.getParameter(QUERY_CONNECT_ID)?.takeIf { it.isNotBlank() }
+            val providerName = req.getParameter(QUERY_PROVIDER)?.takeIf { it.isNotBlank() }
             logger.debug { "[MCP] Incoming request: ${req.method} $path (connectId=$connectId, provider=$providerName)" }
+
             val transport = resolver(path, connectId, providerName)
             if (transport == null) {
-                logger.warn { "[MCP] No transport found for path: $path, connectId=$connectId, provider=$providerName" }
+                logger.warn {
+                    "[MCP] No transport found for path: $path, connectId=$connectId, provider=$providerName, query=${req.queryString}"
+                }
                 resp.sendError(HttpServletResponse.SC_NOT_FOUND)
                 return
             }
@@ -202,7 +207,9 @@ object McpHttpGateway {
             logger.info { "[MCP] Registered session endpoint: $key" }
         }
         
-        return buildUrl(endpointPath)
+        val url = buildUrl(endpointPath)
+        // 会话级 MCP：返回带路由 query 的 URL，避免依赖客户端必须支持自定义 header。
+        return if (isGlobal) url else appendRoutingQuery(url, connectId, provider.name)
     }
 
     /**
@@ -368,13 +375,20 @@ object McpHttpGateway {
     }
 
     /**
-     * 构建端点路径。现在只用 serverName，会话信息通过 header 传递。
+     * 构建端点路径：固定为 /mcp/{serverName}。
+     * 会话级路由信息通过 query 参数传递（connectId / provider）。
      */
     private fun buildEndpointPath(serverName: String): String {
         return "/mcp/$serverName"
     }
 
     private fun buildUrl(path: String): String = "http://127.0.0.1:$actualPort$path"
+
+    private fun appendRoutingQuery(url: String, connectId: String, providerName: String): String {
+        val encodedConnectId = URLEncoder.encode(connectId, StandardCharsets.UTF_8)
+        val encodedProvider = URLEncoder.encode(providerName, StandardCharsets.UTF_8)
+        return "$url?$QUERY_CONNECT_ID=$encodedConnectId&$QUERY_PROVIDER=$encodedProvider"
+    }
 
     /**
      * 获取 MCP 网关端口（启动后可用）
