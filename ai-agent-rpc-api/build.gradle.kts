@@ -15,6 +15,9 @@ dependencies {
 
     // Claude Agent SDK - AgentDefinition 类型由 SDK 统一提供
     api(project(":claude-agent-sdk"))
+
+    // Proto 定义 - 逐步迁移到直接使用 Proto 类
+    api(project(":ai-agent-proto"))
 }
 
 

@@ -98,6 +98,9 @@ export interface SessionConnectOptions {
 
   /** Project path for context */
   projectPath?: string
+
+  /** Permanent connection ID for MCP routing (does not change across reconnects) */
+  connectId?: string
 }
 
 // ============================================================================

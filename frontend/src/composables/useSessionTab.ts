@@ -2058,7 +2058,8 @@ export function useSessionTab(initialOrder: number = 0) {
                 config,
                 continueConversation: resolvedOptions.continueConversation,
                 resumeSessionId: resolvedOptions.resumeSessionId,
-                projectPath: projectPath.value || undefined
+                projectPath: projectPath.value || undefined,
+                connectId: connectId
             }
 
             // 连接

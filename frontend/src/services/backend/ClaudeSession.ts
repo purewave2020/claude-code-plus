@@ -360,6 +360,7 @@ export class ClaudeSession extends BaseBackendSession implements BackendSession 
       resumeSessionId: options.resumeSessionId,
       thinkingEnabled: this.config.thinkingEnabled ?? undefined,
       metadata: options.projectPath ? { projectPath: options.projectPath } : undefined,
+      connectId: options.connectId,
     }
 
     return rpcOptions

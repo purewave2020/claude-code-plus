@@ -157,27 +157,29 @@ object ProtoConverter {
     }
 
     // ==================== ConnectOptions ====================
+    // 使用 ProtoExtensions 中的 xxxOrNull 扩展属性简化映射
 
     fun ConnectOptions.toRpc(): RpcConnectOptions = RpcConnectOptions(
-        provider = if (hasProvider()) provider.toRpc() else null,
-        model = if (hasModel()) model else null,
-        systemPrompt = if (hasSystemPrompt()) systemPrompt else null,
-        initialPrompt = if (hasInitialPrompt()) initialPrompt else null,
-        sessionId = if (hasSessionId()) sessionId else null,
-        resumeSessionId = if (hasResumeSessionId()) resumeSessionId else null,
+        provider = providerOrNull?.toRpc(),
+        model = modelOrNull,
+        systemPrompt = systemPromptOrNull,
+        initialPrompt = initialPromptOrNull,
+        sessionId = sessionIdOrNull,
+        resumeSessionId = resumeSessionIdOrNull,
         metadata = metadataMap,
-        permissionMode = if (hasPermissionMode()) permissionMode.toRpc() else null,
-        dangerouslySkipPermissions = if (hasDangerouslySkipPermissions()) dangerouslySkipPermissions else null,
-        allowDangerouslySkipPermissions = if (hasAllowDangerouslySkipPermissions()) allowDangerouslySkipPermissions else null,
-        includePartialMessages = if (hasIncludePartialMessages()) includePartialMessages else null,
-        continueConversation = if (hasContinueConversation()) continueConversation else null,
-        thinkingEnabled = if (hasThinkingEnabled()) thinkingEnabled else null,
-        baseUrl = if (hasBaseUrl()) baseUrl else null,
-        apiKey = if (hasApiKey()) apiKey else null,
-        sandboxMode = if (hasSandboxMode()) sandboxMode.toRpc() else null,
-        codexReasoningEffort = if (hasCodexReasoningEffort()) codexReasoningEffort else null,
-        codexReasoningSummary = if (hasCodexReasoningSummary()) codexReasoningSummary else null,
-        replayUserMessages = if (hasReplayUserMessages()) replayUserMessages else null
+        permissionMode = permissionModeOrNull?.toRpc(),
+        dangerouslySkipPermissions = dangerouslySkipPermissionsOrNull,
+        allowDangerouslySkipPermissions = allowDangerouslySkipPermissionsOrNull,
+        includePartialMessages = includePartialMessagesOrNull,
+        continueConversation = continueConversationOrNull,
+        thinkingEnabled = thinkingEnabledOrNull,
+        baseUrl = baseUrlOrNull,
+        apiKey = apiKeyOrNull,
+        sandboxMode = sandboxModeOrNull?.toRpc(),
+        codexReasoningEffort = codexReasoningEffortOrNull,
+        codexReasoningSummary = codexReasoningSummaryOrNull,
+        replayUserMessages = replayUserMessagesOrNull,
+        connectId = connectIdOrNull
     )
 
     // ==================== ConnectResult ====================

@@ -639,7 +639,7 @@ val buildAllVersions by tasks.registering {
         // 在执行阶段定义所有变量，避免配置缓存序列化问题
         val platforms = listOf("242", "243", "251", "252", "253")
         val isWin = System.getProperty("os.name").lowercase().contains("windows")
-        val gradlew = if (isWin) "gradlew.bat" else "./gradlew"
+        val gradlew = if (isWin) File(projectDir, "gradlew.bat").absolutePath else File(projectDir, "gradlew").absolutePath
 
         val distDir = buildDir.dir("distributions").get().asFile
         val tempBuildDir = buildDir.dir("multi-version-temp").get().asFile
