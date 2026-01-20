@@ -29,11 +29,10 @@ class CodexAppServerStreamAdapter(
     private var currentSessionId: String? = null
     private var lastUsage: ThreadTokenUsage? = null
 
-    // 累积文本和思考内容，用于在 TurnCompleted 时发送 AssistantMessageEvent
-    private val accumulatedText = StringBuilder()
-    private val accumulatedThinking = StringBuilder()
-    // 累积工具调用内容
-    private val accumulatedToolUses = mutableListOf<ToolUseContent>()
+    // 累积内容块，按 index 保持顺序（TurnCompleted 时组装 AssistantMessageEvent）
+    private val textByIndex = mutableMapOf<Int, StringBuilder>()
+    private val thinkingByIndex = mutableMapOf<Int, StringBuilder>()
+    private val toolUseByIndex = mutableMapOf<Int, ToolUseContent>()
     private var currentMessageId: String? = null
 
     fun convert(event: AppServerEvent): List<NormalizedStreamEvent> {
@@ -50,9 +49,9 @@ class CodexAppServerStreamAdapter(
                 itemIdToIndex.clear()
                 lastUsage = null
                 // 重置累积器
-                accumulatedText.clear()
-                accumulatedThinking.clear()
-                accumulatedToolUses.clear()
+                textByIndex.clear()
+                thinkingByIndex.clear()
+                toolUseByIndex.clear()
                 currentMessageId = event.turn.id
 
                 val sessionId = resolveSessionId()
@@ -69,7 +68,7 @@ class CodexAppServerStreamAdapter(
                 val toolContent = buildToolUseContent(event.item)
                 // 累积工具调用内容，用于在 TurnCompleted 时发送 AssistantMessageEvent
                 if (toolContent != null) {
-                    accumulatedToolUses.add(toolContent)
+                    toolUseByIndex[index] = toolContent
                 }
                 result += ContentStartedEvent(
                     provider = AiAgentProvider.CODEX,
@@ -103,7 +102,7 @@ class CodexAppServerStreamAdapter(
                     )
                 }
                 // 累积文本内容
-                accumulatedText.append(event.delta)
+                textByIndex.getOrPut(index) { StringBuilder() }.append(event.delta)
                 result += ContentDeltaEvent(
                     provider = AiAgentProvider.CODEX,
                     index = index,
@@ -121,7 +120,7 @@ class CodexAppServerStreamAdapter(
                     )
                 }
                 // 累积思考内容
-                accumulatedThinking.append(event.delta)
+                thinkingByIndex.getOrPut(index) { StringBuilder() }.append(event.delta)
                 result += ContentDeltaEvent(
                     provider = AiAgentProvider.CODEX,
                     index = index,
@@ -556,18 +555,23 @@ class CodexAppServerStreamAdapter(
      * 构建内容块列表，包含累积的思考内容、文本内容和工具调用
      */
     private fun buildContentBlocks(): List<UnifiedContentBlock> {
-        val blocks = mutableListOf<UnifiedContentBlock>()
-        // 思考内容放在前面
-        if (accumulatedThinking.isNotEmpty()) {
-            blocks.add(ThinkingContent(accumulatedThinking.toString()))
+        val indexedBlocks = mutableListOf<Pair<Int, UnifiedContentBlock>>()
+        for ((index, builder) in thinkingByIndex) {
+            if (builder.isNotEmpty()) {
+                indexedBlocks.add(index to ThinkingContent(builder.toString()))
+            }
         }
-        // 文本内容
-        if (accumulatedText.isNotEmpty()) {
-            blocks.add(TextContent(accumulatedText.toString()))
+        for ((index, builder) in textByIndex) {
+            if (builder.isNotEmpty()) {
+                indexedBlocks.add(index to TextContent(builder.toString()))
+            }
         }
-        // 工具调用内容（用于前端匹配 tool_use 和 tool_result）
-        blocks.addAll(accumulatedToolUses)
-        return blocks
+        for ((index, toolUse) in toolUseByIndex) {
+            indexedBlocks.add(index to toolUse)
+        }
+        return indexedBlocks
+            .sortedBy { it.first }
+            .map { it.second }
     }
 }
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 统一消息类型定义（兼容旧字段名 role，同时对齐 ai-agent-sdk 数据）
  */
 
@@ -6,6 +6,10 @@ export type MessageRole = 'user' | 'assistant' | 'system' | 'result'
 
 export interface UnifiedMessage {
   id: string
+  /**
+   * Local display id for UI rendering (avoid collisions when backend reuses message.id).
+   */
+  displayId?: string
   /**
    * 消息的 UUID（来自 JSONL 历史文件的顶层字段）
    * 用于编辑重发时定位截断位置
@@ -137,3 +141,4 @@ export type ToolResultBlock = ToolResultContent
 export type Message = UnifiedMessage
 export type ImageBlock = ImageContent
 export type TextBlock = TextContent
+

@@ -1,4 +1,4 @@
-特别提醒：请使用简体中文进行交流
+1=特别提醒：请使用简体中文进行交流
 特别提醒：git commit、changelog 不使用中文，而是使用英文
 
 # Claude Code Plus - 架构说明

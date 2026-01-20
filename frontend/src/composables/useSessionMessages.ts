@@ -197,10 +197,11 @@ export function useSessionMessages(
   const lastError = ref<string | null>(null)
 
   /**
-   * 是否包含分片消息（connect 时设置）
-   * 当为 true 时，流式过程中会收到完整的 assistant 消息，需要忽略以避免重复
+   * Whether partial messages are included (set on connect).
+   * When true, full assistant messages should merge into existing streaming items.
    */
   const includePartialMessages = ref(false)
+  let lastStreamingMessageId: string | null = null
 
   /**
    * 设置是否包含分片消息
@@ -344,50 +345,54 @@ export function useSessionMessages(
       .map(mapRpcContentBlock)
       .filter((b: ContentBlock | null): b is ContentBlock => !!b)
 
-    const existingStreaming = findStreamingAssistantMessage()
-    const previousId = existingStreaming?.id
-    const messageId = event.message?.id || previousId || generateMessageId('assistant')
+    const rawMessageId = event.message?.id
+    const messageId = rawMessageId || generateMessageId('assistant')
+    lastStreamingMessageId = messageId
 
-    log.debug('[message_start]', {
+    const existingStreaming = findStreamingAssistantMessage()
+    const existingById = findLatestAssistantById(messageId)
+    log.info('[message_start]', {
       messageId,
-      previousId,
+      hasBackendId: !!rawMessageId,
+      hasExistingById: !!existingById,
       hasExistingStreaming: !!existingStreaming,
       initialContentLength: contentBlocks.length
     })
-
-    if (existingStreaming && previousId && previousId !== messageId) {
-      // 结束上一条流式消息，开始新消息
-      existingStreaming.isStreaming = false
-
-      const newMessage: Message = {
-        id: messageId,
-        role: 'assistant',
-        timestamp: Date.now(),
-        content: [],
-        isStreaming: true
+    if (existingById) {
+      if (existingStreaming && existingStreaming !== existingById) {
+        existingStreaming.isStreaming = false
       }
-      messages.push(newMessage)
+      existingById.isStreaming = true
+      ensureAssistantDisplayId(existingById)
       stats.setStreamingMessageId(messageId)
-
-      // 合并初始内容（如果有的话）
       if (contentBlocks.length > 0) {
-        mergeInitialAssistantContent(newMessage, contentBlocks)
+        mergeInitialAssistantContent(existingById, contentBlocks)
       }
-    } else {
-      const targetMessage = ensureStreamingAssistantMessage()
-      // 将占位消息 id 更新为后端真实 id
-      if (targetMessage.id !== messageId) {
-        const previousMessageId = targetMessage.id
-        stats.setStreamingMessageId(messageId)
-        targetMessage.id = messageId
-        renameDisplayItemsForMessage(previousMessageId, messageId)
-      }
-      targetMessage.isStreaming = true
+      isGenerating.value = true
+      touchMessages()
+      return
+    }
+    if (existingStreaming) {
+      existingStreaming.isStreaming = false
+    }
 
-      // 合并初始内容（如果有的话）
-      if (contentBlocks.length > 0) {
-        mergeInitialAssistantContent(targetMessage, contentBlocks)
-      }
+    const targetMessage: Message = {
+      id: messageId,
+      role: 'assistant',
+      timestamp: Date.now(),
+      content: [],
+      isStreaming: true
+    }
+    ensureAssistantDisplayId(targetMessage)
+    messages.push(targetMessage)
+
+    // 将占位消息 id 更新为后端真实 id
+    stats.setStreamingMessageId(messageId)
+    targetMessage.isStreaming = true
+
+    // 合并初始内容（如果有的话）
+    if (contentBlocks.length > 0) {
+      mergeInitialAssistantContent(targetMessage, contentBlocks)
     }
 
     isGenerating.value = true
@@ -527,6 +532,27 @@ export function useSessionMessages(
     const streamingMessage = findStreamingAssistantMessage()
     if (streamingMessage) {
       streamingMessage.isStreaming = false
+      const summary = streamingMessage.content.map((block) => {
+        if (block.type === 'text') {
+          return { type: 'text', length: (block as any).text?.length ?? 0 }
+        }
+        if (block.type === 'thinking') {
+          return { type: 'thinking', length: (block as any).thinking?.length ?? 0 }
+        }
+        if (block.type === 'tool_use') {
+          return { type: 'tool_use', id: (block as any).id }
+        }
+        if (block.type === 'tool_result') {
+          return { type: 'tool_result', id: (block as any).tool_use_id }
+        }
+        return { type: (block as any).type }
+      })
+      log.info('[message_stop] streaming stopped', {
+        messageId: streamingMessage.id,
+        blocks: summary
+      })
+    } else {
+      log.info('[message_stop] streaming stopped (no active message)')
     }
     // 注意：不在这里设置 isGenerating = false
     // isGenerating 只在 handleResultMessage() 中设置为 false
@@ -537,7 +563,11 @@ export function useSessionMessages(
    * 处理 content_block_start 事件
    */
   function handleContentBlockStart(event: any): void {
-    const message = ensureStreamingAssistantMessage()
+    const message = findStreamingAssistantMessage()
+    if (!message) {
+      log.warn('[content_block_start] 未找到 streaming 消息，跳过')
+      return
+    }
     const contentBlock = mapRpcContentBlock(event.content_block)
     const blockIndex = event.index
 
@@ -550,6 +580,7 @@ export function useSessionMessages(
     })
 
     if (contentBlock) {
+      const displayBaseId = getAssistantDisplayId(message)
       // 添加到 message.content
       while (message.content.length < blockIndex) {
         message.content.push({ type: 'text', text: '' } as any)
@@ -562,7 +593,7 @@ export function useSessionMessages(
 
       // 直接创建 DisplayItem 并 push（内容为空）
       if (contentBlock.type === 'text') {
-        const displayId = `${message.id}-text-${blockIndex}`
+        const displayId = `${displayBaseId}-text-${blockIndex}`
         if (!displayItems.find(item => item.id === displayId)) {
           pushDisplayItems([{
             displayType: 'assistantText' as const,
@@ -574,7 +605,7 @@ export function useSessionMessages(
           } as AssistantText])
         }
       } else if (contentBlock.type === 'thinking') {
-        const displayId = `${message.id}-thinking-${blockIndex}`
+        const displayId = `${displayBaseId}-thinking-${blockIndex}`
         if (!displayItems.find(item => item.id === displayId)) {
           pushDisplayItems([{
             displayType: 'thinking' as const,
@@ -608,7 +639,11 @@ export function useSessionMessages(
    * 处理 content_block_delta 事件
    */
   function handleContentBlockDelta(event: any): void {
-    const message = ensureStreamingAssistantMessage()
+    const message = findStreamingAssistantMessage()
+    if (!message) {
+      log.warn('[content_block_delta] 未找到 streaming 消息，跳过')
+      return
+    }
     const index = event.index
     const delta = event.delta
 
@@ -651,12 +686,12 @@ export function useSessionMessages(
             const sigDelta = delta as any
             if (sigDelta.signature) {
               contentBlock.signature = sigDelta.signature
-              // 更新对应 displayItem 的 signature
-              const displayItem = displayItems.find(
-                item => item.id === `${message.id}-thinking-${index}` && item.displayType === 'thinking'
-              ) as ThinkingContent | undefined
-              if (displayItem) {
-                displayItem.signature = sigDelta.signature
+                // 更新对应 displayItem 的 signature
+                const displayItem = displayItems.find(
+                  item => item.id === `${getAssistantDisplayId(message)}-thinking-${index}` && item.displayType === 'thinking'
+                ) as ThinkingContent | undefined
+                if (displayItem) {
+                  displayItem.signature = sigDelta.signature
                 triggerDisplayItemsUpdate()
               }
             }
@@ -700,6 +735,17 @@ export function useSessionMessages(
 
         // 强制触发 Vue 响应式更新
         triggerDisplayItemsUpdate()
+      } else if (block.type === 'text') {
+        log.info('[content_block_stop] text', {
+          index: event.index,
+          length: (block as any).text?.length ?? 0
+        })
+      } else if (block.type === 'thinking') {
+        log.info('[content_block_stop] thinking', {
+          index: event.index,
+          length: (block as any).thinking?.length ?? 0,
+          signature: (block as any).signature
+        })
       }
       // thinking 块的完成状态由 syncThinkingSignatures 在收到完整消息时处理
     }
@@ -899,13 +945,14 @@ export function useSessionMessages(
   function syncThinkingSignatures(message: Message): void {
     if (message.role !== 'assistant') return
 
-    let hasUpdate = false
-    message.content.forEach((block, blockIdx) => {
-      if (block.type === 'thinking') {
-        const displayId = `${message.id}-thinking-${blockIdx}`
-        const displayItem = displayItems.find(
-          item => item.id === displayId && item.displayType === 'thinking'
-        ) as ThinkingContent | undefined
+      let hasUpdate = false
+      const displayBaseId = getAssistantDisplayId(message)
+      message.content.forEach((block, blockIdx) => {
+        if (block.type === 'thinking') {
+          const displayId = `${displayBaseId}-thinking-${blockIdx}`
+          const displayItem = displayItems.find(
+            item => item.id === displayId && item.displayType === 'thinking'
+          ) as ThinkingContent | undefined
 
         if (displayItem && !displayItem.signature) {
           // 优先使用 SDK 返回的 signature，否则标记为 complete
@@ -929,20 +976,393 @@ export function useSessionMessages(
   function syncNewContentBlocks(newMessage: Message, existingMessage: Message): void {
     if (newMessage.role !== 'assistant') return
 
-    // 使用 convertMessageToDisplayItems 为新消息创建 displayItems
-    const newDisplayItems = convertMessageToDisplayItems(newMessage, tools.pendingToolCalls)
-    
-    if (newDisplayItems.length > 0) {
-      // 过滤掉已存在的 displayItem
-      const filteredItems = newDisplayItems.filter(
-        item => !displayItems.find(existing => existing.id === item.id)
-      )
-      
-      if (filteredItems.length > 0) {
-        pushDisplayItems(filteredItems)
-        log.debug(`[useSessionMessages] 添加了 ${filteredItems.length} 个新 displayItems`)
+    if (existingMessage && existingMessage.role === 'assistant') {
+      ensureAssistantDisplayId(existingMessage)
+      const existingBlocks = existingMessage.content
+      const incomingBlocks = newMessage.content
+      if (existingBlocks.length === 0) {
+        existingMessage.content = [...incomingBlocks]
+      } else {
+        const mergedBlocks = [...existingBlocks]
+        const isPrefix = isAssistantContentPrefix(existingMessage, newMessage)
+        const isSuffix = isAssistantContentSuffix(existingMessage, newMessage)
+        const offset = isSuffix ? Math.max(0, mergedBlocks.length - incomingBlocks.length) : 0
+
+        const applyMergeAt = (index: number, incoming: ContentBlock) => {
+          if (index < 0 || index > mergedBlocks.length) return
+          const current = mergedBlocks[index]
+          if (!current) {
+            mergedBlocks[index] = incoming
+            return
+          }
+          if (current.type !== incoming.type) {
+            mergedBlocks.splice(index, 0, incoming)
+            return
+          }
+          mergedBlocks[index] = mergeAssistantBlock(current, incoming)
+        }
+
+        if (isPrefix || isSuffix) {
+          for (let i = 0; i < incomingBlocks.length; i += 1) {
+            applyMergeAt(i + offset, incomingBlocks[i])
+          }
+        } else {
+          for (let i = 0; i < incomingBlocks.length; i += 1) {
+            const incoming = incomingBlocks[i]
+            if (i < mergedBlocks.length && mergedBlocks[i].type === incoming.type) {
+              mergedBlocks[i] = mergeAssistantBlock(mergedBlocks[i], incoming)
+              continue
+            }
+            const matchIndex = findMatchingBlockIndex(mergedBlocks, incoming)
+            if (matchIndex !== -1) {
+              mergedBlocks[matchIndex] = mergeAssistantBlock(mergedBlocks[matchIndex], incoming)
+              continue
+            }
+            mergedBlocks.push(incoming)
+          }
+        }
+
+        existingMessage.content = mergedBlocks
       }
     }
+
+    const messageForDisplay = (existingMessage && existingMessage.role === 'assistant')
+      ? existingMessage
+      : newMessage
+    if (messageForDisplay.role === 'assistant') {
+      ensureAssistantDisplayId(messageForDisplay)
+    }
+    const newDisplayItems = convertMessageToDisplayItems(messageForDisplay, tools.pendingToolCalls)
+    if (newDisplayItems.length === 0) return
+
+    const allDisplayItems = displayStore.getWindow(STORE_RETENTION)
+    const existingById = new Map(allDisplayItems.map(item => [item.id, item]))
+    const displayBaseId = getAssistantDisplayId(messageForDisplay)
+    const toolUseIndexById = new Map<string, number>()
+    messageForDisplay.content.forEach((block, idx) => {
+      if (block.type === 'tool_use' && (block as ToolUseBlock).id) {
+        toolUseIndexById.set((block as ToolUseBlock).id, idx)
+      }
+    })
+
+    const isMessageDisplayItem = (item: DisplayItem): boolean => {
+      if (item.displayType === 'assistantText' || item.displayType === 'thinking') {
+        return item.id.startsWith(`${displayBaseId}-`)
+      }
+      if (item.displayType === 'toolCall') {
+        return toolUseIndexById.has(item.id)
+      }
+      return false
+    }
+
+    const existingThinkingItems = allDisplayItems.filter(
+      item => item.displayType === 'thinking' && item.id.startsWith(`${displayBaseId}-thinking-`)
+    )
+    const existingTextItems = allDisplayItems.filter(
+      item => item.displayType === 'assistantText' && item.id.startsWith(`${displayBaseId}-text-`)
+    )
+    const newThinkingItems = newDisplayItems.filter(item => item.displayType === 'thinking')
+    const newTextItems = newDisplayItems.filter(item => item.displayType === 'assistantText')
+
+    // 处理索引不一致导致的重复：同一条消息只有一个 thinking/text 时，优先复用已有 displayItem
+    if (newThinkingItems.length === 1 && existingThinkingItems.length === 1) {
+      const newItem = newThinkingItems[0]
+      const existingItem = existingThinkingItems[0]
+      if (newItem.id !== existingItem.id) {
+        existingById.set(newItem.id, existingItem)
+      }
+    }
+    if (newTextItems.length === 1 && existingTextItems.length === 1) {
+      const newItem = newTextItems[0]
+      const existingItem = existingTextItems[0]
+      if (newItem.id !== existingItem.id) {
+        existingById.set(newItem.id, existingItem)
+      }
+    }
+
+    let updatedCount = 0
+    const missingItems: DisplayItem[] = []
+
+    for (const newItem of newDisplayItems) {
+      const existing = existingById.get(newItem.id)
+      if (!existing) {
+        missingItems.push(newItem)
+        continue
+      }
+
+      if (newItem.displayType === 'assistantText' && existing.displayType === 'assistantText') {
+        const next = newItem as AssistantText
+        const current = existing as AssistantText
+        if (next.content && next.content.length > (current.content || '').length) {
+          current.content = next.content
+          updatedCount += 1
+        }
+        if (next.stats && !current.stats) {
+          current.stats = next.stats
+          updatedCount += 1
+        }
+        if (next.isLastInMessage !== undefined) {
+          current.isLastInMessage = next.isLastInMessage
+        }
+        if (next.isStreaming !== undefined) {
+          current.isStreaming = next.isStreaming
+        }
+      } else if (newItem.displayType === 'thinking' && existing.displayType === 'thinking') {
+        const next = newItem as ThinkingContent
+        const current = existing as ThinkingContent
+        if (next.content && next.content.length > (current.content || '').length) {
+          current.content = next.content
+          updatedCount += 1
+        }
+        if (next.signature && !current.signature) {
+          current.signature = next.signature
+          updatedCount += 1
+        }
+      } else if (newItem.displayType === 'toolCall' && existing.displayType === 'toolCall') {
+        const next = newItem as ToolCall
+        const current = existing as ToolCall
+        const nextInput = next.input || {}
+        const currentInput = current.input || {}
+        if (Object.keys(currentInput).length === 0 && Object.keys(nextInput).length > 0) {
+          current.input = nextInput
+          updatedCount += 1
+        }
+        if (next.result && !current.result) {
+          current.result = next.result
+          updatedCount += 1
+        }
+        if (next.status && current.status !== next.status) {
+          current.status = next.status
+          updatedCount += 1
+        }
+      }
+    }
+
+    const desiredItems = newDisplayItems.map(item => existingById.get(item.id) ?? item)
+    const messageItems = allDisplayItems.filter(isMessageDisplayItem)
+    const orderMismatch = messageItems.length !== desiredItems.length ||
+      messageItems.some((item, idx) => item !== desiredItems[idx])
+    const needsReorder = missingItems.length > 0 || orderMismatch
+
+    if (needsReorder) {
+      const nonMessageItems = allDisplayItems.filter(item => !isMessageDisplayItem(item))
+      let insertAt = nonMessageItems.length
+      if (messageItems.length > 0) {
+        const firstIndex = allDisplayItems.findIndex(isMessageDisplayItem)
+        insertAt = 0
+        for (let i = 0; i < firstIndex; i += 1) {
+          if (!isMessageDisplayItem(allDisplayItems[i])) {
+            insertAt += 1
+          }
+        }
+      }
+      const reordered = [...nonMessageItems]
+      reordered.splice(insertAt, 0, ...desiredItems)
+      displayStore.clear()
+      displayStore.pushBatch(reordered)
+      refreshDisplayWindow()
+      log.debug(`[useSessionMessages] Reordered displayItems: total=${desiredItems.length}, added=${missingItems.length}`)
+    }
+
+    if (updatedCount > 0 || needsReorder) {
+      log.debug(`[useSessionMessages] Updated ${updatedCount} existing displayItems`)
+      stats.incrementContentVersion()
+    }
+  }
+
+  function isPartialAssistantMessage(incoming: Message, streaming: Message): boolean {
+    return isAssistantContentPrefix(incoming, streaming)
+  }
+
+  function isAssistantContentPrefix(full: Message, partial: Message): boolean {
+    if (full.role !== 'assistant' || partial.role !== 'assistant') return false
+    if (!Array.isArray(full.content) || !Array.isArray(partial.content)) return false
+    if (partial.content.length === 0 || full.content.length === 0) return false
+    if (partial.content.length > full.content.length) return false
+
+    for (let i = 0; i < partial.content.length; i += 1) {
+      const partialBlock = partial.content[i]
+      const fullBlock = full.content[i]
+      if (!fullBlock || partialBlock.type !== fullBlock.type) return false
+
+      if (partialBlock.type === 'text') {
+        const partialText = (partialBlock as any).text || ''
+        const fullText = (fullBlock as any).text || ''
+        if (!fullText.startsWith(partialText)) return false
+      } else if (partialBlock.type === 'thinking') {
+        const partialThinking = (partialBlock as any).thinking || ''
+        const fullThinking = (fullBlock as any).thinking || ''
+        if (!fullThinking.startsWith(partialThinking)) return false
+        const partialSig = (partialBlock as any).signature
+        const fullSig = (fullBlock as any).signature
+        if (partialSig && fullSig && partialSig !== fullSig) return false
+      } else if (partialBlock.type === 'tool_use') {
+        const partialId = (partialBlock as any).id
+        const fullId = (fullBlock as any).id
+        if (partialId && fullId && partialId !== fullId) return false
+        const partialName = (partialBlock as any).toolName
+        const fullName = (fullBlock as any).toolName
+        if (partialName && fullName && partialName !== fullName) return false
+      } else if (partialBlock.type === 'tool_result') {
+        const partialTool = (partialBlock as any).tool_use_id
+        const fullTool = (fullBlock as any).tool_use_id
+        if (partialTool && fullTool && partialTool !== fullTool) return false
+      }
+    }
+
+    return true
+  }
+
+  function isAssistantContentSuffix(full: Message, partial: Message): boolean {
+    if (full.role !== 'assistant' || partial.role !== 'assistant') return false
+    if (!Array.isArray(full.content) || !Array.isArray(partial.content)) return false
+    if (partial.content.length === 0 || full.content.length === 0) return false
+    if (partial.content.length > full.content.length) return false
+
+    const offset = full.content.length - partial.content.length
+    for (let i = 0; i < partial.content.length; i += 1) {
+      const partialBlock = partial.content[i]
+      const fullBlock = full.content[i + offset]
+      if (!fullBlock || partialBlock.type !== fullBlock.type) return false
+
+      if (partialBlock.type === 'text') {
+        const partialText = (partialBlock as any).text || ''
+        const fullText = (fullBlock as any).text || ''
+        if (!fullText.startsWith(partialText)) return false
+      } else if (partialBlock.type === 'thinking') {
+        const partialThinking = (partialBlock as any).thinking || ''
+        const fullThinking = (fullBlock as any).thinking || ''
+        if (!fullThinking.startsWith(partialThinking)) return false
+        const partialSig = (partialBlock as any).signature
+        const fullSig = (fullBlock as any).signature
+        if (partialSig && fullSig && partialSig !== fullSig) return false
+      } else if (partialBlock.type === 'tool_use') {
+        const partialId = (partialBlock as any).id
+        const fullId = (fullBlock as any).id
+        if (partialId && fullId && partialId !== fullId) return false
+        const partialName = (partialBlock as any).toolName
+        const fullName = (fullBlock as any).toolName
+        if (partialName && fullName && partialName !== fullName) return false
+      } else if (partialBlock.type === 'tool_result') {
+        const partialTool = (partialBlock as any).tool_use_id
+        const fullTool = (fullBlock as any).tool_use_id
+        if (partialTool && fullTool && partialTool !== fullTool) return false
+      }
+    }
+
+    return true
+  }
+
+  function findMatchingBlockIndex(blocks: ContentBlock[], incoming: ContentBlock): number {
+    if (incoming.type === 'tool_use') {
+      const incomingId = (incoming as any).id
+      if (incomingId) {
+        return blocks.findIndex(
+          block => block.type === 'tool_use' && (block as any).id === incomingId
+        )
+      }
+    }
+    if (incoming.type === 'tool_result') {
+      const incomingTool = (incoming as any).tool_use_id
+      if (incomingTool) {
+        return blocks.findIndex(
+          block => block.type === 'tool_result' && (block as any).tool_use_id === incomingTool
+        )
+      }
+    }
+    return -1
+  }
+
+  function mergeAssistantBlock(existing: ContentBlock, incoming: ContentBlock): ContentBlock {
+    if (existing.type !== incoming.type) return incoming
+    if (incoming.type === 'tool_use') {
+      const mergedTool = { ...existing, ...incoming } as ToolUseBlock
+      if (!mergedTool.toolName && (existing as any).toolName) {
+        mergedTool.toolName = (existing as any).toolName
+      }
+      if (!mergedTool.toolType && (existing as any).toolType) {
+        mergedTool.toolType = (existing as any).toolType
+      }
+      const nextInput = (mergedTool.input || {}) as Record<string, unknown>
+      const currentInput = ((existing as any).input || {}) as Record<string, unknown>
+      if (Object.keys(nextInput).length === 0 && Object.keys(currentInput).length > 0) {
+        mergedTool.input = currentInput
+      }
+      return mergedTool
+    }
+    if (incoming.type === 'text') {
+      const nextText = (incoming as any).text || ''
+      const currentText = (existing as any).text || ''
+      return {
+        ...incoming,
+        text: currentText.length > nextText.length ? currentText : nextText
+      } as ContentBlock
+    }
+    if (incoming.type === 'thinking') {
+      const nextThinking = (incoming as any).thinking || ''
+      const currentThinking = (existing as any).thinking || ''
+      const nextSignature = (incoming as any).signature
+      const currentSignature = (existing as any).signature
+      return {
+        ...incoming,
+        thinking: currentThinking.length > nextThinking.length ? currentThinking : nextThinking,
+        signature: nextSignature || currentSignature
+      } as ContentBlock
+    }
+    return incoming
+  }
+
+  function isAssistantMessageCoveredByStreaming(incoming: Message, streaming: Message): boolean {
+    if (incoming.role !== 'assistant' || streaming.role !== 'assistant') return false
+    if (!Array.isArray(incoming.content) || !Array.isArray(streaming.content)) return false
+    if (incoming.content.length === 0 || streaming.content.length === 0) return false
+
+    for (const incomingBlock of incoming.content) {
+      if (incomingBlock.type === 'text') {
+        const incomingText = (incomingBlock as any).text || ''
+        if (incomingText.length === 0) continue
+        const matched = streaming.content.some(block =>
+          block.type === 'text' && ((block as any).text || '').startsWith(incomingText)
+        )
+        if (!matched) return false
+      } else if (incomingBlock.type === 'thinking') {
+        const incomingThinking = (incomingBlock as any).thinking || ''
+        const incomingSig = (incomingBlock as any).signature
+        if (incomingThinking.length === 0 && !incomingSig) continue
+        const matched = streaming.content.some(block => {
+          if (block.type !== 'thinking') return false
+          const streamingThinking = (block as any).thinking || ''
+          if (!streamingThinking.startsWith(incomingThinking)) return false
+          const streamingSig = (block as any).signature
+          if (incomingSig && streamingSig && incomingSig !== streamingSig) return false
+          return true
+        })
+        if (!matched) return false
+      } else if (incomingBlock.type === 'tool_use') {
+        const incomingId = (incomingBlock as any).id
+        const incomingName = (incomingBlock as any).toolName
+        const matched = streaming.content.some(block => {
+          if (block.type !== 'tool_use') return false
+          const streamingId = (block as any).id
+          if (incomingId && streamingId && incomingId !== streamingId) return false
+          const streamingName = (block as any).toolName
+          if (incomingName && streamingName && incomingName !== streamingName) return false
+          return true
+        })
+        if (!matched) return false
+      } else if (incomingBlock.type === 'tool_result') {
+        const incomingTool = (incomingBlock as any).tool_use_id
+        const matched = streaming.content.some(block =>
+          block.type === 'tool_result' &&
+          (!incomingTool || (block as any).tool_use_id === incomingTool)
+        )
+        if (!matched) return false
+      } else {
+        return false
+      }
+    }
+
+    return true
   }
 
   /**
@@ -974,77 +1394,44 @@ export function useSessionMessages(
 
     // assistant 消息处理
     if (message.role === 'assistant') {
-      // 🔑 分片模式下，流式阶段收到的完整 assistant 消息直接跳过
-      // 因为 content_block_start 已经创建了 displayItems
-      if (includePartialMessages.value && isGenerating.value) {
-        log.info('[useSessionMessages] 分片模式+流式中，跳过完整 assistant 消息处理')
-        // 仅同步 thinking signature（用于验证）
-        syncThinkingSignatures(message)
-        return
+      const latestAssistant = [...messages].reverse().find(m => m.role === 'assistant')
+      const streamingMessage = findStreamingAssistantMessage()
+
+      if (includePartialMessages.value && streamingMessage && message.id && streamingMessage.id !== message.id) {
+        log.info('[useSessionMessages] align streaming message id', {
+          fromId: streamingMessage.id,
+          toId: message.id
+        })
+        streamingMessage.id = message.id
+        stats.setStreamingMessageId(message.id)
       }
 
-      // 优先使用追踪的流式消息 ID 来查找
-      const streamingId = stats.getCurrentTracker()?.currentStreamingMessageId
-      let existingAssistant: Message | undefined
+      if (includePartialMessages.value && isGenerating.value && !streamingMessage) {
+        message.isStreaming = true
+        stats.setStreamingMessageId(message.id)
+        log.info('[useSessionMessages] adopt assistant as streaming', {
+          messageId: message.id
+        })
+      }
 
-      // 🔍 调试：显示查找上下文
-      log.info('[useSessionMessages] 查找 existingAssistant:', {
-        incomingMessageId: message.id,
-        streamingId,
-        isGenerating: isGenerating.value,
-        messagesCount: messages.length,
-        assistantMessages: messages.filter(m => m.role === 'assistant').map(m => ({ id: m.id, isStreaming: m.isStreaming }))
+    const compareAssistant = streamingMessage ?? latestAssistant
+
+    if (includePartialMessages.value && compareAssistant && compareAssistant.id !== message.id) {
+      log.info('[useSessionMessages] assistant id mismatch (full vs latest)', {
+        fullId: message.id,
+        latestId: compareAssistant.id
       })
+    }
 
-      // 1. 先按流式 ID 查找
-      if (streamingId) {
-        existingAssistant = messages.find(m => m.id === streamingId && m.role === 'assistant')
-        log.info('[useSessionMessages] 按 streamingId 查找结果:', existingAssistant?.id || '未找到')
-      }
+    if (includePartialMessages.value && compareAssistant && compareAssistant.id === message.id) {
+      log.info('[useSessionMessages] 完整消息与最新流式消息相同，跳过重复展示')
+      ;(message as any).displayId = getAssistantDisplayId(compareAssistant)
+      syncThinkingSignatures(message)
+      return
+    }
 
-      // 2. 再按消息 ID 查找（可能 ID 已更新）
-      if (!existingAssistant) {
-        existingAssistant = messages.find(m => m.id === message.id && m.role === 'assistant')
-        log.info('[useSessionMessages] 按 message.id 查找结果:', existingAssistant?.id || '未找到')
-      }
-
-      // 3. 如果正在生成中，检查最后一条 streaming 的 assistant 消息
-      if (!existingAssistant && isGenerating.value) {
-        const lastStreaming = [...messages].reverse().find(m => m.role === 'assistant' && m.isStreaming)
-        if (lastStreaming) {
-          existingAssistant = lastStreaming
-          log.info('[useSessionMessages] 通过 isStreaming 状态找到现有消息:', lastStreaming.id)
-        } else {
-          log.info('[useSessionMessages] isGenerating=true 但没有找到 isStreaming 的 assistant 消息')
-        }
-      }
-
-      // 4. 如果是同一个消息，同步内容
-      if (existingAssistant) {
-        log.info('[useSessionMessages] 同步完整消息到现有 assistant 消息, existing:', existingAssistant.id, 'incoming:', message.id)
-        // 更新消息 ID（如果不同）
-        if (existingAssistant.id !== message.id) {
-          const oldId = existingAssistant.id
-          existingAssistant.id = message.id
-          renameDisplayItemsForMessage(oldId, message.id)
-          // 同步更新 streamingMessageId，确保后续消息能正确找到
-          stats.setStreamingMessageId(message.id)
-        }
-        // 同步 thinking signature
-        syncThinkingSignatures(message)
-        // 分片模式下，流式阶段的 content_block_start 已经创建了 displayItems，跳过
-        log.info('[useSessionMessages] 检查分片模式: includePartialMessages=', includePartialMessages.value, 'isGenerating=', isGenerating.value)
-        if (includePartialMessages.value && isGenerating.value) {
-          log.info('[useSessionMessages] 分片模式+流式中，跳过 syncNewContentBlocks')
-          return
-        }
-        // 非分片模式或非流式模式，同步内容块（历史消息加载等场景）
-        syncNewContentBlocks(message, existingAssistant)
-        return
-      }
-
-      // 消息不存在 → 添加新消息
       log.debug('[useSessionMessages] 添加新 assistant 消息')
+      ensureAssistantDisplayId(message)
       addMessage(message)
       touchMessages()
       return
@@ -1357,7 +1744,9 @@ export function useSessionMessages(
     const tracker = stats.getCurrentTracker()
     const streamingId = tracker?.currentStreamingMessageId
     if (streamingId) {
-      const matched = [...messages].reverse().find(msg => msg.id === streamingId && msg.role === 'assistant')
+      const matched = [...messages].reverse().find(
+        msg => msg.id === streamingId && msg.role === 'assistant' && msg.isStreaming
+      )
       if (matched) return matched
     }
 
@@ -1375,21 +1764,12 @@ export function useSessionMessages(
    */
   function ensureStreamingAssistantMessage(): Message {
     const existing = findStreamingAssistantMessage()
-    if (existing) return existing
-
-    const tracker = stats.getCurrentTracker()
-    const placeholderId = tracker?.currentStreamingMessageId || generateMessageId('assistant')
-    const newMessage: Message = {
-      id: placeholderId,
-      role: 'assistant',
-      timestamp: Date.now(),
-      content: [],
-      isStreaming: true
+    if (existing) {
+      lastStreamingMessageId = existing.id
+      ensureAssistantDisplayId(existing)
+      return existing
     }
-    messages.push(newMessage)
-    const items = convertMessageToDisplayItems(newMessage, tools.pendingToolCalls)
-    pushDisplayItems(items)
-    return newMessage
+    throw new Error('[useSessionMessages] Streaming message not found')
   }
 
   /**
@@ -1451,7 +1831,7 @@ export function useSessionMessages(
     blockIndex: number,
     newText: string
   ): void {
-    const expectedId = `${message.id}-text-${blockIndex}`
+    const expectedId = `${getAssistantDisplayId(message)}-text-${blockIndex}`
 
     const existing = displayItems.find(
       item => item.id === expectedId && item.displayType === 'assistantText'
@@ -1483,7 +1863,7 @@ export function useSessionMessages(
     blockIndex: number,
     newThinking: string
   ): void {
-    const expectedId = `${message.id}-thinking-${blockIndex}`
+    const expectedId = `${getAssistantDisplayId(message)}-thinking-${blockIndex}`
 
     const existing = displayItems.find(
       item => item.id === expectedId && item.displayType === 'thinking'
@@ -1541,6 +1921,34 @@ export function useSessionMessages(
       ? crypto.randomUUID().substring(0, 8)
       : Math.random().toString(16).slice(2, 10)
     return `${role}-${Date.now()}-${randomSuffix}`
+  }
+
+  function ensureAssistantDisplayId(message: Message): string {
+    if (message.role !== 'assistant') return message.id
+    const existing = (message as any).displayId as string | undefined
+    if (existing) return existing
+    const baseId = message.id || generateMessageId('assistant')
+    const randomSuffix = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().substring(0, 8)
+      : Math.random().toString(16).slice(2, 10)
+    const displayId = `${baseId}-ui-${randomSuffix}`
+    ;(message as any).displayId = displayId
+    return displayId
+  }
+
+  function getAssistantDisplayId(message: Message): string {
+    if (message.role !== 'assistant') return message.id
+    return (message as any).displayId || message.id
+  }
+
+  function findLatestAssistantById(messageId: string): Message | undefined {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i]
+      if (msg.role === 'assistant' && msg.id === messageId) {
+        return msg
+      }
+    }
+    return undefined
   }
 
   /**
@@ -1630,7 +2038,13 @@ export function useSessionMessages(
     if (newMsgs.length < msgs.length) {
       log.debug(`[useSessionMessages] prependMessagesBatch: 过滤掉 ${msgs.length - newMsgs.length} 条重复消息`)
     }
-    
+
+    newMsgs.forEach(m => {
+      if (m.role === 'assistant') {
+        ensureAssistantDisplayId(m)
+      }
+    })
+
     const displayBatch = newMsgs.flatMap(m => convertMessageToDisplayItems(m, tools.pendingToolCalls))
     // 历史消息中的用户消息设置 hint 样式（禁止编辑，md 渲染）
     displayBatch.forEach(item => {
@@ -1660,7 +2074,13 @@ export function useSessionMessages(
     if (newMsgs.length < msgs.length) {
       log.debug(`[useSessionMessages] appendMessagesBatch: 过滤掉 ${msgs.length - newMsgs.length} 条重复消息`)
     }
-    
+
+    newMsgs.forEach(m => {
+      if (m.role === 'assistant') {
+        ensureAssistantDisplayId(m)
+      }
+    })
+
     const displayBatch = newMsgs.flatMap(m => convertMessageToDisplayItems(m, tools.pendingToolCalls))
     // 历史/后端消息中的用户消息设置 hint 样式（禁止编辑，md 渲染）
     displayBatch.forEach(item => {

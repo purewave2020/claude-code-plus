@@ -817,4 +817,4 @@ async function runToBackground(taskId?: string, toolType?: string) {
     - 来源仓库：`org-14957082@github.com:openai/codex.git`
     - 管理方式：作为 git submodule 引入，位于 `external/` 目录，后续可通过 `git submodule update --init --recursive` 同步。
 
-
+- [?????????](docs/MESSAGE_RENDERING_SPEC.md)????????????????????

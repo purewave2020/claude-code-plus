@@ -1,3 +1,0 @@
-JetBrains File MCP demo 2
-Line 1: created by WriteFile
-Line 2: updated by EditFile

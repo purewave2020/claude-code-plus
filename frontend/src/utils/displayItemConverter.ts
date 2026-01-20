@@ -234,6 +234,7 @@ export function convertMessageToDisplayItems(
   pendingToolCalls: Map<string, ToolCall>
 ): DisplayItem[] {
   const displayItems: DisplayItem[] = []
+  const baseId = (message as any).displayId ?? message.id
 
   if (message.role === 'user') {
     // 检查是否是压缩摘要消息（使用类型守卫）
@@ -392,7 +393,7 @@ export function convertMessageToDisplayItems(
 
         const assistantText: AssistantText = {
           displayType: 'assistantText',
-          id: `${message.id}-text-${blockIdx}`,
+          id: `${baseId}-text-${blockIdx}`,
           content: (block as TextContent).text,
           timestamp: message.timestamp,
           isLastInMessage: isLastTextBlock,
@@ -406,7 +407,7 @@ export function convertMessageToDisplayItems(
         if (thinkingBlock.thinking !== undefined) {
           const thinkingContent: DisplayThinkingContent = {
             displayType: 'thinking',
-            id: `${message.id}-thinking-${blockIdx}`,
+            id: `${baseId}-thinking-${blockIdx}`,
             content: thinkingBlock.thinking,  // 消息格式 .thinking → 显示格式 .content
             signature: thinkingBlock.signature,
             timestamp: message.timestamp
@@ -442,6 +443,7 @@ export function convertToDisplayItems(
   const displayItems: DisplayItem[] = []
 
   for (const message of messages) {
+    const baseId = (message as any).displayId ?? message.id
     if (message.role === 'user') {
       // 检查是否是压缩摘要消息（使用类型守卫）
       if (isCompactSummaryMessage(message)) {
@@ -599,27 +601,27 @@ export function convertToDisplayItems(
 
         const assistantText: AssistantText = {
           displayType: 'assistantText',
-          id: `${message.id}-text-${displayItems.length}`,
+          id: `${baseId}-text-${displayItems.length}`,
           content: (block as TextContent).text,
           timestamp: message.timestamp,
           isLastInMessage: isLastTextBlock,
           stats,
           isStreaming: (message as any).isStreaming === true
         }
-          displayItems.push(assistantText)
-        } else if (block.type === 'thinking') {
-          // 处理 thinking 块（消息格式使用 thinking 字段，显示格式使用 content 字段）
-          const thinkingBlock = block as MessageThinkingContent
-          if (thinkingBlock.thinking !== undefined) {
-            const thinkingContent: DisplayThinkingContent = {
-              displayType: 'thinking',
-              id: `${message.id}-thinking-${blockIdx}`,
-              content: thinkingBlock.thinking,  // 消息格式 .thinking → 显示格式 .content
-              signature: thinkingBlock.signature,
-              timestamp: message.timestamp
-            }
-            displayItems.push(thinkingContent)
+        displayItems.push(assistantText)
+      } else if (block.type === 'thinking') {
+        // 处理 thinking 块（消息格式使用 thinking 字段，显示格式使用 content 字段）
+        const thinkingBlock = block as MessageThinkingContent
+        if (thinkingBlock.thinking !== undefined) {
+          const thinkingContent: DisplayThinkingContent = {
+            displayType: 'thinking',
+            id: `${baseId}-thinking-${blockIdx}`,
+            content: thinkingBlock.thinking,  // 消息格式 .thinking → 显示格式 .content
+            signature: thinkingBlock.signature,
+            timestamp: message.timestamp
           }
+          displayItems.push(thinkingContent)
+        }
         } else if (isToolUseBlock(block)) {
           const toolCall = createToolCall(block as ToolUseContent, pendingToolCalls)
           displayItems.push(toolCall)

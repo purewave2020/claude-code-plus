@@ -1,0 +1,11 @@
+# JetBrains File MCP 演示
+
+这是通过 JetBrains File MCP 创建的文件。
+
+## 核心功能列表 (Core Features)
+1. ReadFile - 读取文件内容
+2. WriteFile - 写入/创建文件
+3. EditFile - 编辑文件（替换文本）
+4. DirectoryTree - 获取目录结构
+
+创建时间: 2026-01-19

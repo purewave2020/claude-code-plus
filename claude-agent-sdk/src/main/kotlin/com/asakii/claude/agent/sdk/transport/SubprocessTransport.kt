@@ -106,10 +106,14 @@ class SubprocessTransport(
     }
 
     override suspend fun connect() = withContext(Dispatchers.IO) {
+        // 在 try 块外构建命令，以便在异常信息中使用
+        val command = buildCommand()
+        val commandString = command.joinToString(" ")
+        logger.info { "🔧 构建的命令: $commandString" }
+        // 同时输出到 stdout，确保在 IDEA 插件环境中也能看到（会被记录到 idea.log 的 STDOUT）
+        println("🔧 [SubprocessTransport] CLI启动命令: $commandString")
+        
         try {
-            val command = buildCommand()
-            logger.info { "🔧 构建的命令: ${command.joinToString(" ")}" }
-
             val processBuilder = ProcessBuilder(command)
             processBuilder.directory(options.cwd?.toFile() ?: java.io.File(System.getProperty("user.dir")))
 
@@ -137,7 +141,8 @@ class SubprocessTransport(
                 }
                 logger.error { "❌ Claude CLI进程立即退出，退出代码: $exitCode" }
                 logger.error { "❌ stderr内容: $stderrContent" }
-                throw CLIConnectionException("Claude CLI process exited immediately with code $exitCode. stderr: $stderrContent")
+                logger.error { "❌ 启动命令: $commandString" }
+                throw CLIConnectionException("Claude CLI process exited immediately with code $exitCode. Command: $commandString. stderr: $stderrContent")
             }
 
             // Setup I/O streams - 显式指定 UTF-8 编码，避免 Windows 默认编码问题
@@ -150,15 +155,17 @@ class SubprocessTransport(
             logger.info { "🎉 SubprocessTransport连接成功!" }
         } catch (e: java.io.IOException) {
             logger.error { "❌ Claude CLI进程启动失败: ${e.message}" }
+            logger.error { "❌ 启动命令: $commandString" }
             // Check if it's a file not found error (CLI not installed)
             if (e.message?.contains("No such file") == true ||
                 e.message?.contains("not found") == true) {
                 throw CLINotFoundException.withInstallInstructions(isNodeInstalled())
             }
-            throw CLIConnectionException("Failed to start Claude CLI process", e)
+            throw CLIConnectionException("Failed to start Claude CLI process. Command: $commandString", e)
         } catch (e: Exception) {
             logger.error { "❌ Claude CLI进程启动失败: ${e.message}" }
-            throw CLIConnectionException("Failed to start Claude CLI process", e)
+            logger.error { "❌ 启动命令: $commandString" }
+            throw CLIConnectionException("Failed to start Claude CLI process. Command: $commandString", e)
         }
     }
     
