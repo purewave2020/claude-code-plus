@@ -185,3 +185,6 @@ runide.log
 
 
 .playwright-mcp/
+
+# Local app artifacts
+.claude-code-plus/codex-images/
