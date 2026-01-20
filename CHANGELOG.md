@@ -2,6 +2,186 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-01-20
+
+A major release with 220+ commits introducing fundamental architecture changes, new features, and significant improvements across the entire codebase.
+
+### Added
+
+#### Message Editing & Retry
+- Implement message editing with visual diff and resend functionality
+- Add message context menu with Copy/Retry/Edit on right-click
+- Add retry failed message functionality with streaming response support
+- Support parentUuid for conversation branching in message editing
+
+#### File Rollback System
+- Implement `FileOriginalContentTracker` for file snapshot management
+- Add single file and batch rollback UI components
+- Add `rollbackFile` and `batchRollback` RSocket endpoints
+- Enable rollback functionality integration with file changes tracking
+
+#### Terminal MCP Server
+- Implement terminal MCP server with command execution and state management
+- Add terminal session management and background execution UI
+- Enable run-to-background for active terminal tasks (Ctrl+B)
+- Support unified batch background execution for Claude and Terminal tasks
+
+#### Fullscreen Diff View
+- Implement fullscreen diff with unified diff format
+- Add inline accept/reject toolbar with three-dot menu
+- Auto-close diff after accept/reject with fade animations
+- Improve diff display with enhanced contrast and toggle functionality
+
+#### Multi-Edit Diff Support
+- Add multi-edit diff component infrastructure
+- Integrate MultiEditDiff with ideService for proper edit display
+- Complete multi-edit diff functionality with RSocket communication
+
+#### Chat Search (Ctrl+F)
+- Implement in-chat search with highlight and navigation
+- Add search history and auto-dismiss behavior
+- Optimize UI with debounced input and keyboard navigation
+
+#### Theme System
+- Implement dual-layer theme system - IDE adapts to system/JCEF theme
+- Add theme options: IDE Theme Sync / Always Light / Always Dark
+- Sync IDE theme with editor using JCEF event listeners
+- Support dark/light theme with system preference detection
+
+#### MCP Management
+- Add MCP status monitoring endpoint with frontend display
+- Implement MCP reconnect, disable/enable functionality
+- Add MCP tools query support with 006-mcp-disable-enable patch
+- Display MCP status card with server details in settings panel
+
+#### Model Selector
+- Implement model selector with real-time model switching
+- Add `/model` slash command for quick model switching
+- Add default model selection to plugin settings
+- Extract and display model name from API response
+
+#### Settings Panel
+- Implement full-featured settings panel with tabs
+- Add permission selector component with mode switching
+- Add max thinking token slider configuration
+- Add restart button for quick config reload
+- Persist and restore settings to disk
+
+#### Run-to-Background (Ctrl+B)
+- Add unified run-to-background support via 007 patch
+- Unify Bash and Agent background operations
+- Implement keyboard shortcut for background execution
+
+#### Thinking Block Display
+- Add thinking block parsing and structured display
+- Implement collapsible thinking display
+- Extract ThinkingBlock component for better maintainability
+
+#### Connection & Session Management
+- Add backend connection status indicator and session reconnection
+- Resume session on reconnect with stored conversation ID
+- Add auto-reconnect on frontend visibility change
+- Add page visibility handling for websocket lifecycle
+
+#### Browser Security
+- Implement dual-mode browser security with JCEF navigation blocking
+- Add `browserSecurity.ts` for dual-mode navigation blocking
+
+#### Input Enhancements
+- Add Shift+Enter multiline input support
+- Implement auto-resize textarea with max height limit
+- Add enter-to-send and escape-to-abort keyboard shortcuts
+- Auto-select entire input text on focus for faster retyping
+
+#### Other Features
+- Add system prompt persistence and API key configuration
+- Separate highlight.js from main bundle with lazy loading
+- Add loading indicator during agent initialization
+- Implement markdown rendering for assistant messages
+
+### Changed
+
+#### Architecture Refactoring
+- **RSocket Migration**: Migrate from ktor-cio to netty-server with WebSocket-based SSE
+- **Frontend Bundler**: Migrate from webpack to vite for faster builds
+- **Logging**: Implement unified logging architecture with lambda-style API
+- **Proto Module**: Extract ai-agent-proto module from ai-agent-server
+- **Session Store**: Decouple RSocket from sessionStore with modular architecture
+- Extract AI session logic into composable RSocketSession
+- Extract message rendering logic to `useMessageRenderer` composable
+- Remove legacy AiAgentServiceImpl and deprecated handlers
+
+#### Multi-Version Compatibility
+- Implement source-level version compatibility with compat layers
+- Add platform-specific Diff API compatibility (242/243)
+- Support multi-platform releases with `buildAllVersions` task
+- Downgrade IntelliJ platform to 2024.2 for broader compatibility
+
+#### CLI Patches
+- Rename claude-agent-sdk patches for clarity
+- Add 007-run-to-background.js patch for unified background execution
+- Patch exit-code override for normal completion
+
+#### UI/UX Improvements
+- Implement pure CSS fullscreen mode with fade animations
+- Update sidebar styling with proper contrast colors
+- Prevent input focus on startup, focus only on user interaction
+- Add CSS variables for foreground colors and theme integration
+
+### Fixed
+
+#### Streaming & Message Rendering
+- Handle partial streams and resume sessions correctly
+- Prevent duplicate displayItems and content in streaming mode
+- Correct duplicate processing for assistant messages
+- Ensure displayId uniqueness in streaming mode
+- Move rawMarkdown generation from watch to render phase
+
+#### RSocket Connection
+- Use complete() for stream termination to prevent cancellation errors
+- Prevent reconnection on non-resumable errors
+- Handle ClosedReceiveChannelException during graceful shutdown
+- Add debounce to prevent rapid reconnection attempts
+- Prevent duplicate RSocket connections with ref counting
+
+#### Session Management
+- Handle Claude session reconnection after network changes
+- Use async initialization to prevent blocking
+- Set initial permission mode correctly during session creation
+- Cleanup session resources when session ends
+- Ensure proper client cleanup on SDK session close
+
+#### Diff & Rollback
+- Correctly handle string escaping in diff content display
+- Handle PATCH_REJECTED / TASK_INTERRUPTED as non-fatal display states
+
+#### Terminal
+- Handle terminal MCP and Bash background separately
+- Correctly differentiate Terminal MCP from regular Bash tasks
+
+#### Other Fixes
+- Allow retry for any failed message except with tool results
+- Handle control errors gracefully in ControlProtocol
+- Handle agent disconnection gracefully
+- Add input safeguard to prevent sending during streaming
+- Fix content overflow issues in chat interface
+
+### Build
+
+- Add buildAllVersions task for multi-platform releases
+- Remove deprecated ktor-server-cio dependency
+- Add kotlinx-coroutines-slf4j dependency for logging
+- Downgrade org.jetbrains.intellij.platform plugin to 2.2.1
+- Update pnpm-lock.yaml with all dependencies
+
+### Docs
+
+- Update CLAUDE.md with new AI agent server architecture
+- Update CLAUDE.md with multi-version build architecture
+- Remove references to non-existent companion website
+
+---
+
 ## [1.2.2] - 2025-12-25
 
 ### Added
