@@ -844,7 +844,7 @@ class AiAgentRpcServiceImpl(
     ): McpSessionSetup = withContext(McpSystemPromptContext.asContextElement(provider)) {
         val defaults = serviceConfig.claude
         val fallbackBackends = serviceConfig.mcpEnabledBackends
-        val connectId = requireNotNull(this.connectId) { "connectId is required" }
+        val connectId = requireNotNull(this@AiAgentRpcServiceImpl.connectId) { "connectId is required" }
         sdkLog.info(
             "[MCP] prepareMcpSession: provider=$provider, connectId=$connectId, sessionId=$sessionId, fallbackBackends=${fallbackBackends.joinToString()}"
         )
