@@ -36,6 +36,7 @@ import com.asakii.rpc.proto.LoadHistoryRequest
 import com.asakii.server.history.HistoryJsonlLoader
 import com.asakii.server.rpc.AiAgentRpcServiceImpl
 import com.asakii.rpc.api.RpcHistorySessionsResult
+import com.asakii.server.mcp.McpHttpGateway
 import com.asakii.server.mcp.McpProviders
 import com.asakii.server.rsocket.ProtoConverter.toProto
 import com.asakii.server.codex.CodexBackendProvider
@@ -158,8 +159,12 @@ class HttpApiServer(
                 // RSocket RPC 路由 (Protobuf over RSocket)
                 // 重要：每个连接创建完全独立的 handler，绝不共享任何状态！
                 rSocket("rsocket") {
-                    val connectionId = java.util.UUID.randomUUID().toString()
-                    logger.info { "🔌 [RSocket] 新连接: $connectionId" }
+                    // 生成唯一 connectId（带碰撞检测）
+                    var connectId = java.util.UUID.randomUUID().toString()
+                    while (McpHttpGateway.hasConnectId(connectId)) {
+                        connectId = java.util.UUID.randomUUID().toString()
+                    }
+                    logger.info { "🔌 [RSocket] 新连接: connectId=$connectId" }
 
                     // 每次连接时调用 provider 获取最新配置（支持用户实时更新设置）
                     val currentConfig = serviceConfigProvider()
@@ -168,15 +173,10 @@ class HttpApiServer(
                     val rsocketHandler = com.asakii.server.rsocket.RSocketHandler(
                         ideTools = ideTools,
                         clientRequester = requester,
-                        connectionId = connectionId,
+                        connectId = connectId,
                         mcpProviders = mcpProviders,
                         serviceConfigProvider = { currentConfig }
                     )
-
-                    // 监听连接关闭
-                    requester.coroutineContext[kotlinx.coroutines.Job]?.invokeOnCompletion { cause ->
-                        logger.info { "🔌 [RSocket] 连接断开: $connectionId (cause: ${cause?.message ?: "正常关闭"})" }
-                    }
 
                     rsocketHandler.createHandler()
                 }
@@ -703,10 +703,12 @@ class HttpApiServer(
                             logger.info { "📋 [HTTP] 获取历史会话列表 (offset=$offset, maxResults=$maxResults)" }
 
                             // 直接调用 RPC 服务实现（复用逻辑，传递 MCP Server Providers）
+                            // HTTP API 使用临时 connectId（不参与 MCP 路由）
                             val rpcService = com.asakii.server.rpc.AiAgentRpcServiceImpl(
                                 ideTools = ideTools,
                                 clientCaller = null,
-                                mcpProviders = mcpProviders
+                                mcpProviders = mcpProviders,
+                                connectId = "http-api-${java.util.UUID.randomUUID()}"
                             )
                             val result = if (provider == "codex") {
                                 codexHistoryHelper.listHistorySessions(maxResults, offset)
@@ -780,7 +782,8 @@ class HttpApiServer(
                                 val rpcService = AiAgentRpcServiceImpl(
                                     ideTools = ideTools,
                                     clientCaller = null,
-                                    mcpProviders = mcpProviders
+                                    mcpProviders = mcpProviders,
+                                    connectId = "http-api-${java.util.UUID.randomUUID()}"
                                 )
                                 rpcService.getHistoryMetadata(sessionId, projectPath).toProto()
                             }
@@ -820,7 +823,8 @@ class HttpApiServer(
                                 val rpcService = AiAgentRpcServiceImpl(
                                     ideTools = ideTools,
                                     clientCaller = null,
-                                    mcpProviders = mcpProviders
+                                    mcpProviders = mcpProviders,
+                                    connectId = "http-api-${java.util.UUID.randomUUID()}"
                                 )
                                 rpcService.loadHistory(
                                     req.sessionId,

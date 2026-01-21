@@ -4,6 +4,7 @@ import com.asakii.rpc.api.AiAgentRpcService
 import com.asakii.rpc.api.IdeTools
 import com.asakii.rpc.api.RpcMessage as RpcMessageApi
 import com.asakii.rpc.proto.*
+import com.asakii.server.mcp.McpHttpGateway
 import com.asakii.server.mcp.McpProviders
 import com.asakii.server.rpc.AiAgentRpcServiceImpl
 import com.asakii.server.rpc.ClientCaller
@@ -56,7 +57,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class RSocketHandler(
     private val ideTools: IdeTools,
     private val clientRequester: RSocket,  // 必须在构造时传入，确保每个连接独立
-    private val connectionId: String = java.util.UUID.randomUUID().toString(),  // 连接唯一标识
+    private val connectId: String,  // 由 HttpApiServer 分配的永久连接标识，用于 MCP 路由
     private val mcpProviders: McpProviders = McpProviders.DEFAULT,  // All MCP Server Providers
     private val serviceConfigProvider: () -> com.asakii.server.config.AiAgentServiceConfig = { com.asakii.server.config.AiAgentServiceConfig() }  // 服务配置提供者（每次 connect 时获取最新配置）
 ) {
@@ -74,7 +75,7 @@ class RSocketHandler(
      * 连接关闭时自动清理所有资源。
      */
     fun createHandler(): RSocket {
-        wsLog.info { "🔌 [RSocket] [$connectionId] 创建请求处理器" }
+        wsLog.info { "🔌 [RSocket] [$connectId] 创建请求处理器" }
 
         // 反向调用支持
         val callIdCounter = AtomicInteger(0)
@@ -82,12 +83,13 @@ class RSocketHandler(
         // 创建 ClientCaller（初始时 requester 可能为空）
         val clientCaller = createClientCaller(callIdCounter)
 
-        // 为每个连接创建独立的 RPC 服务（传递 MCP Server Providers 和服务配置提供者）
+        // 为每个连接创建独立的 RPC 服务（传递 connectId、MCP Providers 和服务配置提供者）
         val rpcService: AiAgentRpcService = AiAgentRpcServiceImpl(
             ideTools = ideTools,
             clientCaller = clientCaller,
             mcpProviders = mcpProviders,
-            serviceConfigProvider = serviceConfigProvider
+            serviceConfigProvider = serviceConfigProvider,
+            connectId = connectId
         )
 
         val handler = RSocketRequestHandler {
@@ -144,21 +146,25 @@ class RSocketHandler(
 
         // 监听连接关闭，自动清理 SDK 资源（非阻塞）
         handler.coroutineContext[Job]?.invokeOnCompletion { cause ->
-            wsLog.info("🔌 [RSocket] [$connectionId] 连接关闭，自动清理资源 (cause: ${cause?.message ?: "正常关闭"})")
+            wsLog.info("🔌 [RSocket] [$connectId] 连接关闭，自动清理资源 (cause: ${cause?.message ?: "正常关闭"})")
             // 使用独立的协程作用域进行异步清理，避免阻塞回调
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 try {
                     withTimeout(10000) { // 10秒超时
                         rpcService.disconnect()
                     }
-                    wsLog.info("✅ [RSocket] [$connectionId] SDK 资源已清理")
+                    wsLog.info("✅ [RSocket] [$connectId] SDK 资源已清理")
                 } catch (e: Exception) {
-                    wsLog.warn { "⚠️ [RSocket] [$connectionId] 清理 SDK 资源时出错: ${e.message}" }
+                    wsLog.warn { "⚠️ [RSocket] [$connectId] 清理 SDK 资源时出错: ${e.message}" }
+                } finally {
+                    // SDK 会话清理完成后，再清理 MCP 端点
+                    McpHttpGateway.unregisterSession(connectId)
+                    wsLog.info("✅ [RSocket] [$connectId] MCP 端点已清理")
                 }
             }
         }
 
-        wsLog.info("✅ [RSocket] [$connectionId] Handler 创建完成，clientRequester 已绑定")
+        wsLog.info("✅ [RSocket] [$connectId] Handler 创建完成，clientRequester 已绑定")
         return handler
     }
 
@@ -377,7 +383,7 @@ class RSocketHandler(
      * 所有 SDK 事件都会通过此流推送给订阅者。
      */
     private fun handleGlobalEvents(rpcService: AiAgentRpcService): Flow<Payload> {
-        wsLog.info("📡 [RSocket] 全局事件流订阅 [$connectionId]")
+        wsLog.info("📡 [RSocket] 全局事件流订阅 [$connectId]")
         
         return rpcService.subscribeGlobalEvents()
             .mapToPayloadWithLogging("events")
@@ -531,7 +537,7 @@ class RSocketHandler(
         return object : ClientCaller {
             override suspend fun callAskUserQuestion(request: AskUserQuestionRequest): AskUserQuestionResponse {
                 val callId = "srv-${callIdCounter.incrementAndGet()}"
-                wsLog.info("📤 [RSocket] [$connectionId] → AskUserQuestion(Proto): callId=$callId, questions=${request.questionsCount}")
+                wsLog.info("📤 [RSocket] [$connectId] → AskUserQuestion(Proto): callId=$callId, questions=${request.questionsCount}")
 
                 try {
                     // 构建 ServerCallRequest
@@ -565,18 +571,18 @@ class RSocketHandler(
                         throw RuntimeException("AskUserQuestion response missing askUserQuestion field")
                     }
 
-                    wsLog.info("📥 [RSocket] [$connectionId] ← AskUserQuestion 成功: callId=$callId, answers=${serverResponse.askUserQuestion.answersCount}")
+                    wsLog.info("📥 [RSocket] [$connectId] ← AskUserQuestion 成功: callId=$callId, answers=${serverResponse.askUserQuestion.answersCount}")
                     return serverResponse.askUserQuestion
 
                 } catch (e: Exception) {
-                    wsLog.warn("📥 [RSocket] [$connectionId] ← AskUserQuestion 失败: callId=$callId, error=${e.message}")
+                    wsLog.warn("📥 [RSocket] [$connectId] ← AskUserQuestion 失败: callId=$callId, error=${e.message}")
                     throw RuntimeException("AskUserQuestion failed: ${e.message}")
                 }
             }
 
             override suspend fun callRequestPermission(request: RequestPermissionRequest): RequestPermissionResponse {
                 val callId = "srv-${callIdCounter.incrementAndGet()}"
-                wsLog.info("📤 [RSocket] [$connectionId] → RequestPermission(Proto): callId=$callId, toolName=${request.toolName}")
+                wsLog.info("📤 [RSocket] [$connectId] → RequestPermission(Proto): callId=$callId, toolName=${request.toolName}")
 
                 try {
                     // 构建 ServerCallRequest
@@ -610,11 +616,11 @@ class RSocketHandler(
                         throw RuntimeException("RequestPermission response missing requestPermission field")
                     }
 
-                    wsLog.info("📥 [RSocket] [$connectionId] ← RequestPermission 成功: callId=$callId, approved=${serverResponse.requestPermission.approved}")
+                    wsLog.info("📥 [RSocket] [$connectId] ← RequestPermission 成功: callId=$callId, approved=${serverResponse.requestPermission.approved}")
                     return serverResponse.requestPermission
 
                 } catch (e: Exception) {
-                    wsLog.warn("📥 [RSocket] [$connectionId] ← RequestPermission 失败: callId=$callId, error=${e.message}")
+                    wsLog.warn("📥 [RSocket] [$connectId] ← RequestPermission 失败: callId=$callId, error=${e.message}")
                     throw RuntimeException("RequestPermission failed: ${e.message}")
                 }
             }
