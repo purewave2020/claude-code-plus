@@ -918,6 +918,25 @@ node ast-verify-enhanced.mjs
 - 更新 docs/CLI_PATCH_SYSTEM.md 变更历史
 - 记录移除或新增的补丁
 
+
+
+#### 5. 语法验证（重要）
+
+增强后的 CLI **必须通过语法验证**，防止补丁引入错误：
+
+```bash
+# 运行语法验证器
+node syntax-validator.mjs ../src/main/resources/bundled/claude-cli-<version>-enhanced.mjs
+```
+
+验证内容：
+- **Babel 严格模式解析**: 检测语法错误
+- **危险模式检测**: 未定义变量访问等
+- **补丁完整性**: 所有控制命令是否存在
+- **AST 验证**: 注入代码是否正确
+
+**重要**: 之前曾因硬编码变量名导致 "y is not defined" 运行时错误，语法验证可提前发现此类问题。
+
 ### 补丁开发规范
 
 1. **使用动态变量发现**: 不要硬编码混淆后的变量名
