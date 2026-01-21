@@ -818,3 +818,114 @@ async function runToBackground(taskId?: string, toolType?: string) {
     - 管理方式：作为 git submodule 引入，位于 `external/` 目录，后续可通过 `git submodule update --init --recursive` 同步。
 
 - [?????????](docs/MESSAGE_RENDERING_SPEC.md)????????????????????
+
+
+---
+
+## 📊 AST 分析方法
+
+对于混砆的 CLI 代码，使用 AST 分析比直接索引这类更可靠。
+### 工具选择
+
+- **@babel/parser**: 解析 JS 代码为 AST
+- **@babel/traverse**: 遍历 AST 节点
+
+- **@babel/generator**: 从 AST 生成代砂
+### 分析脚本
+
+```bash
+# 安装依赖
+cd claude-agent-sdk/cli-patches
+npm install @babel/parser @babel/traverse @babel/generator
+
+# 运行分析脚本
+node ast-analyzer.mjs        # 分析 CLI 源码 node ast-verify-enhanced.mjs   # 验证增强产物
+```
+
+### 示例：查找 Ls5 函数
+
+```javascript
+import { parse } from '@babel/parser';
+import traverse from '@babel/traverse';
+
+const ast = parse(code, { sourceType: 'module', errorRecovery: true });
+
+traverse(ast, {
+  FunctionDeclaration(path) {
+    if (path.node.generator && path.node.id?.name === 'Ls5') {
+      console.log('Found Ls5 at line', path.node.loc?.start.line);
+    }
+  }
+});
+```
+
+### 典型分析任务
+
+1. **查找变量定义**: `VariableDeclarator` 遍历
+2. **日找函数调用**: `CallExpression` 遍历
+3. **代码模式匹配**: 结合多个 visitor 检查特征
+4. **验证补丁结果**: 解析本件并检查目标代码模式
+### CLI 2.1.12 关键变量映射
+
+| 功能 | 变量名�线 | 发现特征 |
+|------|--------|----------|
+| Task 工具 | `P6` | `P6="Task"` |
+| Skill 工具 | `xV` | `xV="Skill"` |
+| Ls5 输出函数 | `Ls5` | generator, switch(A.type), parent_tool_use_id |
+| sourceToolUseID 访问 | - | `if(A.sourceToolUseID)return` |
+| Nd2 消息追踪 | `Nd2` | `为 message 添加 sourceToolUseID` |
+
+
+---
+
+## Claude Agent SDK 增强要求
+
+### CLI 升级流程
+
+当需要升级官方 Claude CLI 版本时，**必须遵循以下流程**：
+
+#### 1. 升级前检查
+
+```bash
+cd claude-agent-sdk/cli-patches
+
+# 下载或复制新版本 CLI
+cp <new-cli-path> claude-cli-<new-version>.js
+
+# 运行 AST 分析
+node ast-analyzer.mjs
+node ast-verify-enhanced.mjs
+```
+
+#### 2. 检查官方是否已修复补丁问题
+
+对每个补丁，使用 AST 工具检查官方是否已内置相关功能：
+- 如已修复：移除补丁，更新 index.js
+- 如未修复：保留补丁
+
+#### 3. 应用补丁并验证
+
+```bash
+# 应用补丁
+node patch-cli.js claude-cli-<version>.js ../src/main/resources/bundled/claude-cli-<version>-enhanced.mjs
+
+# 验证增强产物
+node ast-verify-enhanced.mjs
+```
+
+#### 4. 更新文档
+
+- 更新 docs/CLI_PATCH_SYSTEM.md 变更历史
+- 记录移除或新增的补丁
+
+### 补丁开发规范
+
+1. **使用动态变量发现**: 不要硬编码混淆后的变量名
+2. **通过 context 共享**: 使用 `context.foundVariables` 在补丁间共享
+3. **AST 验证**: 新补丁必须配套验证脚本
+4. **优先级管理**: 合理设置 `priority` 字段
+
+### 相关文档
+
+- 详细补丁系统说明: docs/CLI_PATCH_SYSTEM.md
+- AST 分析工具: claude-agent-sdk/cli-patches/ast-*.mjs

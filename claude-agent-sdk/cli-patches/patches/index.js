@@ -1,26 +1,26 @@
-/**
- * 补丁注册表
+﻿/**
+ * Patch Registry
  *
- * 按顺序加载和应用补丁
+ * Load and apply patches in order
  */
 
 const runInBackground = require('./001-run-in-background');
 const chromeStatus = require('./002-chrome-status');
 const parentUuid = require('./003-parent-uuid');
-const mcpReconnect = require('./004-mcp-reconnect');
+const mcpServerControl = require('./004-mcp-server-control');
 const mcpTools = require('./005-mcp-tools');
-const mcpDisableEnable = require('./006-mcp-disable-enable');
 const runToBackground = require('./007-run-to-background');
 const getCapabilities = require('./008-get-capabilities');
+const skillParentToolUseId = require('./009-skill-parent-tool-use-id');
 
-// 按优先级排序导出所有补丁
+// Export all patches sorted by priority
 module.exports = [
   runInBackground,
   chromeStatus,
   parentUuid,
-  mcpReconnect,
+  mcpServerControl,
   mcpTools,
-  mcpDisableEnable,
   runToBackground,
   getCapabilities,
+  skillParentToolUseId,
 ].sort((a, b) => (a.priority || 100) - (b.priority || 100));
