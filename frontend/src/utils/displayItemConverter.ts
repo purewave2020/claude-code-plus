@@ -17,10 +17,11 @@ import type {
   RequestStats,
   ContextReference,
   CompactSummary,
-  LocalCommandOutput
+  LocalCommandOutput,
+  ClaudeSkillToolCall
 } from '@/types/display'
 import { ToolCallStatus } from '@/types/display'
-import { resolveToolType } from '@/constants/toolTypes'
+import { resolveToolType, CLAUDE_TOOL_TYPE } from '@/constants/toolTypes'
 import type {
   ContentBlock,
   Message,
@@ -30,6 +31,13 @@ import type {
   ToolResultContent,
   UnifiedMessage
 } from '@/types/message'
+
+/**
+ * Skill 工具调用类型守卫
+ */
+function isSkillToolCall(toolCall: ToolCall): toolCall is ClaudeSkillToolCall {
+  return toolCall.toolType === CLAUDE_TOOL_TYPE.SKILL
+}
 
 /**
  * 压缩摘要消息类型守卫
@@ -231,7 +239,8 @@ export function updateToolCallResult(toolCall: ToolCall, resultBlock: ToolResult
 
 export function convertMessageToDisplayItems(
   message: Message,
-  pendingToolCalls: Map<string, ToolCall>
+  pendingToolCalls: Map<string, ToolCall>,
+  getSkillContent?: (toolUseId: string) => string | undefined
 ): DisplayItem[] {
   const displayItems: DisplayItem[] = []
   const baseId = (message as any).displayId ?? message.id
@@ -416,6 +425,14 @@ export function convertMessageToDisplayItems(
         }
       } else if (isToolUseBlock(block)) {
         const toolCall = createToolCall(block as ToolUseContent, pendingToolCalls)
+        // 如果是 Skill 工具，从跨消息映射获取 skillContent
+        const toolUse = block as ToolUseContent
+        if ((toolUse.toolName === 'Skill' || toolUse.name === 'Skill') && getSkillContent) {
+          const skillContent = getSkillContent(toolUse.id)
+          if (skillContent && isSkillToolCall(toolCall)) {
+            toolCall.skillContent = skillContent
+          }
+        }
         displayItems.push(toolCall)
       }
     }
