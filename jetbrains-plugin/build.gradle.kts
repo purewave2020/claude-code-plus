@@ -34,7 +34,7 @@ val targetPlatformVersion = when (platformMajor) {
     243 -> "2024.3.5"
     251 -> "2025.1.5"
     252 -> "2025.2.4"
-    else -> "2025.3.1"  // 253+
+    else -> "2025.3.1.1"  // 253+
 }
 
 // ===== 兼容性代码目录配置 =====
@@ -325,7 +325,7 @@ intellijPlatform {
 fun getDefaultShell(): String {
     val osName = System.getProperty("os.name").lowercase()
     return when {
-        osName.contains("windows") -> "powershell.exe"
+        osName.contains("windows") -> "cmd.exe"
         else -> System.getenv("SHELL") ?: "/bin/sh"
     }
 }
@@ -336,6 +336,7 @@ fun getDefaultShell(): String {
 fun shellCommand(command: String): List<String> {
     val shell = getDefaultShell()
     return when {
+        shell.contains("cmd") -> listOf(shell, "/c", command)
         shell.contains("powershell") -> listOf(shell, "-Command", command)
         else -> listOf(shell, "-c", command)
     }
