@@ -95,8 +95,6 @@ class GenerateCommitMessageService(private val project: Project) {
                     codexConnectId = connectId
 
                     val mcpUrl = McpHttpGateway.registerServer(
-                        AiAgentProvider.CODEX,
-                        connectId,
                         "jetbrains_git",
                         gitMcpServer
                     )
@@ -284,7 +282,7 @@ class GenerateCommitMessageService(private val project: Project) {
                 } catch (e: Exception) {
                     logger.debug { "Disconnect error: ${e.message}" }
                 }
-                codexConnectId?.let { McpHttpGateway.unregisterProviderSession(provider, it) }
+                // MCP 端点全局共享，无需手动清理
             }
 
             if (success) {
