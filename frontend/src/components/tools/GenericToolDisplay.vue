@@ -17,7 +17,10 @@
           <div class="section-title">Result</div>
           <div class="result-content">
             <div v-for="(block, index) in resultBlocks" :key="index" class="result-block">
-              <pre v-if="blockType(block) === 'text'" class="result-text">{{ blockText(block) }}</pre>
+              <div v-if="blockType(block) === 'text' && shouldRenderMarkdown" class="result-markdown">
+                <MarkdownRenderer :content="blockText(block)" />
+              </div>
+              <pre v-else-if="blockType(block) === 'text'" class="result-text">{{ blockText(block) }}</pre>
               <img
                 v-else-if="blockType(block) === 'image'"
                 class="result-image"
@@ -63,6 +66,7 @@
 import { ref, computed } from 'vue'
 import type { GenericToolCall } from '@/types/display'
 import CompactToolCard from './CompactToolCard.vue'
+import MarkdownRenderer from '@/components/markdown/MarkdownRenderer.vue'
 import { extractToolDisplayInfo } from '@/utils/toolDisplayInfo'
 
 interface Props {
@@ -141,6 +145,11 @@ const resultBlocks = computed<any[]>(() => {
 const hasResult = computed(() => (resultBlocks.value?.length ?? 0) > 0)
 
 const hasDetails = computed(() => Object.keys(params.value || {}).length > 0 || hasResult.value)
+
+const shouldRenderMarkdown = computed(() => {
+  const toolName = props.toolCall?.toolName || ''
+  return toolName.startsWith('mcp__user_interaction__') || toolName.startsWith('mcp__user-interaction__')
+})
 
 function blockType(block: any): string {
   return typeof block?.type === 'string' ? block.type : 'unknown'
@@ -262,6 +271,10 @@ function embeddedMeta(block: any): string {
   font-family: var(--theme-editor-font-family);
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.result-markdown {
+  padding: 8px;
 }
 
 .result-image {
