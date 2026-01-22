@@ -532,7 +532,11 @@ export function mapStreamEventFromProto(proto: any): StreamEventData {
         },
         usage: eventData.value.usage
           ? {
-              output_tokens: eventData.value.usage.outputTokens
+              input_tokens: eventData.value.usage.inputTokens,
+              output_tokens: eventData.value.usage.outputTokens,
+              cached_input_tokens: eventData.value.usage.cachedInputTokens,
+              cache_creation_tokens: eventData.value.usage.cacheCreationTokens,
+              cache_read_tokens: eventData.value.usage.cacheReadTokens
             }
           : undefined
       })
