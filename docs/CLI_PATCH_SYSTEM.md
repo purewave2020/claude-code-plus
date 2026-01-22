@@ -96,16 +96,68 @@ const reconnectFnName = context.foundVariables?.reconnectFn;
 3. 提取 X 作为 configs 变量名，Y 作为 clients 变量名
 4. 查找 `disabledMcpServers` 相关函数获取禁用/启用控制函数
 
-## CLI 2.1.12 变量映射
+## CLI 2.1.15 变量映射
 
 | 用途 | 变量名 | 发现特征 |
 |------|--------|----------|
-| MCP configs 对象 | `J` | `{configs:J,...}` 在 mcp_set_servers 处理中 |
-| MCP clients 数组 | `S` | `{clients:S,...}` 在 mcp_set_servers 处理中 |
-| 重连函数 | `x2A` | async 函数，返回 `{client, tools}` |
-| 检查禁用函数 | `lPA` | 包含 `disabledMcpServers` 和 `includes` |
-| 更新禁用函数 | `CY0` | 包含 `disabledMcpServers` 和 `filter` |
-| 断开连接函数 | `gm` | async 函数，包含 `cleanup` 调用 |
+| Task 工具定义 | `bq` | `bq="Task"` @ line 181 |
+| Skill 工具定义 | `c_` | `c_="Skill"` @ line 2528 |
+| MCP 重连函数 | `tb` | async 函数，返回 `{client, tools}` |
+| 检查禁用函数 | `jSA` | 包含 `disabledMcpServers` 和 `includes` |
+| 更新禁用函数 | `CWA` | 包含 `disabledMcpServers` 和 `filter` |
+| 断开连接函数 | `ob` | async 函数，包含 `cleanup` 调用 |
+| id2 函数 | `Kd7` | Skill 内部消息 sourceToolUseID 添加 |
+| Ts5 输出函数 | `stY` | 消息输出核心函数 |
+| iV1 批量后台化 | `R01` | 批量后台化所有任务 |
+| Me5 Bash 后台化 | `XMY` | 后台化单个 Bash |
+| R42 Agent 后台化 | `fO7` | 后台化单个 Agent |
+| wt Bash 判断 | `nh6` | 判断是否是 Bash |
+| Jr Agent 判断 | `PU` | 判断是否是 Agent |
+| 控制请求变量 | `OA` | for await 循环中的请求对象 |
+| 响应函数 | `t` | `t(OA, response)` 发送成功响应 |
+
+## 008-get-capabilities.js
+
+**功能**: 查询 CLI 运行时能力状态
+
+**控制命令**: `get_capabilities`
+
+**请求格式**:
+```json
+{
+  "type": "control_request",
+  "request_id": "xxx",
+  "request": { "subtype": "get_capabilities" }
+}
+```
+
+**响应格式**:
+```json
+{
+  "capabilities": {
+    "background_tasks_enabled": true
+  }
+}
+```
+
+**实现细节**:
+- 读取环境变量 `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS`
+- 解析布尔值: `"1"`, `"true"`, `"yes"`, `"on"` 视为禁用
+- 返回 `background_tasks_enabled: !disabled`
+
+**注入方式**:
+- 查找 `OA.request.subtype === "mcp_status"` 的 `else if` 链
+- 遍历到链末尾，插入新的 `else if` 分支
+- 使用动态发现的 `requestVar` 和 `responderName`
+
+**关键代码模式**:
+```javascript
+// CLI 中的 else if 链结构
+if (OA.request.subtype === "interrupt") { ... }
+else if (OA.request.subtype === "initialize") { ... }
+else if (OA.request.subtype === "mcp_status") { ... }  // <- 从这里找到入口
+else if (OA.request.subtype === "get_capabilities") { ... }  // <- 插入到链末尾
+```
 
 ## 常见问题
 
@@ -146,13 +198,30 @@ const reconnectFnName = context.foundVariables?.reconnectFn;
 cd claude-agent-sdk/cli-patches
 
 # 干运行模式（仅验证，不生成文件）
-node patch-cli.js --dry-run claude-cli-2.1.12.js
+node patch-cli.js --dry-run claude-cli-2.1.15.js
 
 # 应用补丁
-node patch-cli.js claude-cli-2.1.12.js patched-cli.js
+node patch-cli.js claude-cli-2.1.15.js patched-cli.js
 ```
 
 ## 变更历史
+
+### 2026-01-23
+
+- **升级**: CLI 版本从 2.1.14 升级到 2.1.15
+- **修复**: `008-get-capabilities.js` 补丁重写，正确处理 `else if` 链结构
+- **更新**: 变量映射表更新为 2.1.15 版本
+- **删除**: 移除旧版本 CLI 文件 (2.1.12, 2.1.14)
+
+**get_capabilities 补丁修复说明**:
+
+原补丁查找独立的 `IfStatement`，但 CLI 使用 `else if` 链，导致无法找到注入位置。
+
+修复方案：
+1. 查找 `mcp_status` 的 `if` 语句作为入口
+2. 遍历 `else if` 链到末尾
+3. 在链末尾插入新的 `else if` 分支
+4. 使用 AST 构建代码而非字符串解析
 
 ### 2026-01-21
 

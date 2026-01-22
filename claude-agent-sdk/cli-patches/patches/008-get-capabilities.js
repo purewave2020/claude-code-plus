@@ -16,7 +16,6 @@
  * {
  *   capabilities: {
  *     background_tasks_enabled: boolean  // !CLAUDE_CODE_DISABLE_BACKGROUND_TASKS
- *     // 未来可扩展更多状态...
  *   }
  * }
  *
@@ -33,10 +32,10 @@ module.exports = {
   apply(ast, t, traverse, context) {
     const details = [];
     let patchApplied = false;
-    const parser = require('@babel/parser');
 
     // ========================================
-    // 找到控制请求处理位置并添加 get_capabilities 分支
+    // 找到控制请求处理位置
+    // 查找 OA.request.subtype === "mcp_status" 模式
     // ========================================
     traverse(ast, {
       IfStatement(path) {
@@ -59,14 +58,18 @@ module.exports = {
         if (!t.isStringLiteral(subtypeValue)) return;
 
         const subtype = subtypeValue.value;
-        // 在已知的控制命令附近添加
-        if (subtype !== 'mcp_set_servers' && subtype !== 'mcp_status' && subtype !== 'mcp_reconnect') return;
+        // 在 mcp_status 或 mcp_set_servers 附近添加
+        if (subtype !== 'mcp_status' && subtype !== 'mcp_set_servers') return;
 
         // 找到了控制请求处理位置
         const requestVar = obj.object;
+        if (!t.isIdentifier(requestVar)) return;
+        const requestVarName = requestVar.name;
 
-        // 找出响应函数名
-        let responderName = 's';
+        // 从 context 获取 responder 函数名，或使用默认值
+        let responderName = context.foundVariables?.responderName || 't';
+
+        // 尝试从当前 if 块中找到 responder 调用
         const consequent = path.node.consequent;
         if (t.isBlockStatement(consequent)) {
           for (const stmt of consequent.body) {
@@ -77,90 +80,117 @@ module.exports = {
                 break;
               }
             }
-            // 检查 IIFE 内部
-            if (t.isExpressionStatement(stmt)) {
-              const expr = stmt.expression;
-              if (t.isCallExpression(expr) && t.isArrowFunctionExpression(expr.callee)) {
-                const body = expr.callee.body;
-                if (t.isBlockStatement(body)) {
-                  for (const innerStmt of body.body) {
-                    if (t.isExpressionStatement(innerStmt) && t.isCallExpression(innerStmt.expression)) {
-                      const innerCallee = innerStmt.expression.callee;
-                      if (t.isIdentifier(innerCallee)) {
-                        responderName = innerCallee.name;
-                        break;
-                      }
-                    }
-                  }
-                }
-              }
-            }
           }
         }
 
         // 构建 get_capabilities 处理逻辑
-        // 读取 process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS
-        // 使用与 CLI 内部 i1() 函数相同的逻辑解析布尔值
-        // i1() 检查: "1", "true", "yes", "on" (不区分大小写)
-        // 返回 { background_tasks_enabled: !disabled }
-        
-        const handlerCode = `
-          var __disableBackgroundTasks = (process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS || '').toLowerCase();
-          var __isDisabled = __disableBackgroundTasks === '1' || __disableBackgroundTasks === 'true' || __disableBackgroundTasks === 'yes' || __disableBackgroundTasks === 'on';
-          var __backgroundEnabled = !__isDisabled;
-          ${responderName}({
-            ...${requestVar.name},
-            response: {
-              subtype: "capabilities",
-              request_id: ${requestVar.name}.request_id,
-              response: {
-                capabilities: {
-                  background_tasks_enabled: __backgroundEnabled
-                }
-              }
-            }
-          });
-        `;
+        // 使用 AST 构建而不是解析字符串
+        const handlerStatements = [
+          // var __disableBackgroundTasks = (process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS || '').toLowerCase();
+          t.variableDeclaration('var', [
+            t.variableDeclarator(
+              t.identifier('__disableBackgroundTasks'),
+              t.callExpression(
+                t.memberExpression(
+                  t.logicalExpression(
+                    '||',
+                    t.memberExpression(
+                      t.memberExpression(t.identifier('process'), t.identifier('env')),
+                      t.identifier('CLAUDE_CODE_DISABLE_BACKGROUND_TASKS')
+                    ),
+                    t.stringLiteral('')
+                  ),
+                  t.identifier('toLowerCase')
+                ),
+                []
+              )
+            )
+          ]),
+          // var __isDisabled = __disableBackgroundTasks === '1' || __disableBackgroundTasks === 'true' || ...
+          t.variableDeclaration('var', [
+            t.variableDeclarator(
+              t.identifier('__isDisabled'),
+              t.logicalExpression(
+                '||',
+                t.logicalExpression(
+                  '||',
+                  t.logicalExpression(
+                    '||',
+                    t.binaryExpression('===', t.identifier('__disableBackgroundTasks'), t.stringLiteral('1')),
+                    t.binaryExpression('===', t.identifier('__disableBackgroundTasks'), t.stringLiteral('true'))
+                  ),
+                  t.binaryExpression('===', t.identifier('__disableBackgroundTasks'), t.stringLiteral('yes'))
+                ),
+                t.binaryExpression('===', t.identifier('__disableBackgroundTasks'), t.stringLiteral('on'))
+              )
+            )
+          ]),
+          // var __backgroundEnabled = !__isDisabled;
+          t.variableDeclaration('var', [
+            t.variableDeclarator(
+              t.identifier('__backgroundEnabled'),
+              t.unaryExpression('!', t.identifier('__isDisabled'))
+            )
+          ]),
+          // responder(OA, { capabilities: { background_tasks_enabled: __backgroundEnabled } });
+          t.expressionStatement(
+            t.callExpression(
+              t.identifier(responderName),
+              [
+                t.identifier(requestVarName),
+                t.objectExpression([
+                  t.objectProperty(
+                    t.identifier('capabilities'),
+                    t.objectExpression([
+                      t.objectProperty(
+                        t.identifier('background_tasks_enabled'),
+                        t.identifier('__backgroundEnabled')
+                      )
+                    ])
+                  )
+                ])
+              ]
+            )
+          )
+        ];
 
-        // 解析处理代码
-        const handlerAst = parser.parse(handlerCode, {
-          sourceType: 'script'
-        });
-
-        // 创建新的 if 语句
+        // 创建新的 if 语句: if (OA.request.subtype === "get_capabilities") { ... }
         const newIfStatement = t.ifStatement(
           t.binaryExpression(
             '===',
             t.memberExpression(
-              t.memberExpression(t.cloneNode(requestVar), t.identifier('request')),
+              t.memberExpression(t.identifier(requestVarName), t.identifier('request')),
               t.identifier('subtype')
             ),
             t.stringLiteral('get_capabilities')
           ),
-          t.blockStatement(handlerAst.program.body)
+          t.blockStatement(handlerStatements)
         );
 
-        // 在当前 if 语句后插入新的 if 语句
-        const parentPath = path.parentPath;
-        if (parentPath && parentPath.isBlockStatement()) {
-          const siblings = parentPath.node.body;
-          const index = siblings.indexOf(path.node);
-          if (index !== -1) {
-            siblings.splice(index + 1, 0, newIfStatement);
-            patchApplied = true;
-            details.push(`添加 get_capabilities 控制命令处理 (responder: ${responderName})`);
-          }
-        } else if (path.node.alternate === null) {
-          // 如果没有 else 分支，添加为 else if
-          path.node.alternate = newIfStatement;
+        // 插入到 else if 链中
+        // 找到最后一个 else if，在其 alternate 上添加
+        let currentIf = path.node;
+        while (currentIf.alternate && t.isIfStatement(currentIf.alternate)) {
+          currentIf = currentIf.alternate;
+        }
+
+        // 将新的 if 语句添加为最后的 else if
+        if (currentIf.alternate === null) {
+          currentIf.alternate = newIfStatement;
           patchApplied = true;
-          details.push(`添加 get_capabilities 作为 else if 分支 (responder: ${responderName})`);
+          details.push(`添加 get_capabilities 作为 else if 分支 (responder: ${responderName}, requestVar: ${requestVarName})`);
+        } else if (t.isBlockStatement(currentIf.alternate)) {
+          // 如果有 else 块，将其移到新 if 的 else 中
+          newIfStatement.alternate = currentIf.alternate;
+          currentIf.alternate = newIfStatement;
+          patchApplied = true;
+          details.push(`添加 get_capabilities 在 else 块之前 (responder: ${responderName}, requestVar: ${requestVarName})`);
         }
       }
     });
 
     if (!patchApplied) {
-      return { success: false, error: '未找到控制请求处理位置' };
+      return { success: false, error: '未找到控制请求处理位置 (mcp_status/mcp_set_servers)' };
     }
 
     return { success: true, details };
