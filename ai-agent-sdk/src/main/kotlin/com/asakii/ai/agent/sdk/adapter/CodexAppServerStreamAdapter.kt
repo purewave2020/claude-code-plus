@@ -488,10 +488,10 @@ class CodexAppServerStreamAdapter(
     private fun McpToolCallResult?.toResultJson(): JsonElement? {
         if (this == null) return null
         if (structuredContent != null) return structuredContent
-        // 直接返回 content 列表，而不是序列化整个对象
-        // 这样前端收到的格式与 Claude Code 一致
+        // 始终返回数组格式，与 Claude Code 保持一致
+        // 前端期望 content 是 [{ type: 'text', text: '...' }] 格式
         if (content.isNotEmpty()) {
-            return if (content.size == 1) content.first() else buildJsonArray { content.forEach { add(it) } }
+            return buildJsonArray { content.forEach { add(it) } }
         }
         return null
     }
