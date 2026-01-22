@@ -105,7 +105,8 @@ class AiAgentRpcServiceImpl(
     private val clientCaller: ClientCaller? = null,
     private val mcpProviders: McpProviders = McpProviders.DEFAULT,
     private val serviceConfigProvider: () -> AiAgentServiceConfig = { AiAgentServiceConfig() },
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val connectId: String  // 由 RSocketHandler 传入，与 RSocket 连接生命周期绑定
 ) : AiAgentRpcService {
 
     // 使用 server.log 专用 logger（SDK 日志）
@@ -123,12 +124,7 @@ class AiAgentRpcServiceImpl(
     private var client: UnifiedAgentClient? = null
     private var currentProvider: AiAgentProvider = AiAgentProvider.CLAUDE  // 默认值，connect 时会根据配置更新
     private var lastConnectOptions: RpcConnectOptions? = null
-    /**
-     * 前端永久连接标识，用于 MCP 路由（与 tab 绑定，不随重连变化）。
-     *
-     * 注意：禁止任何回退逻辑；前端 connect() 必须显式传入 connectId。
-     */
-    private var connectId: String? = null
+    // connectId 现在通过构造函数传入，由 RSocketHandler 分配，与 RSocket 连接生命周期绑定
 
     // 🔧 追踪当前 query 的完成状态，用于 interrupt 同步等待
     private var queryCompletion: CompletableDeferred<Unit>? = null
@@ -139,9 +135,7 @@ class AiAgentRpcServiceImpl(
     )
 
     // 用户交互 MCP Server（仅包含 AskUserQuestion，权限走 canUseTool 回调）
-    private val userInteractionServer = UserInteractionMcpServer().apply {
-        clientCaller?.let { setClientCaller(it) }
-    }
+    private val userInteractionServer = UserInteractionMcpServer()
 
     private companion object {
         private val GLOBAL_MCP_PROVIDER = AiAgentProvider.CLAUDE
@@ -212,30 +206,14 @@ class AiAgentRpcServiceImpl(
             normalizedOptions = normalizedOptions.copy(resumeSessionId = null)
         }
 
-        val requestedConnectId = normalizedOptions.connectId
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?: throw IllegalArgumentException("connectId is required")
-
-        // 禁止回退：connectId 必须由前端提供；并且在同一个 RPC session 内不能变化（避免跨 tab 串线）
-        if (connectId != null && connectId != requestedConnectId) {
-            throw IllegalStateException("connectId mismatch: current=$connectId, requested=$requestedConnectId")
-        }
-        connectId = requestedConnectId
-        sdkLog.info { "[connect] connectId=$requestedConnectId" }
+        // connectId 现在由 RSocketHandler 分配，与 RSocket 连接生命周期绑定
+        sdkLog.info { "[connect] connectId=$connectId (backend-assigned)" }
 
         disconnectInternal()
 
         val connectOptions = buildConnectOptions(normalizedOptions)
 
-        // 清理该 tabId 对应的旧 MCP 端点，确保新 CLI 的 initialize 创建新 session
-        // 这解决了 transport 复用但 SDK session 不匹配的问题
-        runCatching {
-            McpHttpGateway.unregisterProviderSession(connectOptions.provider, requestedConnectId)
-            sdkLog.info { "[connect] Cleared old MCP endpoints for connectId=$requestedConnectId, provider=${connectOptions.provider}" }
-        }.onFailure { e ->
-            sdkLog.warn { "[connect] Failed to clear old MCP endpoints: ${e.message}" }
-        }
+        // MCP 端点现在复用（不再清理），由 McpHttpGateway.registerServer(reuseExisting=true) 处理
         currentProvider = connectOptions.provider
         sdkLog.info { "[connect] provider=${connectOptions.provider}, model=${connectOptions.model ?: "default"}" }
 
@@ -308,8 +286,8 @@ class AiAgentRpcServiceImpl(
             status = RpcSessionStatus.CONNECTED,
             capabilities = capabilities,
             cwd = projectCwd,
-            // 回显前端传入的 connectId 供前端确认
-            connectId = requestedConnectId
+            // 返回后端分配的 connectId 供前端保存
+            connectId = connectId
         )
     }
 
@@ -728,21 +706,8 @@ class AiAgentRpcServiceImpl(
     }
 
     private suspend fun disconnectInternal() {
-        // 断开客户端并清理 MCP 资源
-        // 确保下次 connect 时能创建新的 MCP session
-        
-        // 先清理 MCP 资源
-        val currentConnectId = connectId?.takeIf { it.isNotBlank() }
-        if (currentConnectId != null) {
-            runCatching {
-                McpHttpGateway.unregisterProviderSession(currentProvider, currentConnectId)
-                sdkLog.info { "[disconnect] Cleared MCP endpoints for connectId=$currentConnectId" }
-            }.onFailure { e ->
-                sdkLog.warn { "[disconnect] Failed to clear MCP endpoints: ${e.message}" }
-            }
-        }
-        
-        // 断开 CLI
+        // 仅断开 CLI 客户端
+        // MCP 端点保持复用，只在 RSocket 断开时由 HttpApiServer 清理
         try {
             client?.disconnect()
         } catch (t: Throwable) {
@@ -844,7 +809,7 @@ class AiAgentRpcServiceImpl(
     ): McpSessionSetup = withContext(McpSystemPromptContext.asContextElement(provider)) {
         val defaults = serviceConfig.claude
         val fallbackBackends = serviceConfig.mcpEnabledBackends
-        val connectId = requireNotNull(this@AiAgentRpcServiceImpl.connectId) { "connectId is required" }
+        val connectId = this@AiAgentRpcServiceImpl.connectId
         sdkLog.info(
             "[MCP] prepareMcpSession: provider=$provider, connectId=$connectId, sessionId=$sessionId, fallbackBackends=${fallbackBackends.joinToString()}"
         )
@@ -895,32 +860,24 @@ class AiAgentRpcServiceImpl(
             mcpProviders.git.getServer()?.let { globalServers["jetbrains_git"] = it }
         }
 
-        // 构建 permissionRequester（仅 Codex 需要 MCP 工具权限检查）
-        val mcpPermissionRequester = if (provider == AiAgentProvider.CODEX) buildPermissionRequester() else null
-
         // 注册 MCP 服务器的辅助函数
-        suspend fun registerMcpServer(
-            name: String,
-            server: McpServer,
-            regProvider: AiAgentProvider,
-            regSessionId: String,
-            scope: String
-        ) {
-            val allowedTools = server.getAllowedTools().map { "mcp__${name}__$it" }.toSet()
-            val url = McpHttpGateway.registerServer(regProvider, regSessionId, name, server, mcpPermissionRequester, allowedTools)
-            // 内部 MCP 路由信息统一通过 URL query 参数传递，不再下发自定义 headers（避免客户端不支持 headers 导致 404）。
-            claudeServers[name] = McpHttpServerConfig(url = url)
-            sdkLog.info("✅ [MCP] HTTP endpoint registered (scope=$scope): $name -> $url")
+        // MCP SDK 自己管理 Transport 和 Session，我们只需注册一次
+        // 通过 X-MCP-Connect-Id header 传递 connectId，使 MCP 工具能回调前端
+        suspend fun registerMcpServer(name: String, server: McpServer, scope: String) {
+            val url = McpHttpGateway.registerServer(name, server)
+            claudeServers[name] = McpHttpServerConfig(
+                url = url,
+                headers = mapOf(McpHttpGateway.HEADER_CONNECT_ID to connectId)
+            )
+            sdkLog.info("✅ [MCP] HTTP endpoint registered (scope=$scope): $name -> $url (connectId=$connectId)")
         }
 
         // 注册 global 和 session MCP 服务器
-        // 注意：global servers 也需要使用当前 provider 注册，以便 Codex 模式下进行权限检查
-        // session servers 使用 connectId 进行路由（不随重连变化）
         globalServers.forEach { (name, server) ->
-            registerMcpServer(name, server, provider, McpHttpGateway.GLOBAL_CONNECT_ID, "global")
+            registerMcpServer(name, server, "global")
         }
         sessionServers.forEach { (name, server) ->
-            registerMcpServer(name, server, provider, connectId, "session")
+            registerMcpServer(name, server, "session")
         }
 
         val internalServers = mutableMapOf<String, McpServer>().apply {

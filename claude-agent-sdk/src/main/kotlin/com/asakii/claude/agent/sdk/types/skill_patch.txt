@@ -1,0 +1,26 @@
+/**
+ * Skill工具使用
+ * 调用已注册的技能（如 /codex, /commit 等）
+ */
+@Serializable
+@SerialName("skill_tool_use")
+data class SkillToolUse(
+    override val id: String,
+    override val name: String,
+    override val input: JsonElement,
+    val skill: String,           // 技能名称，如 "codex"
+    val args: String? = null     // 可选参数
+) : SpecificToolUse {
+    @kotlinx.serialization.Transient
+    override val toolType = ToolType.SKILL
+
+    override fun getTypedParameters(): JsonObject = input.jsonObject
+}
+
+/**
+ * 未知工具使用
+ * 用于处理不认识的工具类型
+ */
+@Serializable
+@SerialName("unknown_tool_use")
+data class UnknownToolUse(

@@ -260,6 +260,75 @@ export function useSessionMessages(
    */
   const hasMessages = computed(() => messages.length > 0)
 
+  // ========== Skill 内容关联 ==========
+
+  /**
+   * 建立 Skill 工具 ID 到 SKILL.md 内容的映射
+   * 基于消息顺序：Skill 工具调用（assistant msg）后的第一个 user 消息
+   */
+  const skillContentMap = computed(() => {
+    const map = new Map<string, string>() // toolUseId -> skillContent
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      if (msg.role !== 'assistant') continue
+
+      // 查找 Skill 工具调用
+      for (const block of msg.content) {
+        if (block.type === 'tool_use' &&
+            ((block as any).toolName === 'Skill' || (block as any).name === 'Skill')) {
+          const toolUseId = (block as any).id
+          // 查找紧随其后的 user 消息
+          const nextMsg = messages[i + 1]
+          if (nextMsg?.role === 'user') {
+            const textBlock = nextMsg.content.find((b: any) => b.type === 'text')
+            if (textBlock && 'text' in textBlock) {
+              map.set(toolUseId, (textBlock as any).text)
+            }
+          }
+        }
+      }
+    }
+    return map
+  })
+
+  /**
+   * 获取被 Skill 工具关联的 user 消息 ID 集合（这些消息需要隐藏）
+   */
+  const skillContentMessageIds = computed(() => {
+    const ids = new Set<string>()
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      if (msg.role !== 'assistant') continue
+
+      for (const block of msg.content) {
+        if (block.type === 'tool_use' &&
+            ((block as any).toolName === 'Skill' || (block as any).name === 'Skill')) {
+          const nextMsg = messages[i + 1]
+          if (nextMsg?.role === 'user') {
+            ids.add(nextMsg.id)
+          }
+        }
+      }
+    }
+    return ids
+  })
+
+  /**
+   * 判断消息是否为 Skill 内容消息（需要隐藏）
+   */
+  function isSkillContentMessage(msgId: string): boolean {
+    return skillContentMessageIds.value.has(msgId)
+  }
+
+  /**
+   * 获取 Skill 工具的关联内容
+   */
+  function getSkillContent(toolUseId: string): string | undefined {
+    return skillContentMap.value.get(toolUseId)
+  }
+
   // ========== 消息处理核心方法 ==========
 
   /**
@@ -1032,7 +1101,7 @@ export function useSessionMessages(
     if (messageForDisplay.role === 'assistant') {
       ensureAssistantDisplayId(messageForDisplay)
     }
-    const newDisplayItems = convertMessageToDisplayItems(messageForDisplay, tools.pendingToolCalls)
+    const newDisplayItems = convertMessageToDisplayItems(messageForDisplay, tools.pendingToolCalls, getSkillContent)
     if (newDisplayItems.length === 0) return
 
     const allDisplayItems = displayStore.getWindow(STORE_RETENTION)
@@ -1443,6 +1512,25 @@ export function useSessionMessages(
       const hasToolUse = message.content.some((block: ContentBlock) => block.type === 'tool_use')
       const hasText = message.content.some((block: ContentBlock) => block.type === 'text')
 
+      // 🔍 调试日志：打印 user 消息中的 tool_result 详情
+      if (hasToolResult) {
+        const toolResults = message.content.filter((block: ContentBlock) => block.type === 'tool_result')
+        log.info('[useSessionMessages] user 消息包含 tool_result:', {
+          messageId: message.id,
+          toolResultCount: toolResults.length,
+          toolResults: toolResults.map((r: any) => ({
+            tool_use_id: r.tool_use_id,
+            is_error: r.is_error,
+            contentType: typeof r.content,
+            contentPreview: typeof r.content === 'string' 
+              ? r.content.substring(0, 100) 
+              : Array.isArray(r.content) 
+                ? `Array[${r.content.length}]` 
+                : JSON.stringify(r.content)?.substring(0, 100)
+          }))
+        })
+      }
+
       // 压缩摘要消息：直接添加到消息列表
       if ((message as any).isCompactSummary === true) {
         log.info('[useSessionMessages] 添加压缩摘要消息')
@@ -1459,6 +1547,14 @@ export function useSessionMessages(
       // 纯 tool_use 的 user 消息：忽略
       if (hasToolUse && !hasText && !hasToolResult) {
         log.debug('[useSessionMessages] 忽略纯 tool_use 的 user 消息')
+        return
+      }
+
+      // Skill 内容消息：已关联到 Skill 工具卡片，不单独显示
+      if (isSkillContentMessage(message.id)) {
+        log.debug('[useSessionMessages] 忽略 Skill 内容消息（已关联到工具卡片）:', message.id)
+        // 仍然保存消息用于状态追踪，但不生成 DisplayItem
+        addMessage(message)
         return
       }
 
@@ -1890,9 +1986,19 @@ export function useSessionMessages(
   function processToolResults(content: ContentBlock[]): void {
     const toolResults = content.filter((block): block is ToolResultBlock => block.type === 'tool_result')
 
+    log.info(`[processToolResults] 开始处理 ${toolResults.length} 个 tool_result`)
+
     let hasUpdates = false
     for (const result of toolResults) {
+      log.info(`[processToolResults] 处理 tool_result:`, {
+        tool_use_id: result.tool_use_id,
+        is_error: result.is_error,
+        hasContent: !!result.content
+      })
+      
       const success = tools.updateToolResult(result.tool_use_id, result)
+      log.info(`[processToolResults] updateToolResult 结果: ${success ? '成功' : '失败'}, tool_use_id=${result.tool_use_id}`)
+      
       if (success) {
         hasUpdates = true
         // 不再自动执行 IDEA 操作
@@ -1902,6 +2008,7 @@ export function useSessionMessages(
 
     // 强制触发 Vue 响应式更新
     if (hasUpdates) {
+      log.info(`[processToolResults] 触发 displayItems 更新`)
       triggerDisplayItemsUpdate()
     }
   }
@@ -2024,6 +2131,28 @@ export function useSessionMessages(
   }
 
   /**
+   * 从消息数组中检测 Skill 内容消息 ID 集合
+   * 基于消息顺序：Skill 工具调用（assistant msg）后的第一个 user 消息
+   */
+  function detectSkillContentMessageIds(msgList: Message[]): Set<string> {
+    const ids = new Set<string>()
+    for (let i = 0; i < msgList.length; i++) {
+      const msg = msgList[i]
+      if (msg.role !== 'assistant') continue
+      for (const block of msg.content) {
+        if (block.type === 'tool_use' &&
+            ((block as any).toolName === 'Skill' || (block as any).name === 'Skill')) {
+          const nextMsg = msgList[i + 1]
+          if (nextMsg?.role === 'user') {
+            ids.add(nextMsg.id)
+          }
+        }
+      }
+    }
+    return ids
+  }
+
+  /**
    * 批量前插消息（用于历史回放）
    */
   function prependMessagesBatch(msgs: Message[]): void {
@@ -2045,7 +2174,16 @@ export function useSessionMessages(
       }
     })
 
-    const displayBatch = newMsgs.flatMap(m => convertMessageToDisplayItems(m, tools.pendingToolCalls))
+    // 先添加消息到数组，确保 skillContentMap computed 能检测到
+    for (let i = newMsgs.length - 1; i >= 0; i -= 1) {
+      messages.unshift(newMsgs[i])
+    }
+
+    // 检测并过滤 Skill 内容消息（不生成独立 DisplayItem）
+    const skillContentIds = detectSkillContentMessageIds(messages)
+    const msgsForDisplay = newMsgs.filter(m => !skillContentIds.has(m.id))
+
+    const displayBatch = msgsForDisplay.flatMap(m => convertMessageToDisplayItems(m, tools.pendingToolCalls, getSkillContent))
     // 历史消息中的用户消息设置 hint 样式（禁止编辑，md 渲染）
     displayBatch.forEach(item => {
       if (isDisplayUserMessage(item)) {
@@ -2053,10 +2191,6 @@ export function useSessionMessages(
       }
     })
     prependDisplayItems(displayBatch)
-    // 再更新 messages 状态（保持原顺序）
-    for (let i = newMsgs.length - 1; i >= 0; i -= 1) {
-      messages.unshift(newMsgs[i])
-    }
   }
 
   /**
@@ -2081,7 +2215,14 @@ export function useSessionMessages(
       }
     })
 
-    const displayBatch = newMsgs.flatMap(m => convertMessageToDisplayItems(m, tools.pendingToolCalls))
+    // 先添加消息到数组，确保 skillContentMap computed 能检测到
+    messages.push(...newMsgs)
+
+    // 检测并过滤 Skill 内容消息（不生成独立 DisplayItem）
+    const skillContentIds = detectSkillContentMessageIds(messages)
+    const msgsForDisplay = newMsgs.filter(m => !skillContentIds.has(m.id))
+
+    const displayBatch = msgsForDisplay.flatMap(m => convertMessageToDisplayItems(m, tools.pendingToolCalls, getSkillContent))
     // 历史/后端消息中的用户消息设置 hint 样式（禁止编辑，md 渲染）
     displayBatch.forEach(item => {
       if (isDisplayUserMessage(item)) {
@@ -2089,7 +2230,6 @@ export function useSessionMessages(
       }
     })
     pushDisplayItems(displayBatch)
-    messages.push(...newMsgs)
   }
 
   /**
@@ -2248,7 +2388,12 @@ export function useSessionMessages(
     // 窗口化辅助（供历史前插调用）
     pushDisplayItems,
     prependDisplayItems,
-    refreshDisplayWindow
+    refreshDisplayWindow,
+
+    // Skill 内容关联
+    skillContentMap,
+    isSkillContentMessage,
+    getSkillContent
   }
 }
 

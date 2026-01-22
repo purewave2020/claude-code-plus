@@ -111,7 +111,7 @@ const enhancedMessage = computed((): EnhancedMessage => {
 
       // 🔧 使用 resolveToolStatus 从消息列表实时计算工具状态
       const statusInfo = resolveToolStatus(block.id, messages)
-      const toolResult = statusInfo.result?.content
+      const toolResult = statusInfo.result
 
       // 将状态转换为 EnhancedMessage 期望的格式
       const status = toToolCallStatus(statusInfo.status)
@@ -129,8 +129,8 @@ const enhancedMessage = computed((): EnhancedMessage => {
           result: toolResult ? {
             type: 'tool_result',
             tool_use_id: block.id,
-            content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
-            is_error: status === ToolCallStatus.FAILED
+            content: toolResult.content,
+            is_error: toolResult.is_error ?? status === ToolCallStatus.FAILED
           } : undefined,
           startTime: msg.timestamp,
           endTime: toolResult ? msg.timestamp : undefined

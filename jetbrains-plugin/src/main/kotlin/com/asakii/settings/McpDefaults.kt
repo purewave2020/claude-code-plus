@@ -502,7 +502,7 @@ object McpDefaults {
         get() = McpInstructions.load(McpInstructions.USER_INTERACTION)
 
     /**
-     * JetBrains IDE MCP 默认提示词
+     * JetBrains LSP MCP 默认提示词
      * 使用国际化资源加载
      */
     val JETBRAINS_INSTRUCTIONS: String
@@ -1135,7 +1135,7 @@ object McpAutoApprovedDefaults {
     val JETBRAINS_FILE = listOf("ReadFile")
     
     /**
-     * JetBrains IDE MCP (LSP) 默认自动批准工具
+     * JetBrains LSP MCP 默认自动批准工具
      * 所有工具都是只读查询或安全的重构操作
      */
     val JETBRAINS_LSP = listOf(

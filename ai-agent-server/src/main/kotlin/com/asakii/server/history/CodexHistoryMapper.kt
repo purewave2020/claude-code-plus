@@ -446,9 +446,9 @@ object CodexHistoryMapper {
     private fun McpToolCallResult?.toResultJson(): JsonElement? {
         if (this == null) return null
         if (structuredContent != null) return structuredContent
-        // 直接返回 content，避免嵌套 { content: { content: [...] } }
+        // 统一返回数组格式，与 MCP 协议保持一致
         if (content.isNotEmpty()) {
-            return if (content.size == 1) content.first() else buildJsonArray { content.forEach { add(it) } }
+            return buildJsonArray { content.forEach { add(it) } }
         }
         return null
     }

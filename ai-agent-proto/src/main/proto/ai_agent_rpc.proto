@@ -732,7 +732,7 @@ message IdeSettings {
   string default_model_name = 2;         // 默认模型显示名称（如 "Opus 4.5"）
   bool default_bypass_permissions = 3;   // 默认启用 ByPass
   bool enable_user_interaction_mcp = 4;  // 启用用户交互 MCP
-  bool enable_jetbrains_mcp = 5;         // 启用 JetBrains IDE MCP
+  bool enable_jetbrains_mcp = 5;         // 启用 JetBrains LSP MCP
   bool include_partial_messages = 6;     // 在流中包含部分消息
   // 思考配置
   string default_thinking_level = 7;     // 默认思考等级（旧字段，向后兼容）

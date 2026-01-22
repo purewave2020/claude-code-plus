@@ -38,6 +38,7 @@ object ToolTypeParser {
                 "ExitPlanMode" -> parseExitPlanModeTool(block)
                 "ListMcpResourcesTool" -> parseListMcpResourcesTool(block)
                 "ReadMcpResourceTool" -> parseReadMcpResourceTool(block)
+                "Skill" -> parseSkillTool(block)
                 else -> {
                     // 检查是否是MCP工具
                     if (block.name.startsWith("mcp__")) {
@@ -377,6 +378,21 @@ object ToolTypeParser {
                 ?: throw MessageParsingException("Missing 'server' in ReadMcpResource tool"),
             uri = params["uri"]?.jsonPrimitive?.content
                 ?: throw MessageParsingException("Missing 'uri' in ReadMcpResource tool")
+        )
+    }
+
+    /**
+     * 解析Skill工具
+     */
+    private fun parseSkillTool(block: ToolUseBlock): SkillToolUse {
+        val params = block.input.jsonObject
+        return SkillToolUse(
+            id = block.id,
+            name = block.name,
+            input = block.input,
+            skill = params["skill"]?.jsonPrimitive?.content
+                ?: throw MessageParsingException("Missing 'skill' in Skill tool"),
+            args = params["args"]?.jsonPrimitive?.contentOrNull
         )
     }
 

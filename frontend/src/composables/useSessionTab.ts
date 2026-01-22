@@ -230,8 +230,8 @@ export function useSessionTab(initialOrder: number = 0) {
 
     // ========== Tab 基础信息 ==========
     const tabId = `tab-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
-    /** 永久连接标识，用于 MCP 路由（不随重连变化），复用 tabId */
-    const connectId = tabId
+    /** 永久连接标识，用于 MCP 路由（由后端分配，与 RSocket 连接生命周期绑定） */
+    const connectId = ref<string | null>(null)
     const sessionId = ref<string | null>(null)
     const projectPath = ref<string | null>(null)
     const name = ref('新会话')
@@ -866,9 +866,8 @@ export function useSessionTab(initialOrder: number = 0) {
                 // 固定开启重放用户消息
                 replayUserMessages: true,
                 // 统一协议：传递 provider 参数，后端根据此参数路由到对应的 AI Agent
-                provider: (resolvedOptions as any).provider || backendType.value,
-                // 永久连接标识，用于 MCP 路由（不随重连变化）
-                connectId: connectId
+                provider: (resolvedOptions as any).provider || backendType.value
+                // connectId 现在由后端分配，不再前端传递
             }
             if (backendType.value === 'codex') {
                 if (settingsStore.settings.codexSandboxMode) {
@@ -904,6 +903,8 @@ export function useSessionTab(initialOrder: number = 0) {
             // 保存会话实例和状态
             rsocketSession.value = session
             sessionId.value = newSessionId
+            // 保存后端分配的 connectId（用于 MCP 路由）
+            connectId.value = session.connectId
             connectionState.capabilities = session.capabilities
             connectionState.status = ConnectionStatus.CONNECTED
             connectionState.lastError = null
@@ -2053,13 +2054,12 @@ export function useSessionTab(initialOrder: number = 0) {
             session.onEvent(handleBackendEvent)
             session.onConnectionStatusChange(handleBackendConnectionStatus)
 
-            // 连接选项
+            // 连接选项（connectId 由后端分配，不再前端传递）
             const connectOptions = {
                 config,
                 continueConversation: resolvedOptions.continueConversation,
                 resumeSessionId: resolvedOptions.resumeSessionId,
-                projectPath: projectPath.value || undefined,
-                connectId: connectId
+                projectPath: projectPath.value || undefined
             }
 
             // 连接
@@ -2358,7 +2358,7 @@ export function useSessionTab(initialOrder: number = 0) {
     return {
         // Tab 标识
         tabId,
-        /** 永久连接标识，用于 MCP 路由（不随重连变化） */
+        /** 后端分配的连接标识，用于 MCP 路由（与 RSocket 连接生命周期绑定） */
         connectId,
 
         // 基础信息（响应式）

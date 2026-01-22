@@ -21,7 +21,7 @@ interface LoggerConfig {
 const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV
 
 const config: LoggerConfig = {
-  level: isDev ? LogLevel.DEBUG : LogLevel.INFO,
+  level: LogLevel.DEBUG,
   enabledModules: null,
   timestamp: false
 }
@@ -66,6 +66,35 @@ function formatMessage(module: string | undefined, message: string): string {
   return parts.join(' ')
 }
 
+function safeStringify(value: unknown): string {
+  try {
+    const seen = new WeakSet<object>()
+    return JSON.stringify(value, (_key, val) => {
+      if (typeof val === 'bigint') {
+        return val.toString()
+      }
+      if (typeof val === 'object' && val !== null) {
+        if (seen.has(val)) return '[Circular]'
+        seen.add(val)
+      }
+      return val
+    })
+  } catch {
+    return String(value)
+  }
+}
+
+function formatArgs(args: unknown[]): unknown[] {
+  if (args.length === 0) return args
+  return args.map(arg => {
+    if (arg instanceof Error) return arg
+    if (typeof arg === 'object' && arg !== null) {
+      return safeStringify(arg)
+    }
+    return arg
+  })
+}
+
 /**
  * 创建模块专用的 logger
  */
@@ -73,25 +102,25 @@ export function createLogger(module: string) {
   return {
     debug(message: string, ...args: any[]) {
       if (shouldLog(LogLevel.DEBUG, module)) {
-        console.debug(formatMessage(module, message), ...args)
+        console.debug(formatMessage(module, message), ...formatArgs(args))
       }
     },
 
     info(message: string, ...args: any[]) {
       if (shouldLog(LogLevel.INFO, module)) {
-        console.info(formatMessage(module, message), ...args)
+        console.info(formatMessage(module, message), ...formatArgs(args))
       }
     },
 
     warn(message: string, ...args: any[]) {
       if (shouldLog(LogLevel.WARN, module)) {
-        console.warn(formatMessage(module, message), ...args)
+        console.warn(formatMessage(module, message), ...formatArgs(args))
       }
     },
 
     error(message: string, ...args: any[]) {
       if (shouldLog(LogLevel.ERROR, module)) {
-        console.error(formatMessage(module, message), ...args)
+        console.error(formatMessage(module, message), ...formatArgs(args))
       }
     }
   }
@@ -111,25 +140,25 @@ export const loggers = {
 export const log = {
   debug(message: string, ...args: any[]) {
     if (shouldLog(LogLevel.DEBUG)) {
-      console.debug(message, ...args)
+      console.debug(message, ...formatArgs(args))
     }
   },
 
   info(message: string, ...args: any[]) {
     if (shouldLog(LogLevel.INFO)) {
-      console.info(message, ...args)
+      console.info(message, ...formatArgs(args))
     }
   },
 
   warn(message: string, ...args: any[]) {
     if (shouldLog(LogLevel.WARN)) {
-      console.warn(message, ...args)
+      console.warn(message, ...formatArgs(args))
     }
   },
 
   error(message: string, ...args: any[]) {
     if (shouldLog(LogLevel.ERROR)) {
-      console.error(message, ...args)
+      console.error(message, ...formatArgs(args))
     }
   }
 }

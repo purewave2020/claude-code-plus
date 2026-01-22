@@ -10,7 +10,7 @@ import com.asakii.rpc.proto.QuestionItem as ProtoQuestionItem
 import com.asakii.rpc.proto.QuestionOption as ProtoQuestionOption
 import com.asakii.server.mcp.schema.SchemaValidator
 import com.asakii.server.mcp.schema.ValidationResult
-import com.asakii.server.rpc.ClientCaller
+import com.asakii.server.rpc.ClientCallerRegistry
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -146,7 +146,6 @@ private val mcpLogger = getLogger("UserInteractionMcpServer")
     description = "用户交互工具服务器，提供向用户提问等功能"
 )
 class UserInteractionMcpServer : McpServerBase() {
-    private var clientCaller: ClientCaller? = null
     private var timeoutMs: Long? = null
     private var instructionsByBackend: Map<String, String>? = null
 
@@ -233,11 +232,6 @@ The user's response will be returned to you through the same tool.
         }
     }
 
-    fun setClientCaller(caller: ClientCaller) {
-        this.clientCaller = caller
-        mcpLogger.info { "✅ [UserInteractionMcpServer] ClientCaller 已设置" }
-    }
-
     fun setTimeoutMs(timeoutMs: Long?) {
         this.timeoutMs = timeoutMs
     }
@@ -250,8 +244,9 @@ The user's response will be returned to you through the same tool.
     }
 
     private suspend fun handleAskUserQuestionJson(arguments: JsonObject): ToolResult {
-        val caller = clientCaller
-            ?: return ToolResult.error("ClientCaller 未设置，无法与前端通信")
+        val connectId = currentConnectId()
+        val caller = connectId?.let { ClientCallerRegistry.get(it) }
+            ?: return ToolResult.error("无法获取 ClientCaller，connectId=$connectId")
 
         mcpLogger.info { "📩 [AskUserQuestion] 收到工具调用，参数: $arguments" }
 

@@ -12,14 +12,14 @@ claude-agent-sdk/cli-patches/
 │   ├── 001-run-in-background.js
 │   ├── 002-chrome-status.js
 │   ├── 003-parent-uuid.js
-│   ├── 004-mcp-reconnect.js    # MCP 重连控制
+│   ├── 004-mcp-server-control.js  # MCP 服务器控制（重连/禁用/启用）
 │   ├── 005-mcp-tools.js
-│   ├── 006-mcp-disable-enable.js # MCP 禁用/启用控制
 │   ├── 007-run-to-background.js
 │   ├── 008-get-capabilities.js
+│   ├── 009-skill-parent-tool-use-id.js  # Skill 消息 parent_tool_use_id 输出
 │   └── index.js
 ├── patch-cli.js                # 补丁应用主程序
-├── claude-cli-2.1.12.js        # 官方 CLI 源码
+├── claude-cli-*.js             # 官方 CLI 源码（版本号动态）
 └── analyze-*.js                # 分析脚本
 ```
 
@@ -63,12 +63,12 @@ traverse(ast, {
 补丁通过 `context.foundVariables` 对象在补丁之间共享发现的变量名：
 
 ```javascript
-// 004-mcp-reconnect.js 中发现并存储
+// 004-mcp-server-control.js 中发现并存储
 context.foundVariables.mcpConfigsVar = configsVarName;  // "J"
 context.foundVariables.mcpClientsVar = clientsVarName;  // "S"
 context.foundVariables.reconnectFn = reconnectFnName;   // "x2A"
 
-// 006-mcp-disable-enable.js 中使用
+// 其他补丁中使用
 const configsVarName = context.foundVariables?.mcpConfigsVar;
 const clientsVarName = context.foundVariables?.mcpClientsVar;
 const reconnectFnName = context.foundVariables?.reconnectFn;
@@ -76,34 +76,25 @@ const reconnectFnName = context.foundVariables?.reconnectFn;
 
 ## MCP 相关补丁
 
-### 004-mcp-reconnect.js
+### 004-mcp-server-control.js
 
-**功能**: 添加 MCP 服务器重连控制端点
+**功能**: 添加 MCP 服务器控制端点（重连/禁用/启用）
 
-**控制命令**: `mcp_reconnect`
+**控制命令**: `mcp_reconnect`, `mcp_disable`, `mcp_enable`
 
 **发现的变量**:
 - `reconnectFn`: 重连函数名 (如 `x2A`)
 - `mcpConfigsVar`: configs 变量名 (如 `J`)
 - `mcpClientsVar`: clients 变量名 (如 `S`)
+- `checkDisabledFn`: 检查禁用状态函数 (如 `lPA`)
+- `updateDisabledFn`: 更新禁用配置函数 (如 `CY0`)
+- `disconnectFn`: 断开连接函数 (如 `gm`)
 
 **发现逻辑**:
 1. 查找 `mcp_set_servers` 处理位置
 2. 在其中查找 `{configs:X,clients:Y,...}` 对象表达式
 3. 提取 X 作为 configs 变量名，Y 作为 clients 变量名
-
-### 006-mcp-disable-enable.js
-
-**功能**: 添加 MCP 服务器禁用/启用控制端点
-
-**控制命令**: `mcp_disable`, `mcp_enable`
-
-**依赖**: 使用 004 补丁发现的 `mcpConfigsVar` 和 `mcpClientsVar`
-
-**发现的变量**:
-- `checkDisabledFn`: 检查禁用状态函数 (如 `lPA`)
-- `updateDisabledFn`: 更新禁用配置函数 (如 `CY0`)
-- `disconnectFn`: 断开连接函数 (如 `gm`)
+4. 查找 `disabledMcpServers` 相关函数获取禁用/启用控制函数
 
 ## CLI 2.1.12 变量映射
 
@@ -163,9 +154,15 @@ node patch-cli.js claude-cli-2.1.12.js patched-cli.js
 
 ## 变更历史
 
+### 2026-01-21
+
+- **重构**: 将 004-mcp-reconnect.js 和 006-mcp-disable-enable.js 合并为 004-mcp-server-control.js
+- **删除**: 移除 010-skill-id2-assistant-fix.js（不再需要）
+- **文档**: 更新补丁文档以反映当前补丁结构
+
 ### 2026-01-20
 
-- **修复**: 004-mcp-reconnect.js 和 006-mcp-disable-enable.js 补丁中的硬编码变量名问题
+- **修复**: MCP 相关补丁中的硬编码变量名问题
 - **改进**: 添加动态变量发现机制，从 `mcp_set_servers` 处理代码中提取 `configs` 和 `clients` 变量名
 - **影响**: 修复 `user_interaction` MCP 服务器连接失败问题 ("y is not defined" 错误)
 
@@ -246,6 +243,8 @@ Skill ������  �����е���:
 ### 2026-01-21
 
 - **分析**: Skill 工具的 `parent_tool_use_id` 输出问题
+- **新增**: 补丁 `009-skill-parent-tool-use-id.js` - 修改 Ts5 (Ls5) 函数输出
+- **新增**: 补丁 `010-skill-id2-assistant-fix.js` - 修复 `id2` 函数只为 user 消息添加 sourceToolUseID 的问题
 
 ---
 
@@ -262,53 +261,90 @@ SDK 输出的消息中，Task 子代理的消息有正确的 `parent_tool_use_id
 - **Task 定义**: `P6 = "Task"` (line 181)
 - **Skill 定义**: `xV = "Skill"` (line 2530)
 
-**parent_tool_use_id 属性统订**:
+**parent_tool_use_id 属性统计**:
 - 非 null 值: 3 处 (均为 `A.parentToolUseID`)
 - null 值: 14 处 (硬编码)
 
 **sourceToolUseID 访问**: line 3090
 
-### 消息输出核心函数 (Ls5)
+### 消息输出核心函数 (Ts5/Ls5)
 
 位置: line 2663 附近
 
 - 普通 `assistant`/`user` 消息：硬编码 `parent_tool_use_id: null`
 - `progress` 类型的 `agent_progress`：使用 `A.parentToolUseID`
 
-### 核本原因  
+### 根本原因
 
 | | Task | Skill |
 |---|------|-------|
 | 是子会话 | Yes | Yes |
 | 消息输出路径 | `progress` -> `agent_progress` | 普通 `assistant`/`user` |
-| parent_tool_use_id | `A.parentToolUseID` (有值) | 硫叆码 `null` |
+| parent_tool_use_id | `A.parentToolUseID` (有值) | 硬编码 `null` |
 | 内部追踪机制 | `parentToolUseID` | `sourceToolUseID` |
 
 **Task 子代理**: 通过 `progress` 类型的 `agent_progress` 事件发送消息，携带 `parentToolUseID`。
 
-**Skill**: 内部通过 `Nd2` 函数给消息添加了 `sourceToolUseID`，但在 `Ls5` 函数输出时被丢弃，硬编码为 `null`。
+**Skill**: 内部通过 `id2` 函数给消息添加 `sourceToolUseID`，但在 `Ts5` 函数输出时被丢弃，硬编码为 `null`。
 
 ### Skill 内部追踪机制
 
-`Nd2` 函数 (位于 line 2530 附近)：
-- 为 `user` 类型消息添加 `sourceToolUseID` 属性
-- Skill 工具在 `call()` 方法中调用此函数
+**id2 函数** - 为 Skill 内部消息添加 `sourceToolUseID`：
+
+```javascript
+// 原始实现（有 bug）
+function id2(A, Q) {
+  if (!Q) return A;
+  return A.map(B => {
+    if (B.type === "user") return {...B, sourceToolUseID: Q};
+    return B;  // assistant 消息未添加 sourceToolUseID！
+  });
+}
+```
+
+**问题**: `id2` 函数只为 `user` 类型消息添加 `sourceToolUseID`，`assistant` 消息被遗漏。
 
 ### 设计不一致
 
 这是 CLI 的一个 **设计不一致** 或 **遗漏**：
 - Task 和 Skill 都是子会话
 - 两者内部都有追踪机制
-
 - 但只有 Task 在输出时正确传递了 `parent_tool_use_id`
+- Skill 的 `id2` 函数遗漏了对 `assistant` 消息的处理
 
 ### 补丁方案
 
-**目标**: 在 `Ls5` 函数中，检查信息是否有 `sourceToolUseID`，如果有则作为 `parent_tool_use_id`。
+需要 **两个补丁** 配合修复此问题：
 
-**修改点**: 将硬编码的 `parent_tool_use_id:null` 改为动态检查 `Q.sourceToolUseID || null`
+#### 1. 补丁 010-skill-id2-assistant-fix.js (priority: 55)
 
-**待实现**: 补丁文件 `008-skill-parent-tool-use-id.js`
+**目标**: 修复 `id2` 函数，使其同时为 `user` 和 `assistant` 消息添加 `sourceToolUseID`
+
+**修改**:
+```javascript
+// 修改后
+function id2(A, Q) {
+  if (!Q) return A;
+  return A.map(B => {
+    if (B.type === "user" || B.type === "assistant")  // 添加 assistant
+      return {...B, sourceToolUseID: Q};
+    return B;
+  });
+}
+```
+
+#### 2. 补丁 009-skill-parent-tool-use-id.js (priority: 60)
+
+**目标**: 在 `Ts5` 函数输出时，使用 `sourceToolUseID` 作为 `parent_tool_use_id`
+
+**修改**: 将 `parent_tool_use_id: null` 改为 `parent_tool_use_id: Q.sourceToolUseID || null`
+
+### 验证方法
+
+运行 Skill 工具后，检查 SDK 输出的消息：
+- `assistant` 消息应有非 null 的 `parent_tool_use_id`
+- `user` 消息应有非 null 的 `parent_tool_use_id`
+- 两者的 `parent_tool_use_id` 应等于 Skill 工具调用的 tool_use_id
 
 
 ---
@@ -383,7 +419,7 @@ node syntax-validator.mjs [enhanced-cli-path]
 
 | 补丁 | 检查方法 | 官方已修复标志 |
 |------|----------|---------------|
-| 009-skill-parent-tool-use-id | 检查 Ls5 函数 | parent_tool_use_id 使用动态值 |
+| 009-skill-parent-tool-use-id | 检查 id2 和 Ts5 函数 | assistant 消息有 sourceToolUseID，输出使用动态值 |
 | 007-run-to-background | 检查控制端点 | 官方支持后台化 |
 | 004-mcp-reconnect | 检查控制端点 | 官方支持 MCP 重连 |
 

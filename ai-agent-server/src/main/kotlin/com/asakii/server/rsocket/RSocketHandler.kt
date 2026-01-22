@@ -4,10 +4,10 @@ import com.asakii.rpc.api.AiAgentRpcService
 import com.asakii.rpc.api.IdeTools
 import com.asakii.rpc.api.RpcMessage as RpcMessageApi
 import com.asakii.rpc.proto.*
-import com.asakii.server.mcp.McpHttpGateway
 import com.asakii.server.mcp.McpProviders
 import com.asakii.server.rpc.AiAgentRpcServiceImpl
 import com.asakii.server.rpc.ClientCaller
+import com.asakii.server.rpc.ClientCallerRegistry
 import com.asakii.server.rsocket.ProtoConverter.toProto
 import com.asakii.server.rsocket.ProtoConverter.toRpc
 import com.google.protobuf.ByteString
@@ -144,6 +144,10 @@ class RSocketHandler(
             }
         }
 
+        // 注册 ClientCaller 到全局注册表，绑定到 handler 的生命周期
+        // 当 handler 关闭时，ClientCallerRegistry 会自动移除此条目
+        ClientCallerRegistry.register(connectId, clientCaller, handler)
+
         // 监听连接关闭，自动清理 SDK 资源（非阻塞）
         handler.coroutineContext[Job]?.invokeOnCompletion { cause ->
             wsLog.info("🔌 [RSocket] [$connectId] 连接关闭，自动清理资源 (cause: ${cause?.message ?: "正常关闭"})")
@@ -156,11 +160,8 @@ class RSocketHandler(
                     wsLog.info("✅ [RSocket] [$connectId] SDK 资源已清理")
                 } catch (e: Exception) {
                     wsLog.warn { "⚠️ [RSocket] [$connectId] 清理 SDK 资源时出错: ${e.message}" }
-                } finally {
-                    // SDK 会话清理完成后，再清理 MCP 端点
-                    McpHttpGateway.unregisterSession(connectId)
-                    wsLog.info("✅ [RSocket] [$connectId] MCP 端点已清理")
                 }
+                // 注意：ClientCaller 的清理由 ClientCallerRegistry 的 invokeOnCompletion 自动处理
             }
         }
 

@@ -37,6 +37,7 @@ import com.asakii.server.history.HistoryJsonlLoader
 import com.asakii.server.rpc.AiAgentRpcServiceImpl
 import com.asakii.rpc.api.RpcHistorySessionsResult
 import com.asakii.server.mcp.McpHttpGateway
+import com.asakii.server.rpc.ClientCallerRegistry
 import com.asakii.server.mcp.McpProviders
 import com.asakii.server.rsocket.ProtoConverter.toProto
 import com.asakii.server.codex.CodexBackendProvider
@@ -161,7 +162,7 @@ class HttpApiServer(
                 rSocket("rsocket") {
                     // 生成唯一 connectId（带碰撞检测）
                     var connectId = java.util.UUID.randomUUID().toString()
-                    while (McpHttpGateway.hasConnectId(connectId)) {
+                    while (ClientCallerRegistry.contains(connectId)) {
                         connectId = java.util.UUID.randomUUID().toString()
                     }
                     logger.info { "🔌 [RSocket] 新连接: connectId=$connectId" }

@@ -38,6 +38,9 @@ bin/
 runIde-console.log
 pty-logs/
 
+### Codex Skill ###
+.codex-skill/
+
 ### Gradle ###
 .gradle/
 build/

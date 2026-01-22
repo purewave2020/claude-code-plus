@@ -160,6 +160,17 @@ export function useSessionTools() {
     toolCall.endTime = Date.now()
     toolCall.result = result as ToolResult
 
+    // 🔍 调试日志：打印更新后的工具结果
+    log.info(`[useSessionTools] 更新工具结果成功:`, {
+      toolUseId,
+      toolName: toolCall.toolName,
+      status: toolCall.status,
+      isError,
+      resultContent: typeof (result as any).content === 'string'
+        ? (result as any).content?.substring(0, 200)
+        : JSON.stringify((result as any).content)?.substring(0, 200)
+    })
+
     // 向后兼容：同时更新 toolCallsMap
     const state = toolCallsMap.get(toolUseId)
     if (state) {
@@ -175,7 +186,6 @@ export function useSessionTools() {
       emitter.emit('toolCompleted', toolCall)
     }
 
-    log.debug(`[useSessionTools] 更新工具结果: ${toolUseId}, 状态: ${toolCall.status}`)
     return true
   }
 

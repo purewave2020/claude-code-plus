@@ -131,6 +131,10 @@ const resultBlocks = computed<any[]>(() => {
     }
     return []
   }
+  // 处理单个 MCP 结果对象（如 { type: 'text', text: '...' }）
+  if (content && typeof content === 'object' && content.type) {
+    return [content]
+  }
   return []
 })
 

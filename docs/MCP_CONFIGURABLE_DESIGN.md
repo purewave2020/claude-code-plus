@@ -20,7 +20,7 @@ MCP Settings (List-based UI)
 │ Status   │ Name                 │ Configuration   │ Level       │
 ├──────────┼──────────────────────┼─────────────────┼─────────────┤
 │ [✓]      │ User Interaction MCP │ Allows Claude...│ Built-in    │
-│ [✓]      │ JetBrains IDE MCP    │ Code search...  │ Built-in    │
+│ [✓]      │ JetBrains LSP MCP    │ Code search...  │ Built-in    │
 │ [ ]      │ Context7 MCP         │ Library docs... │ Built-in    │
 │ [✓]      │ playwright           │ command: docker │ Global      │
 │ [✓]      │ postgres             │ command: docker │ Project     │
@@ -57,7 +57,7 @@ MCP Settings (List-based UI)
 
 ---
 
-### JetBrains IDE MCP
+### JetBrains LSP MCP
 
 **功能**: 提供快速代码搜索、文件索引和符号查找（使用 IDE 内置索引）
 
@@ -389,7 +389,7 @@ if (defaults.enableUserInteractionMcp) {
 
 **系统提示词注入**: 通过 `McpDefaults.USER_INTERACTION_INSTRUCTIONS` 或用户自定义值
 
-#### JetBrains IDE MCP
+#### JetBrains LSP MCP
 
 ```kotlin
 // AiAgentRpcServiceImpl.kt

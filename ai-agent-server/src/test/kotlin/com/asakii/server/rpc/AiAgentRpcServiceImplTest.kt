@@ -13,7 +13,7 @@ class AiAgentRpcServiceImplTest {
     @Test
     fun buildAppServerConfigOverrides_includesOnlyFeatures() {
         val ideTools = IdeToolsDefault(".")
-        val service = AiAgentRpcServiceImpl(ideTools)
+        val service = AiAgentRpcServiceImpl(ideTools, connectId = "test-connect-id")
 
         val configOverrides = mapOf(
             "features.shell_tool" to JsonPrimitive(false),
@@ -38,7 +38,7 @@ class AiAgentRpcServiceImplTest {
     @Test
     fun buildCodexMcpThreadConfigOverrides_includesHttpHeaders() {
         val ideTools = IdeToolsDefault(".")
-        val service = AiAgentRpcServiceImpl(ideTools)
+        val service = AiAgentRpcServiceImpl(ideTools, connectId = "test-connect-id")
 
         val url = "https://mcp.context7.com/mcp"
         val mcpServers = mapOf(

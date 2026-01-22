@@ -51,6 +51,7 @@ export class RSocketSession {
     private client: RSocketClient | null = null
     private _isConnected = false
     private sessionId: string | null = null
+    private _connectId: string | null = null
     private _capabilities: RpcCapabilities | null = null
     private messageHandlers = new Set<MessageHandler>()
     private errorHandlers = new Set<ErrorHandler>()
@@ -88,12 +89,15 @@ export class RSocketSession {
         return this._capabilities
     }
 
+    /** 后端分配的永久连接标识（用于 MCP 路由） */
+    get connectId(): string | null {
+        return this._connectId
+    }
+
     /**
      * 连接到服务器并初始化会话
      */
     async connect(options?: ConnectOptions): Promise<string> {
-        console.log('[RSocket] ← agent.connect 发送:', JSON.stringify(options, null, 2))
-
         // 创建 RSocket 客户端
         this.client = createRSocketClient(this.wsUrl)
 
@@ -111,8 +115,8 @@ export class RSocketSession {
             const responseData = await this.client.requestResponse('agent.connect', data)
 
             const result = ProtoCodec.decodeConnectResult(responseData)
-            console.log('[RSocket] → agent.connect 结果:', JSON.stringify(result, null, 2))
             this.sessionId = result.sessionId
+            this._connectId = result.connectId || null
             this._capabilities = result.capabilities || null
             this._isConnected = true
 
@@ -141,8 +145,6 @@ export class RSocketSession {
             throw new Error('Session not connected')
         }
 
-        console.log('[RSocket] ← agent.query 发送:', JSON.stringify({message}, null, 2))
-
         const data = ProtoCodec.encodeQueryRequest(message)
 
         // 使用 Request-Stream 获取流式响应
@@ -150,10 +152,6 @@ export class RSocketSession {
             onNext: (responseData) => {
                 try {
                     const rpcMessage = ProtoCodec.decodeRpcMessage(responseData)
-                    // 只打印完整消息，不打印 stream_event
-                    if (rpcMessage.type !== 'stream_event') {
-                        console.log('[RSocket] → agent.query 消息:', JSON.stringify(rpcMessage, null, 2))
-                    }
                     this.notifyMessageHandlers(rpcMessage)
                 } catch (error) {
                     log.error('[RSocketSession] 解析消息失败:', error)
@@ -180,18 +178,12 @@ export class RSocketSession {
             throw new Error('Session not connected')
         }
 
-        console.log('[RSocket] ← agent.queryWithContent 发送:', JSON.stringify({content}, null, 2))
-
         const data = ProtoCodec.encodeQueryWithContentRequest(content)
 
         this._cancelStream = this.client.requestStream('agent.queryWithContent', data, {
             onNext: (responseData) => {
                 try {
                     const rpcMessage = ProtoCodec.decodeRpcMessage(responseData)
-                    // 只打印完整消息，不打印 stream_event
-                    if (rpcMessage.type !== 'stream_event') {
-                        console.log('[RSocket] → agent.queryWithContent 消息:', JSON.stringify(rpcMessage, null, 2))
-                    }
                     this.notifyMessageHandlers(rpcMessage)
                 } catch (error) {
                     log.error('[RSocketSession] 解析消息失败:', error)
@@ -364,13 +356,10 @@ export class RSocketSession {
 
         this.checkCapability('canThink', 'setMaxThinkingTokens')
 
-        console.log('[RSocket] ← agent.setMaxThinkingTokens 发送:', JSON.stringify({maxThinkingTokens}, null, 2))
-
         try {
             const data = ProtoCodec.encodeSetMaxThinkingTokensRequest(maxThinkingTokens)
             const responseData = await this.client.requestResponse('agent.setMaxThinkingTokens', data)
-            const result = ProtoCodec.decodeSetMaxThinkingTokensResult(responseData)
-            console.log('[RSocket] → agent.setMaxThinkingTokens 结果:', JSON.stringify(result, null, 2))
+            ProtoCodec.decodeSetMaxThinkingTokensResult(responseData)
         } catch (err) {
             log.warn('[RSocketSession] Set max thinking tokens request failed:', err)
             throw err
@@ -566,10 +555,8 @@ export class RSocketSession {
             throw new Error('Session not connected')
         }
 
-        console.log('[RSocket] ← agent.setModel 发送:', JSON.stringify({model}, null, 2))
         const data = ProtoCodec.encodeSetModelRequest(model)
         await this.client.requestResponse('agent.setModel', data)
-        console.log('[RSocket] → agent.setModel 结果: OK')
     }
 
     /**
@@ -582,11 +569,9 @@ export class RSocketSession {
 
         this.checkCapability('canSwitchPermissionMode', 'setPermissionMode')
 
-        console.log('[RSocket] ← agent.setPermissionMode 发送:', JSON.stringify({mode}, null, 2))
         const data = ProtoCodec.encodeSetPermissionModeRequest(mode)
         const responseData = await this.client.requestResponse('agent.setPermissionMode', data)
         const result = ProtoCodec.decodeSetPermissionModeResult(responseData)
-        console.log('[RSocket] → agent.setPermissionMode 结果:', JSON.stringify(result, null, 2))
 
         return result as RpcSetPermissionModeResult
     }
@@ -602,11 +587,9 @@ export class RSocketSession {
             throw new Error('Session not connected')
         }
 
-        console.log('[RSocket] ← agent.setSandboxMode 发送:', JSON.stringify({mode}, null, 2))
         const data = ProtoCodec.encodeSetSandboxModeRequest(mode)
         const responseData = await this.client.requestResponse('agent.setSandboxMode', data)
         const result = ProtoCodec.decodeSetSandboxModeResult(responseData)
-        console.log('[RSocket] → agent.setSandboxMode 结果:', JSON.stringify(result, null, 2))
 
         return result
     }
@@ -619,10 +602,8 @@ export class RSocketSession {
             throw new Error('Session not connected')
         }
 
-        console.log('[RSocket] ← agent.getHistory 发送')
         const responseData = await this.client.requestResponse('agent.getHistory')
         const result = ProtoCodec.decodeHistory(responseData)
-        console.log('[RSocket] → agent.getHistory 结果:', JSON.stringify(result, null, 2))
         return result.messages as AgentStreamEvent[]
     }
 
@@ -647,11 +628,9 @@ export class RSocketSession {
             throw new Error('Session not connected')
         }
 
-        console.log('[RSocket] ← agent.truncateHistory 发送:', JSON.stringify(params, null, 2))
         const data = ProtoCodec.encodeTruncateHistoryRequest(params)
         const responseData = await this.client.requestResponse('agent.truncateHistory', data)
         const result = ProtoCodec.decodeTruncateHistoryResult(responseData)
-        console.log('[RSocket] → agent.truncateHistory 结果:', JSON.stringify(result, null, 2))
         return result
     }
 
@@ -663,10 +642,8 @@ export class RSocketSession {
             throw new Error('Session not connected')
         }
 
-        console.log('[RSocket] ← agent.getMcpStatus 发送')
         const responseData = await this.client.requestResponse('agent.getMcpStatus', new Uint8Array())
         const result = ProtoCodec.decodeMcpStatusResult(responseData)
-        console.log('[RSocket] → agent.getMcpStatus 结果:', JSON.stringify(result, null, 2))
         return result
     }
 
@@ -684,11 +661,9 @@ export class RSocketSession {
             throw new Error('Session not connected')
         }
 
-        console.log('[RSocket] ← agent.reconnectMcp 发送:', serverName)
         const requestData = ProtoCodec.encodeReconnectMcpRequest(serverName)
         const responseData = await this.client.requestResponse('agent.reconnectMcp', requestData)
         const result = ProtoCodec.decodeReconnectMcpResult(responseData)
-        console.log('[RSocket] → agent.reconnectMcp 结果:', JSON.stringify(result, null, 2))
         return result
     }
 
@@ -708,11 +683,9 @@ export class RSocketSession {
             throw new Error('Session not connected')
         }
 
-        console.log('[RSocket] ← agent.getMcpTools 发送:', serverName || '(all)')
         const requestData = ProtoCodec.encodeGetMcpToolsRequest(serverName)
         const responseData = await this.client.requestResponse('agent.getMcpTools', requestData)
         const result = ProtoCodec.decodeGetMcpToolsResult(responseData)
-        console.log('[RSocket] → agent.getMcpTools 结果:', result.count, 'tools')
         return result
     }
 

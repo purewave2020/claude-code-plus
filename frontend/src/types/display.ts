@@ -486,7 +486,9 @@ export interface ClaudeSkillToolCall extends BaseToolCall {
   toolType: typeof CLAUDE_TOOL_TYPE.SKILL
   input: {
     skill: string
+    args?: string  // Skill 参数
   }
+  skillContent?: string  // 关联的 SKILL.md 内容（跨消息关联）
 }
 
 /**

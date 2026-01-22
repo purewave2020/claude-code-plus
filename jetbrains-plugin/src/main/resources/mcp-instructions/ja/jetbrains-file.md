@@ -2,4 +2,4 @@
 
 相対パス（プロジェクトルート基準）をサポートするファイル操作に使用します。
 
-**注意**: ライブラリソースコード（JAR ファイル、デコンパイルされた .class）を読み取る場合は、JetBrains IDE MCP の `jetbrains / ReadFile` を使用してください。
+**注意**: ライブラリソースコード（JAR ファイル、デコンパイルされた .class）を読み取る場合は、JetBrains LSP MCP の `jetbrains / ReadFile` を使用してください。

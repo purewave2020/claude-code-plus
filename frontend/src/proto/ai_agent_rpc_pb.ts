@@ -2553,7 +2553,7 @@ export type IdeSettings = Message<"aiagent.rpc.IdeSettings"> & {
   enableUserInteractionMcp: boolean;
 
   /**
-   * 启用 JetBrains IDE MCP
+   * 启用 JetBrains LSP MCP
    *
    * @generated from field: bool enable_jetbrains_mcp = 5;
    */
