@@ -14,7 +14,7 @@ const generate = _generate.default || _generate;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const cliPath = path.join(__dirname, 'claude-cli-2.1.15.js');
+const cliPath = path.join(__dirname, 'claude-cli-2.1.17.js');
 console.log('Reading CLI source:', cliPath);
 const code = fs.readFileSync(cliPath, 'utf-8');
 

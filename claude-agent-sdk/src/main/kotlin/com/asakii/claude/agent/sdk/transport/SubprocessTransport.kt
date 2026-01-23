@@ -748,26 +748,23 @@ class SubprocessTransport(
             val resource = this::class.java.classLoader.getResource(resourcePath)
 
             if (resource != null) {
-                // 如果资源在 JAR 内，提取到基于内容摘要的目录
+                // 如果资源在 JAR 内，提取到用户目录
                 if (resource.protocol == "jar") {
-                    // 先读取内容计算摘要
-                    val content = resource.openStream().use { it.readBytes() }
-                    val contentHash = DigestUtil.md5Hex(content).substring(0, 32)
+                    // 提取到用户目录：~/.claude-code-plus/cli/
+                    val cliDir = java.io.File(System.getProperty("user.home"), ".claude-code-plus/cli")
+                    val targetFile = java.io.File(cliDir, cliJsName)
 
-                    // 创建基于摘要的目录：{tempDir}/claude-code-plus/{hash}/
-                    val cacheDir = java.io.File(System.getProperty("java.io.tmpdir"), "claude-code-plus/$contentHash")
-                    val targetFile = java.io.File(cacheDir, cliJsName)
-
-                    // 如果文件已存在且大小匹配，直接复用
-                    if (targetFile.exists() && targetFile.length() == content.size.toLong()) {
-                        logger.info { "📦 复用已缓存的 CLI: ${targetFile.absolutePath}" }
+                    // 如果文件已存在，直接复用
+                    if (targetFile.exists()) {
+                        logger.info { "📦 复用已安装的 CLI: ${targetFile.absolutePath}" }
                         return targetFile.absolutePath
                     }
 
-                    // 否则提取到目录
-                    cacheDir.mkdirs()
+                    // 提取新版本
+                    cliDir.mkdirs()
+                    val content = resource.openStream().use { it.readBytes() }
                     targetFile.writeBytes(content)
-                    logger.info { "📦 从 JAR 提取 CLI: ${targetFile.absolutePath}" }
+                    logger.info { "📦 安装 CLI 到: ${targetFile.absolutePath}" }
                     return targetFile.absolutePath
                 } else {
                     // 资源在文件系统中（开发模式）

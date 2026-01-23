@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - 2026-01-23
+
+### Changed
+- Upgrade bundled Claude CLI to v2.1.17 and regenerate the enhanced CLI bundle
+- Update CLI patch documentation and tooling defaults for v2.1.17
+
 ## [2.0.0] - 2026-01-20
 
 A major release with 220+ commits introducing fundamental architecture changes, new features, and significant improvements across the entire codebase.

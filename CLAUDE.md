@@ -913,15 +913,15 @@ traverse(ast, {
 2. **日找函数调用**: `CallExpression` 遍历
 3. **代码模式匹配**: 结合多个 visitor 检查特征
 4. **验证补丁结果**: 解析本件并检查目标代码模式
-### CLI 2.1.15 关键变量映射
+### CLI 2.1.17 关键变量映射
 
 | 功能 | 变量名 | 发现特征 |
 |------|--------|----------|
-| Task 工具 | `bq` | `bq="Task"` @ line 181 |
-| Skill 工具 | `c_` | `c_="Skill"` @ line 2528 |
-| Ts5 输出函数 | `stY` | generator, switch(A.type), parent_tool_use_id |
-| id2 消息追踪 | `Kd7` | Skill 内部 sourceToolUseID 添加 |
-| sourceToolUseID 访问 | - | `if(A.sourceToolUseID)return` |
+| Task 工具 | `gq` | `gq="Task"` @ line 198 |
+| Skill 工具 | `NZ` | `NZ="Skill"` @ line 2468 |
+| Ts5 输出函数 | `z92` | generator, switch(A.type), parent_tool_use_id |
+| id2 消息追踪 | `xp7` | Skill 内部 sourceToolUseID 添加 |
+| sourceToolUseID 访问 | - | `if(A.sourceToolUseID)return` @ line 3612 |
 
 
 ---

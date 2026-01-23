@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const args = process.argv.slice(2);
-const cliPath = args[0] || path.join(__dirname, '../src/main/resources/bundled/claude-cli-2.1.15-enhanced.mjs');
+const cliPath = args[0] || path.join(__dirname, '../src/main/resources/bundled/claude-cli-2.1.17-enhanced.mjs');
 
 console.log('=== Enhanced CLI Syntax Validator ===');
 console.log('File:', cliPath);
