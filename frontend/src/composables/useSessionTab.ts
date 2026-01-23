@@ -751,6 +751,29 @@ export function useSessionTab(initialOrder: number = 0) {
         log.debug(`[Tab ${tabId}] 📦 system_init: cwd=${message.cwd}, permissionMode=${message.permissionMode}, tools=${message.tools?.length || 0}`)
     }
 
+    // 连接尝试序号，用于避免旧连接覆盖新状态（例如切换后端时）
+    let connectAttemptId = 0
+    let pendingConnectSession: RSocketSession | null = null
+
+    function isConnectAttemptStale(attemptId: number, expectedBackend: BackendType): boolean {
+        return attemptId !== connectAttemptId || backendType.value !== expectedBackend
+    }
+
+    function invalidateConnectAttempt(reason: string): void {
+        connectAttemptId += 1
+        if (pendingConnectSession) {
+            try {
+                pendingConnectSession.disconnect()
+            } catch (error) {
+                log.debug(`[Tab ${tabId}] 断开待连接会话失败: ${error}`)
+            } finally {
+                pendingConnectSession = null
+            }
+        }
+        log.debug(`[Tab ${tabId}] 连接尝试已失效: ${reason}`)
+        cancelReconnect()
+    }
+
     // ========== 连接管理 ==========
 
     // 重连配置
@@ -820,6 +843,26 @@ export function useSessionTab(initialOrder: number = 0) {
             return
         }
 
+        const expectedBackend = backendType.value
+        const attemptId = ++connectAttemptId
+
+        if (pendingConnectSession) {
+            try {
+                pendingConnectSession.disconnect()
+            } catch (error) {
+                log.debug(`[Tab ${tabId}] 断开待连接会话失败: ${error}`)
+            } finally {
+                pendingConnectSession = null
+            }
+        }
+
+        if (backendSession.value) {
+            log.info(`[Tab ${tabId}] 断开 BackendSession 连接`)
+            backendSession.value.disconnect()
+            backendSession.value = null
+            backendConfig.value = null
+        }
+
         // 保存当前 sessionId，用于重连时恢复会话（在清空前保存）
         const resumeId = sessionId.value
 
@@ -834,12 +877,17 @@ export function useSessionTab(initialOrder: number = 0) {
         connectionState.status = ConnectionStatus.CONNECTING
         connectionState.lastError = null
 
-        try {
-            // 创建新的 RSocketSession 实例
-            const session = new RSocketSession()
+        const session = new RSocketSession()
+        pendingConnectSession = session
 
-            // 订阅消息事件
-            session.onMessage(handleMessage)
+        try {
+            // 订阅消息事件（避免旧连接回写状态）
+            session.onMessage((message) => {
+                if (isConnectAttemptStale(attemptId, expectedBackend)) {
+                    return
+                }
+                handleMessage(message)
+            })
 
             // 订阅断开事件（被动断开时触发）
             session.onDisconnect((error) => {
@@ -886,6 +934,12 @@ export function useSessionTab(initialOrder: number = 0) {
 
             // 连接并获取 sessionId（包含 agent.connect RPC）
             const newSessionId = await session.connect(connectOptions)
+
+            if (isConnectAttemptStale(attemptId, expectedBackend)) {
+                log.info(`[Tab ${tabId}] 连接结果已过期，忽略 (provider=${expectedBackend})`)
+                session.disconnect()
+                return
+            }
 
             // 记录分片消息模式，用于 handleNormalMessage 判断是否忽略完整消息
             messagesHandler.setIncludePartialMessages(connectOptions.includePartialMessages ?? true)
@@ -966,19 +1020,36 @@ export function useSessionTab(initialOrder: number = 0) {
             // 连接成功后，处理队列中的消息
             processNextQueuedMessage()
         } catch (error) {
+            if (isConnectAttemptStale(attemptId, expectedBackend)) {
+                log.debug(`[Tab ${tabId}] 连接失败但已过期，忽略`)
+                return
+            }
             connectionState.status = ConnectionStatus.ERROR
             connectionState.lastError = error instanceof Error ? error.message : String(error)
             log.error(`[Tab ${tabId}] 连接失败:`, error)
 
             // 自动重连
-            scheduleReconnect(options)
+            scheduleReconnect(options, attemptId, expectedBackend)
+        } finally {
+            if (pendingConnectSession === session) {
+                pendingConnectSession = null
+            }
         }
     }
 
     /**
      * 安排自动重连
      */
-    function scheduleReconnect(options: TabConnectOptions): void {
+    function scheduleReconnect(
+        options: TabConnectOptions,
+        attemptId: number = connectAttemptId,
+        expectedBackend: BackendType = backendType.value
+    ): void {
+        if (isConnectAttemptStale(attemptId, expectedBackend)) {
+            log.debug(`[Tab ${tabId}] 重连已过期，忽略`)
+            return
+        }
+
         if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
             log.warn(`[Tab ${tabId}] 已达到最大重连次数 (${MAX_RECONNECT_ATTEMPTS})，停止重连`)
             return
@@ -993,8 +1064,14 @@ export function useSessionTab(initialOrder: number = 0) {
 
         log.info(`[Tab ${tabId}] 将在 ${delay}ms 后尝试第 ${reconnectAttempts} 次重连`)
 
+        const scheduledAttemptId = attemptId
+        const scheduledBackend = expectedBackend
         reconnectTimer = setTimeout(async () => {
             reconnectTimer = null
+            if (isConnectAttemptStale(scheduledAttemptId, scheduledBackend)) {
+                log.debug(`[Tab ${tabId}] 重连已过期，跳过`)
+                return
+            }
             connectionState.status = ConnectionStatus.DISCONNECTED // 重置状态以允许重连
             await connect(options)
         }, delay)
@@ -1015,12 +1092,17 @@ export function useSessionTab(initialOrder: number = 0) {
      * 主动断开连接
      */
     async function disconnect(): Promise<void> {
-        // 取消自动重连
-        cancelReconnect()
+        invalidateConnectAttempt('disconnect')
 
         if (rsocketSession.value) {
             rsocketSession.value.disconnect()
             rsocketSession.value = null
+        }
+
+        if (backendSession.value) {
+            backendSession.value.disconnect()
+            backendSession.value = null
+            backendConfig.value = null
         }
 
         sessionId.value = null
@@ -1988,12 +2070,21 @@ export function useSessionTab(initialOrder: number = 0) {
         }
 
         log.info(`[Tab ${tabId}] 切换后端类型 (provider): ${backendType.value} -> ${type}`)
+        invalidateConnectAttempt(`switch-backend:${backendType.value}->${type}`)
 
         // 断开现有 RSocket 连接（统一协议，只需管理一个连接）
         if (rsocketSession.value) {
             log.info(`[Tab ${tabId}] 断开 RSocket 连接`)
             rsocketSession.value.disconnect()
             rsocketSession.value = null
+            sessionId.value = null
+        }
+
+        if (backendSession.value) {
+            log.info(`[Tab ${tabId}] 断开 BackendSession 连接`)
+            backendSession.value.disconnect()
+            backendSession.value = null
+            backendConfig.value = null
             sessionId.value = null
         }
 
@@ -2024,8 +2115,16 @@ export function useSessionTab(initialOrder: number = 0) {
         const resolvedOptions: TabConnectOptions = {...(initialConnectOptions.value || {}), ...options}
 
         if (connectionState.status === ConnectionStatus.CONNECTING) {
-            log.warn(`[Tab ${tabId}] 正在连接中，请勿重复连接`)
-            return
+            log.warn(`[Tab ${tabId}] 正在连接中，将强制中断并重新连接`)
+        }
+
+        invalidateConnectAttempt('connect-with-backend')
+
+        if (rsocketSession.value) {
+            log.info(`[Tab ${tabId}] 断开 RSocket 连接`)
+            rsocketSession.value.disconnect()
+            rsocketSession.value = null
+            sessionId.value = null
         }
 
         // 如果已有后端会话，先断开
