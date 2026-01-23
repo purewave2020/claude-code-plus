@@ -16,7 +16,12 @@
 import {ref, reactive, computed, shallowRef, watch} from 'vue'
 import {aiAgentService} from '@/services/aiAgentService'
 import type {ConnectOptions} from '@/services/aiAgentService'
-import {RSocketSession} from '@/services/rsocket/RSocketSession'
+import {
+    RSocketSession,
+    createRunToBackgroundError,
+    type BashRunToBackgroundResult,
+    type RunToBackgroundResult
+} from '@/services/rsocket/RSocketSession'
 import type {ContentBlock, Message} from '@/types/message'
 import {ConnectionStatus} from '@/types/display'
 import type {RpcCapabilities, RpcPermissionMode, RpcMessage, RpcStreamEvent, RpcResultMessage} from '@/types/rpc'
@@ -162,7 +167,14 @@ export const SETTING_KEYS = {
     SKIP_PERMISSIONS: 'skipPermissions',
 } as const
 
-export type SettingKey = typeof SETTING_KEYS[keyof typeof SETTING_KEYS]
+type PendingSettingKey = 'model' | 'thinkingLevel' | 'permissionMode' | 'skipPermissions'
+
+type PendingSettingValueMap = {
+    model: TabConnectOptions['model']
+    thinkingLevel: TabConnectOptions['thinkingLevel']
+    permissionMode: TabConnectOptions['permissionMode']
+    skipPermissions: TabConnectOptions['skipPermissions']
+}
 
 /**
  * RPC 消息规范化结果类型
@@ -340,7 +352,7 @@ export function useSessionTab(initialOrder: number = 0) {
     /**
      * 设置待应用的设置项
      */
-    function setPendingSetting<K extends keyof TabConnectOptions>(key: K, value: TabConnectOptions[K]): void {
+    function setPendingSetting<K extends PendingSettingKey>(key: K, value: PendingSettingValueMap[K]): void {
         // skipPermissions 是纯前端行为，不放入 pendingSettings
         if (key === 'skipPermissions') {
             skipPermissions.value = value as boolean
@@ -1737,12 +1749,7 @@ export function useSessionTab(initialOrder: number = 0) {
      * @param taskId Bash 命令的 tool_use_id
      * @returns 后台运行结果
      */
-    async function bashRunToBackground(taskId: string): Promise<{
-        success: boolean
-        taskId?: string
-        command?: string
-        error?: string
-    }> {
+    async function bashRunToBackground(taskId: string): Promise<BashRunToBackgroundResult> {
         if (!rsocketSession.value) {
             return { success: false, error: '会话未连接' }
         }
@@ -1768,26 +1775,9 @@ export function useSessionTab(initialOrder: number = 0) {
      *   - 不传 taskId: 后台化所有前台任务（Bash + Agent）
      * @returns 统一后台运行结果
      */
-    async function runToBackground(taskId?: string): Promise<{
-        success: boolean
-        isBash?: boolean
-        taskId?: string
-        command?: string
-        bashCount: number
-        agentCount: number
-        backgroundedBashIds: string[]
-        backgroundedAgentIds: string[]
-        error?: string
-    }> {
+    async function runToBackground(taskId?: string): Promise<RunToBackgroundResult> {
         if (!rsocketSession.value) {
-            return {
-                success: false,
-                bashCount: 0,
-                agentCount: 0,
-                backgroundedBashIds: [],
-                backgroundedAgentIds: [],
-                error: '会话未连接'
-            }
+            return createRunToBackgroundError('会话未连接')
         }
 
         try {
@@ -1801,14 +1791,7 @@ export function useSessionTab(initialOrder: number = 0) {
             return result
         } catch (err) {
             log.error(`[Tab ${tabId}] 后台运行请求失败:`, err)
-            return {
-                success: false,
-                bashCount: 0,
-                agentCount: 0,
-                backgroundedBashIds: [],
-                backgroundedAgentIds: [],
-                error: String(err)
-            }
+            return createRunToBackgroundError(String(err))
         }
     }
 

@@ -38,6 +38,25 @@ export type AgentStreamEvent = RpcStreamEvent
 /** 内容块（向后兼容别名） */
 export type ContentBlock = RpcContentBlock
 
+export type BashRunToBackgroundResult = ReturnType<typeof ProtoCodec.decodeBashBackgroundResult>
+export type RunToBackgroundResult = ReturnType<typeof ProtoCodec.decodeUnifiedBackgroundResult>
+
+export function createRunToBackgroundError(error: string): RunToBackgroundResult {
+    const emptyResult = ProtoCodec.decodeUnifiedBackgroundResult(new Uint8Array())
+    return {...emptyResult, error}
+}
+
+type RpcCapabilityKey =
+    | 'canInterrupt'
+    | 'canSwitchModel'
+    | 'canSwitchPermissionMode'
+    | 'supportedPermissionModes'
+    | 'canSkipPermissions'
+    | 'canSendRichContent'
+    | 'canThink'
+    | 'canResumeSession'
+    | 'canRunInBackground'
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type MessageHandler = (message: any) => void
 type ErrorHandler = (error: Error) => void
@@ -272,12 +291,7 @@ export class RSocketSession {
      * @param taskId Bash 命令的 tool_use_id
      * @returns 后台运行结果
      */
-    async bashRunToBackground(taskId: string): Promise<{
-        success: boolean
-        taskId?: string
-        command?: string
-        error?: string
-    }> {
+    async bashRunToBackground(taskId: string): Promise<BashRunToBackgroundResult> {
         if (!this._isConnected || !this.client) {
             throw new Error('Session not connected')
         }
@@ -307,17 +321,7 @@ export class RSocketSession {
      *   - 不传 taskId: 后台化所有前台任务（Bash + Agent）
      * @returns 统一后台运行结果
      */
-    async runToBackground(taskId?: string): Promise<{
-        success: boolean
-        isBash?: boolean
-        taskId?: string
-        command?: string
-        bashCount: number
-        agentCount: number
-        backgroundedBashIds: string[]
-        backgroundedAgentIds: string[]
-        error?: string
-    }> {
+    async runToBackground(taskId?: string): Promise<RunToBackgroundResult> {
         if (!this._isConnected || !this.client) {
             throw new Error('Session not connected')
         }
@@ -771,7 +775,7 @@ export class RSocketSession {
         this.sessionId = null
     }
 
-    private checkCapability(cap: keyof RpcCapabilities, method: string): void {
+    private checkCapability(cap: RpcCapabilityKey, method: string): void {
         if (!this._capabilities) {
             throw new Error(`${method}: 能力信息未加载，请先调用 connect()`)
         }

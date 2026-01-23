@@ -96,6 +96,8 @@ class CodexAppServerProcess private constructor(
                 command
             }
 
+            logger.info { "Executing command: ${finalCommand.joinToString(" ")}" }
+
             val processBuilder = ProcessBuilder(finalCommand)
                 .redirectErrorStream(false)
 
