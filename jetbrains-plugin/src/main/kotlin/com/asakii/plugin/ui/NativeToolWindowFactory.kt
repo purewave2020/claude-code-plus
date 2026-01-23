@@ -118,12 +118,18 @@ class NativeToolWindowFactory : ToolWindowFactory, DumbAware {
             ): Boolean {
                 val sourceInfo = source.substringAfterLast("/")
                 val logMessage = "[$sourceInfo:$line] $message"
-                when (level) {
-                    org.cef.CefSettings.LogSeverity.LOGSEVERITY_VERBOSE -> frontendLogger.debug(logMessage)
-                    org.cef.CefSettings.LogSeverity.LOGSEVERITY_INFO -> frontendLogger.info(logMessage)
-                    org.cef.CefSettings.LogSeverity.LOGSEVERITY_WARNING -> frontendLogger.warn(logMessage)
-                    org.cef.CefSettings.LogSeverity.LOGSEVERITY_ERROR,
-                    org.cef.CefSettings.LogSeverity.LOGSEVERITY_FATAL -> frontendLogger.error(logMessage)
+                
+                // 检查是否是预期的连接关闭错误（如切换后端时），降级为警告
+                val isExpectedClosedError = level == org.cef.CefSettings.LogSeverity.LOGSEVERITY_ERROR &&
+                    message.contains("Error: Closed")
+                
+                when {
+                    isExpectedClosedError -> frontendLogger.warn(logMessage)
+                    level == org.cef.CefSettings.LogSeverity.LOGSEVERITY_VERBOSE -> frontendLogger.debug(logMessage)
+                    level == org.cef.CefSettings.LogSeverity.LOGSEVERITY_INFO -> frontendLogger.info(logMessage)
+                    level == org.cef.CefSettings.LogSeverity.LOGSEVERITY_WARNING -> frontendLogger.warn(logMessage)
+                    level == org.cef.CefSettings.LogSeverity.LOGSEVERITY_ERROR ||
+                    level == org.cef.CefSettings.LogSeverity.LOGSEVERITY_FATAL -> frontendLogger.error(logMessage)
                     else -> frontendLogger.info(logMessage)
                 }
                 return false  // 继续默认处理
