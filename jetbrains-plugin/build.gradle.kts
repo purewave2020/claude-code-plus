@@ -731,6 +731,90 @@ val buildAllVersions by tasks.registering {
     }
 }
 
+// ===== 多版本批量发布 =====
+// 用法: gradlew :jetbrains-plugin:publishAllVersions
+// 前提: 需要在 ~/.gradle/gradle.properties 中配置 intellijPlatformPublishingToken
+val publishAllVersions by tasks.registering {
+    group = "publishing"
+    description = "Publish plugin for all supported platform versions (242, 243, 251, 252, 253) to JetBrains Marketplace"
+
+    // 将需要的值在配置阶段捕获
+    val projectDir = rootProject.projectDir
+
+    doFirst {
+        println("====================================")
+        println("Publishing plugin for all platforms")
+        println("====================================")
+        println()
+    }
+
+    doLast {
+        val platforms = listOf("242", "243", "251", "252", "253")
+        val isWin = System.getProperty("os.name").lowercase().contains("windows")
+        val gradlew = if (isWin) File(projectDir, "gradlew.bat").absolutePath else File(projectDir, "gradlew").absolutePath
+
+        // 依次发布每个版本（JetBrains Marketplace 不支持并行上传）
+        val results = mutableListOf<Pair<String, Int>>()
+
+        for (platform in platforms) {
+            println("📤 [$platform] Publishing...")
+
+            val cmd = if (isWin) {
+                listOf("cmd", "/c", gradlew, ":jetbrains-plugin:publishPlugin",
+                    "-PplatformMajor=$platform",
+                    "--no-daemon")
+            } else {
+                listOf(gradlew, ":jetbrains-plugin:publishPlugin",
+                    "-PplatformMajor=$platform",
+                    "--no-daemon")
+            }
+
+            val process = ProcessBuilder(cmd)
+                .directory(projectDir)
+                .redirectErrorStream(true)
+                .start()
+
+            // 实时输出日志
+            process.inputStream.bufferedReader().forEachLine { line ->
+                println("    [$platform] $line")
+            }
+
+            val exitCode = process.waitFor()
+
+            if (exitCode == 0) {
+                println("✅ [$platform] Published successfully!")
+            } else {
+                println("❌ [$platform] FAILED (exit code: $exitCode)")
+            }
+
+            results.add(platform to exitCode)
+            println()
+        }
+
+        // 汇总结果
+        println("====================================")
+        println("Publishing Summary:")
+        println("====================================")
+
+        val succeeded = results.filter { it.second == 0 }
+        val failed = results.filter { it.second != 0 }
+
+        succeeded.forEach { (platform, _) ->
+            println("✅ [$platform] Success")
+        }
+        failed.forEach { (platform, code) ->
+            println("❌ [$platform] Failed (exit code: $code)")
+        }
+
+        println()
+        println("Total: ${succeeded.size}/5 published successfully")
+
+        if (failed.isNotEmpty()) {
+            throw GradleException("Publishing failed for platforms: ${failed.map { it.first }.joinToString(", ")}")
+        }
+    }
+}
+
 // 🔧 对于插件模块，只排除运行时的 kotlinx-coroutines，保留编译时
 configurations {
     // 只排除运行时配置，保留编译时配置

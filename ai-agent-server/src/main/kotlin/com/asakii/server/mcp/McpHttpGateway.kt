@@ -49,9 +49,14 @@ object McpHttpGateway {
     /**
      * Jetty 默认 idleTimeout 只有 30s，SSE 长连接在空闲时会被断开，导致 session 频繁失效。
      * 这里显式调大 idleTimeout，同时把 MCP keep-alive 调整为更短间隔，尽量避免中间层/容器超时。
+     * 
+     * 注意：Claude CLI 使用的 MCP 客户端在会话丢失时不会自动重连（不符合 MCP 规范），
+     * 所以必须确保会话尽可能不丢失。
+     * 
+     * @see <a href="https://spec.modelcontextprotocol.io/specification/2025-03-26/basic/transports/">MCP Transport Spec</a>
      */
-    private val JETTY_CONNECTOR_IDLE_TIMEOUT_MS = Duration.ofMinutes(5).toMillis()
-    private val MCP_KEEP_ALIVE_INTERVAL = Duration.ofSeconds(20)
+    private val JETTY_CONNECTOR_IDLE_TIMEOUT_MS = Duration.ofSeconds(30).toMillis()  // 30 秒
+    private val MCP_KEEP_ALIVE_INTERVAL = Duration.ofSeconds(15)  // 15 秒心跳
 
     private val json = JsonTools.kotlinJson
     private val jsonMapper = JsonTools.mcpJsonMapper
