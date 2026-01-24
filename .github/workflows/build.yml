@@ -14,23 +14,11 @@ jobs:
       max-parallel: 6
       matrix:
         ide:
-          # 2024.2 版本
+          # 2024.2 版本 - IntelliJ IDEA + WebStorm
           - type: IC
             version: "2024.2.6"
             platformMajor: 242
           - type: WS
-            version: "2024.2.4"
-            platformMajor: 242
-          - type: GO
-            version: "2024.2.3"
-            platformMajor: 242
-          - type: CL
-            version: "2024.2.3"
-            platformMajor: 242
-          - type: PC
-            version: "2024.2.4"
-            platformMajor: 242
-          - type: PS
             version: "2024.2.4"
             platformMajor: 242
           # 2024.3 版本
@@ -40,35 +28,11 @@ jobs:
           - type: WS
             version: "2024.3.3"
             platformMajor: 243
-          - type: GO
-            version: "2024.3.3"
-            platformMajor: 243
-          - type: CL
-            version: "2024.3.3"
-            platformMajor: 243
-          - type: PC
-            version: "2024.3.3"
-            platformMajor: 243
-          - type: PS
-            version: "2024.3.3"
-            platformMajor: 243
           # 2025.1 版本
           - type: IC
             version: "2025.1.5"
             platformMajor: 251
           - type: WS
-            version: "2025.1.2"
-            platformMajor: 251
-          - type: GO
-            version: "2025.1.2"
-            platformMajor: 251
-          - type: CL
-            version: "2025.1.2"
-            platformMajor: 251
-          - type: PC
-            version: "2025.1.2"
-            platformMajor: 251
-          - type: PS
             version: "2025.1.2"
             platformMajor: 251
           # 2025.2 版本
@@ -78,33 +42,11 @@ jobs:
           - type: WS
             version: "2025.2.1"
             platformMajor: 252
-          - type: GO
-            version: "2025.2.1"
-            platformMajor: 252
-          - type: CL
-            version: "2025.2.1"
-            platformMajor: 252
-          - type: PC
-            version: "2025.2.1"
-            platformMajor: 252
-          - type: PS
-            version: "2025.2.1"
-            platformMajor: 252
           # 2025.3 版本
           - type: II
             version: "2025.3.1"
             platformMajor: 253
           - type: WS
-            version: "2025.3.1"
-            platformMajor: 253
-          - type: GO
-            version: "2025.3.1"
-            platformMajor: 253
-          - type: CL
-            version: "2025.3.1"
-            platformMajor: 253
-          # PC (PyCharm Community) removed for 2025.3+: JetBrains unified PyCharm into a single edition
-          - type: PS
             version: "2025.3.1"
             platformMajor: 253
 
