@@ -4,7 +4,7 @@
  */
 
 import { resolveServerHttpUrl } from '@/utils/serverUrl'
-import { withServerToken } from '@/utils/serverAuth'
+
 
 export interface IndexedFileInfo {
   name: string
@@ -80,7 +80,7 @@ export class FileSearchService {
     try {
       const response = await fetch(
         this.getApiUrl(`/api/files/search?query=${encodeURIComponent(query)}&maxResults=${maxResults}`),
-        { headers: withServerToken() }
+        { headers: {} }
       )
 
       if (!response.ok) {

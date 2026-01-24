@@ -4,7 +4,7 @@
  */
 
 import type { FrontendResponse, IdeEvent } from '@/types/bridge'
-import { withServerToken } from '@/utils/serverAuth'
+
 
 type EventHandler = (data: any) => void
 
@@ -169,7 +169,7 @@ class IdeaBridgeService {
     try {
       const response = await fetch(`${this.getBaseUrl()}/api/`, {
         method: 'POST',
-        headers: withServerToken({ 'Content-Type': 'application/json' }),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, data })
       })
 

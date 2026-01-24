@@ -14,7 +14,6 @@
 import { resolveServerHttpUrl } from '@/utils/serverUrl'
 import { jetbrainsRSocket } from './jetbrainsRSocket'
 import { setLocale, normalizeLocale } from '@/i18n'
-import { withServerToken } from '@/utils/serverAuth'
 
 // ========== 类型定义 ==========
 
@@ -93,9 +92,9 @@ export async function checkJetBrainsCapabilities(): Promise<JetBrainsCapabilitie
     const baseUrl = resolveServerHttpUrl()
     const response = await fetch(`${baseUrl}/api/`, {
       method: 'POST',
-      headers: withServerToken({
+      headers: {
         'Content-Type': 'application/json'
-      }),
+      },
       body: JSON.stringify({ action: 'ide.hasIdeEnvironment' })
     })
 
