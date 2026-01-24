@@ -46,6 +46,13 @@ object McpHttpGateway {
         val transport: HttpServletStreamableServerTransportProvider
     )
 
+    /**
+     * Jetty 默认 idleTimeout 只有 30s，SSE 长连接在空闲时会被断开，导致 session 频繁失效。
+     * 这里显式调大 idleTimeout，同时把 MCP keep-alive 调整为更短间隔，尽量避免中间层/容器超时。
+     */
+    private val JETTY_CONNECTOR_IDLE_TIMEOUT_MS = Duration.ofMinutes(5).toMillis()
+    private val MCP_KEEP_ALIVE_INTERVAL = Duration.ofSeconds(20)
+
     private val json = JsonTools.kotlinJson
     private val jsonMapper = JsonTools.mcpJsonMapper
 
@@ -92,6 +99,7 @@ object McpHttpGateway {
             val connector = ServerConnector(server)
             connector.host = "127.0.0.1"
             connector.port = 0
+            connector.idleTimeout = JETTY_CONNECTOR_IDLE_TIMEOUT_MS
             server.addConnector(connector)
 
             val context = ServletContextHandler(ServletContextHandler.NO_SESSIONS)
@@ -134,7 +142,7 @@ object McpHttpGateway {
         val transport = HttpServletStreamableServerTransportProvider.builder()
             .jsonMapper(jsonMapper)
             .mcpEndpoint(endpointPath)
-            .keepAliveInterval(Duration.ofMinutes(1))
+            .keepAliveInterval(MCP_KEEP_ALIVE_INTERVAL)
             // 从 HTTP header 提取 connectId，存入 TransportContext
             .contextExtractor { request ->
                 val connectId = request.getHeader(HEADER_CONNECT_ID)?.takeIf { it.isNotBlank() }
