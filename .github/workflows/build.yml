@@ -146,33 +146,31 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
+      # CLI patches npm dependencies cache
+      - name: Cache CLI patches node_modules
+        uses: actions/cache@v4
+        with:
+          path: claude-agent-sdk/cli-patches/node_modules
+          key: cli-patches-${{ runner.os }}-${{ hashFiles('claude-agent-sdk/cli-patches/package-lock.json') }}
+          restore-keys: |
+            cli-patches-${{ runner.os }}-
+
+      # Setup Gradle with built-in caching (handles wrapper, dependencies, build cache)
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Cache Gradle wrapper
-        uses: actions/cache@v4
         with:
-          path: ~/.gradle/wrapper
-          key: gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
 
-      - name: Cache Gradle build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches/build-cache-*
-            ~/.gradle/caches/jars-*
-            ~/.gradle/caches/transforms-*
-          key: gradle-build-${{ runner.os }}-${{ hashFiles('**/*.gradle*','**/*.kts') }}
-          restore-keys: |
-            gradle-build-${{ runner.os }}-
-
+      # IDE SDK cache - important for large JetBrains SDK downloads
       - name: Cache IDE ${{ matrix.ide.type }} ${{ matrix.ide.version }}
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/JetBrains
             ~/.gradle/caches/modules-2/files-2.1/com.jetbrains*
-          key: ide-${{ matrix.ide.type }}-${{ matrix.ide.version }}-v1
+          key: ide-${{ matrix.ide.type }}-${{ matrix.ide.version }}-v2
+          restore-keys: |
+            ide-${{ matrix.ide.type }}-${{ matrix.ide.version }}-
 
       - name: Verify ${{ matrix.ide.type }} ${{ matrix.ide.version }}
         run: |
@@ -220,18 +218,20 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Cache Gradle
+      # CLI patches npm dependencies cache
+      - name: Cache CLI patches node_modules
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}-${{ hashFiles('**/*.gradle*','**/*.kts') }}
+          path: claude-agent-sdk/cli-patches/node_modules
+          key: cli-patches-${{ runner.os }}-${{ hashFiles('claude-agent-sdk/cli-patches/package-lock.json') }}
           restore-keys: |
-            gradle-${{ runner.os }}-
+            cli-patches-${{ runner.os }}-
+
+      # Setup Gradle with built-in caching (handles wrapper, dependencies, build cache)
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
 
       - name: Build Plugin
         run: ./gradlew buildPlugin --no-daemon --no-configuration-cache --stacktrace
