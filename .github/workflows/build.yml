@@ -154,10 +154,14 @@ jobs:
             cli-patches-${{ runner.os }}-
 
       # Setup Gradle with built-in caching (handles wrapper, dependencies, build cache)
+      # Note: Exclude transforms cache to avoid exceeding GitHub's 10GB cache limit
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+          gradle-home-cache-excludes: |
+            caches/transforms-*
+            caches/*/transforms
 
       # IDE SDK cache - important for large JetBrains SDK downloads
       - name: Cache IDE ${{ matrix.ide.type }} ${{ matrix.ide.version }}
@@ -226,10 +230,14 @@ jobs:
             cli-patches-${{ runner.os }}-
 
       # Setup Gradle with built-in caching (handles wrapper, dependencies, build cache)
+      # Note: Exclude transforms cache to avoid exceeding GitHub's 10GB cache limit
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+          gradle-home-cache-excludes: |
+            caches/transforms-*
+            caches/*/transforms
 
       - name: Build Plugin
         run: ./gradlew buildPlugin --no-daemon --no-configuration-cache --stacktrace
