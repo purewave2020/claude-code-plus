@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2] - 2026-01-25
+
+### Fixed
+- Normalize timestamp handling for seconds/milliseconds compatibility in session management
+- Improve history loading and tool call rendering in chat
+- Convert McpHttpGateway from singleton to project-level instance for better isolation
+- Reduce streamable HTTP session churn in MCP
+
+### Changed
+- Upgrade MCP SDK to 0.17.2 with improved timeout configuration
+- Upgrade bundled Claude CLI to 2.1.17
+- Optimize GitHub Actions caching for faster builds
+- Reduce verify matrix to IntelliJ IDEA and WebStorm only
+
+### Removed
+- Remove PyCharm Community verification for 2025.3+
+- Remove unused withServerToken imports from frontend
+
 ## [2.0.1] - 2026-01-23
 
 ### Changed
