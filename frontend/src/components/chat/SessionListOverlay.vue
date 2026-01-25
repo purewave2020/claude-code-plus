@@ -165,9 +165,6 @@
 
 <script setup lang="ts">
 import { watch, onBeforeUnmount, computed, ref, nextTick } from 'vue'
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n()
 
 interface SessionListItem {
   id: string
@@ -222,21 +219,21 @@ function handleSelect(sessionId: string) {
   emit('select-session', sessionId)
 }
 
+function normalizeTimestamp(timestamp: number): number {
+  // 兼容后端返回秒级时间戳（10 位）/毫秒级时间戳（13 位）
+  return timestamp < 1e12 ? timestamp * 1000 : timestamp
+}
+
 function formatRelativeTime(timestamp: number): string {
-  const diff = Date.now() - timestamp
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
-
-  if (minutes < 1) return t('time.justNow')
-  if (minutes < 60) return t('time.minutesAgo', { n: minutes })
-  if (hours < 24) return t('time.hoursAgo', { n: hours })
-  if (days < 7) return t('time.daysAgo', { n: days })
-
-  return new Date(timestamp).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric'
-  })
+  const ts = normalizeTimestamp(timestamp)
+  const date = new Date(ts)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
 }
 
 function handleKeydown(e: KeyboardEvent) {
