@@ -512,18 +512,18 @@ class HttpApiServer(
                                     // 内置模型列表
                                     val builtInClaudeModels = listOf(
                                         mapOf(
-                                            "displayName" to JsonPrimitive("Opus 4.5"),
-                                            "modelId" to JsonPrimitive("claude-opus-4-5-20251101"),
+                                            "displayName" to JsonPrimitive("Opus 4.6"),
+                                            "modelId" to JsonPrimitive("claude-opus-4-6"),
                                             "isBuiltIn" to JsonPrimitive(true)
                                         ),
                                         mapOf(
-                                            "displayName" to JsonPrimitive("Sonnet 4.5"),
-                                            "modelId" to JsonPrimitive("claude-sonnet-4-5-20250929"),
+                                            "displayName" to JsonPrimitive("Sonnet 4.6"),
+                                            "modelId" to JsonPrimitive("claude-sonnet-4-6"),
                                             "isBuiltIn" to JsonPrimitive(true)
                                         ),
                                         mapOf(
-                                            "displayName" to JsonPrimitive("Haiku 4.5"),
-                                            "modelId" to JsonPrimitive("claude-haiku-4-5-20251001"),
+                                            "displayName" to JsonPrimitive("Haiku 4.6"),
+                                            "modelId" to JsonPrimitive("claude-haiku-4-6"),
                                             "isBuiltIn" to JsonPrimitive(true)
                                         )
                                     )
@@ -687,7 +687,7 @@ class HttpApiServer(
                     route("/config") {
                         get {
                             // TODO: 实现配置获取
-                            call.respond(mapOf("model" to "claude-sonnet-4-5-20250929"))
+                            call.respond(mapOf("model" to "claude-sonnet-4-6"))
                         }
 
                         put {

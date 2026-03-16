@@ -85,9 +85,9 @@ describe('Capability Lookups', () => {
 
   describe('getModelByModelId', () => {
     it('should find Claude model by ID', () => {
-      const model = getModelByModelId('claude', 'claude-sonnet-4-5-20250929')
+      const model = getModelByModelId('claude', 'claude-sonnet-4-6')
       expect(model).toBeDefined()
-      expect(model?.displayName).toBe('Claude Sonnet 4.5')
+      expect(model?.displayName).toBe('Claude Sonnet 4.6')
     })
 
     it('should find Codex model by ID', () => {

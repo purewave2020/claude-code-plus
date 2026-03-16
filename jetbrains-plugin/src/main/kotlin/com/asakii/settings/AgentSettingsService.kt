@@ -125,7 +125,7 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var codexCustomModels: String = "[]",
 
         // 默认模型（使用实际 modelId 存储）
-        var defaultModel: String = "claude-opus-4-5-20251101",
+        var defaultModel: String = "claude-opus-4-6",
 
         // 默认思考等级 ID（如 "off", "think", "ultra", "custom_xxx"）
         var defaultThinkingLevelId: String = "ultra",
@@ -154,28 +154,35 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
 
     private val builtInClaudeModels = listOf(
         ModelInfo(
-            modelId = "claude-opus-4-5-20251101",
-            displayName = "Opus 4.5",
+            modelId = "claude-opus-4-6",
+            displayName = "Opus 4.6",
             isBuiltIn = true
         ),
         ModelInfo(
-            modelId = "claude-sonnet-4-5-20250929",
-            displayName = "Sonnet 4.5",
+            modelId = "claude-sonnet-4-6",
+            displayName = "Sonnet 4.6",
             isBuiltIn = true
         ),
         ModelInfo(
-            modelId = "claude-haiku-4-5-20251001",
-            displayName = "Haiku 4.5",
+            modelId = "claude-haiku-4-6",
+            displayName = "Haiku 4.6",
             isBuiltIn = true
         )
     )
 
     private val legacyClaudeModelAliases = mapOf(
-        "OPUS_45" to "claude-opus-4-5-20251101",
-        "SONNET_45" to "claude-sonnet-4-5-20250929",
-        "HAIKU_45" to "claude-haiku-4-5-20251001",
-        "claude-opus-4-5-20250929" to "claude-opus-4-5-20251101",
-        "claude-haiku-4-5-20250929" to "claude-haiku-4-5-20251001"
+        "OPUS_46" to "claude-opus-4-6",
+        "SONNET_46" to "claude-sonnet-4-6",
+        "HAIKU_46" to "claude-haiku-4-6",
+        // 4.5 legacy aliases for migration
+        "OPUS_45" to "claude-opus-4-6",
+        "SONNET_45" to "claude-sonnet-4-6",
+        "HAIKU_45" to "claude-haiku-4-6",
+        "claude-opus-4-5-20251101" to "claude-opus-4-6",
+        "claude-sonnet-4-5-20250929" to "claude-sonnet-4-6",
+        "claude-haiku-4-5-20251001" to "claude-haiku-4-6",
+        "claude-opus-4-5-20250929" to "claude-opus-4-6",
+        "claude-haiku-4-5-20250929" to "claude-haiku-4-6"
     )
 
     private fun normalizeClaudeModelId(rawModelId: String): String {

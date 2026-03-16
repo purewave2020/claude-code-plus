@@ -161,96 +161,43 @@
 
     <!-- Bottom Toolbar (底部工具栏) -->
     <div class="bottom-toolbar">
-      <!-- 左侧控件组 - Cursor 风格紧凑布局 -->
-      <div class="toolbar-left">
-        <div class="cursor-style-selectors">
-          <!-- 后端切换器 - 放在最左侧 -->
-          <div class="backend-switcher-inline" @click.stop="toggleBackendSwitcher">
-            <BackendIcon :type="backendType" :size="14" />
-            <span class="backend-name">{{ getBackendDisplayName(backendType) }}</span>
-            <svg class="dropdown-arrow" width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
-              <path d="M1 2.5L4 5.5L7 2.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-            </svg>
-            <!-- 下拉菜单 -->
-            <div v-if="showBackendSwitcher" class="backend-dropdown">
-              <div
-                v-for="backend in availableBackends"
-                :key="backend"
-                class="backend-option"
-                :class="{ active: backend === backendType }"
-                @click.stop="handleBackendChange(backend)"
-              >
-                <BackendIcon :type="backend" :size="14" />
-                <span>{{ getBackendDisplayName(backend) }}</span>
-                <span v-if="backend === backendType" class="check-icon">✓</span>
+      <!-- 控件组 - 垂直布局减少宽度 -->
+      <div class="toolbar-controls">
+        <!-- 第一行：后端切换器 + 模型选择器 -->
+        <div class="toolbar-row">
+          <div class="cursor-style-selectors">
+            <!-- 后端切换器 - 放在最左侧 -->
+            <div class="backend-switcher-inline" @click.stop="toggleBackendSwitcher">
+              <BackendIcon :type="backendType" :size="14" />
+              <span class="backend-name">{{ getBackendDisplayName(backendType) }}</span>
+              <svg class="dropdown-arrow" width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
+                <path d="M1 2.5L4 5.5L7 2.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+              </svg>
+              <!-- 下拉菜单 -->
+              <div v-if="showBackendSwitcher" class="backend-dropdown">
+                <div
+                  v-for="backend in availableBackends"
+                  :key="backend"
+                  class="backend-option"
+                  :class="{ active: backend === backendType }"
+                  @click.stop="handleBackendChange(backend)"
+                >
+                  <BackendIcon :type="backend" :size="14" />
+                  <span>{{ getBackendDisplayName(backend) }}</span>
+                  <span v-if="backend === backendType" class="check-icon">✓</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Claude 权限模式选择器 - Cursor 风格（带灰色背景） -->
-          <el-select
-            v-if="showPermissionControls && backendType === 'claude'"
-            v-model="selectedPermissionValue"
-            class="cursor-selector mode-selector"
-            :disabled="!enabled"
-            placement="top-start"
-            :teleported="true"
-            popper-class="chat-input-select-dropdown mode-dropdown claude-mode-dropdown"
-            :popper-options="{
-              modifiers: [
-                {
-                  name: 'preventOverflow',
-                  options: { boundary: 'viewport' }
-                },
-                {
-                  name: 'flip',
-                  options: {
-                    fallbackPlacements: ['top-start', 'top'],
-                  }
-                }
-              ]
-            }"
-            @change="setPermissionMode(selectedPermissionValue)"
-          >
-            <template #prefix>
-              <span class="mode-prefix-icon">{{ getModeIcon(selectedPermissionValue) }}</span>
-            </template>
-            <el-option value="default" label="Default">
-              <span class="mode-option-label">
-                <span class="mode-icon">?</span>
-                <span>Default</span>
-              </span>
-            </el-option>
-            <el-option value="acceptEdits" label="Accept Edits">
-              <span class="mode-option-label">
-                <span class="mode-icon">✎</span>
-                <span>Accept Edits</span>
-              </span>
-            </el-option>
-            <el-option value="bypassPermissions" label="Bypass">
-              <span class="mode-option-label">
-                <span class="mode-icon">∞</span>
-                <span>Bypass</span>
-              </span>
-            </el-option>
-            <el-option value="plan" label="Plan">
-              <span class="mode-option-label">
-                <span class="mode-icon">☰</span>
-                <span>Plan</span>
-              </span>
-            </el-option>
-          </el-select>
-
-          <!-- ========== Claude 后端控件组 ========== -->
-          <template v-if="showModelSelector && backendType === 'claude'">
-            <!-- Claude 模型选择器 -->
+            <!-- Claude 权限模式选择器 - Cursor 风格（带灰色背景） -->
             <el-select
-              v-model="selectedModelValue"
-              class="cursor-selector model-selector"
+              v-if="showPermissionControls && backendType === 'claude'"
+              v-model="selectedPermissionValue"
+              class="cursor-selector mode-selector"
               :disabled="!enabled"
               placement="top-start"
               :teleported="true"
-              popper-class="chat-input-select-dropdown claude-model-dropdown"
+              popper-class="chat-input-select-dropdown mode-dropdown claude-mode-dropdown"
               :popper-options="{
                 modifiers: [
                   {
@@ -265,72 +212,128 @@
                   }
                 ]
               }"
-              @change="handleBaseModelChange"
+              @change="setPermissionMode(selectedPermissionValue)"
             >
-              <el-option
-                v-for="model in claudeModelOptions"
-                :key="model.modelId"
-                :value="model.modelId"
-                :label="model.displayName"
-              >
-                <span class="model-option-label">
-                  {{ model.displayName }}
+              <template #prefix>
+                <span class="mode-prefix-icon">{{ getModeIcon(selectedPermissionValue) }}</span>
+              </template>
+              <el-option value="default" label="Default">
+                <span class="mode-option-label">
+                  <span class="mode-icon">?</span>
+                  <span>Default</span>
+                </span>
+              </el-option>
+              <el-option value="acceptEdits" label="Accept Edits">
+                <span class="mode-option-label">
+                  <span class="mode-icon">✎</span>
+                  <span>Accept Edits</span>
+                </span>
+              </el-option>
+              <el-option value="bypassPermissions" label="Bypass">
+                <span class="mode-option-label">
+                  <span class="mode-icon">∞</span>
+                  <span>Bypass</span>
+                </span>
+              </el-option>
+              <el-option value="plan" label="Plan">
+                <span class="mode-option-label">
+                  <span class="mode-icon">☰</span>
+                  <span>Plan</span>
                 </span>
               </el-option>
             </el-select>
 
-            <!-- Claude 思考级别控件 -->
-            <ThinkingToggle
-              :thinking-mode="currentThinkingMode"
-              :thinking-tokens="thinkingLevel"
-              :thinking-levels="thinkingLevels"
-              @change="handleThinkingLevelChange"
-            />
-          </template>
+            <!-- ========== Claude 后端控件组 ========== -->
+            <template v-if="showModelSelector && backendType === 'claude'">
+              <!-- Claude 模型选择器 -->
+              <el-select
+                v-model="selectedModelValue"
+                class="cursor-selector model-selector"
+                :disabled="!enabled"
+                placement="top-start"
+                :teleported="true"
+                popper-class="chat-input-select-dropdown claude-model-dropdown"
+                :popper-options="{
+                  modifiers: [
+                    {
+                      name: 'preventOverflow',
+                      options: { boundary: 'viewport' }
+                    },
+                    {
+                      name: 'flip',
+                      options: {
+                        fallbackPlacements: ['top-start', 'top'],
+                      }
+                    }
+                  ]
+                }"
+                @change="handleBaseModelChange"
+              >
+                <el-option
+                  v-for="model in claudeModelOptions"
+                  :key="model.modelId"
+                  :value="model.modelId"
+                  :label="model.displayName"
+                >
+                  <span class="model-option-label">
+                    {{ model.displayName }}
+                  </span>
+                </el-option>
+              </el-select>
+            </template>
 
+            <!-- ========== Codex 工具栏（独立组件） ========== -->
+            <CodexToolbar
+              v-if="backendType === 'codex'"
+              :model="codexModel"
+              :sandbox-mode="codexSandboxMode"
+              :reasoning-effort="codexReasoningEffort"
+              :disabled="!enabled"
+              @update:model="handleCodexModelChange"
+              @update:sandbox-mode="handleCodexSandboxModeChange"
+              @update:reasoning-effort="handleCodexReasoningEffortChange"
+            />
+          </div>
+
+          <!-- 上下文使用量指示器 -->
+          <ContextUsageIndicator
+            :session-token-usage="sessionTokenUsage"
+          />
         </div>
 
-        <!-- ========== Codex 工具栏（独立组件） ========== -->
-        <CodexToolbar
-          v-if="backendType === 'codex'"
-          :model="codexModel"
-          :sandbox-mode="codexSandboxMode"
-          :reasoning-effort="codexReasoningEffort"
-          :disabled="!enabled"
-          @update:model="handleCodexModelChange"
-          @update:sandbox-mode="handleCodexSandboxModeChange"
-          @update:reasoning-effort="handleCodexReasoningEffortChange"
-        />
-
-        <!-- Skip Permissions 开关（Claude 和 Codex 共用） -->
-        <StatusToggle
-          v-if="showPermissionControls"
-          :label="t('permission.mode.bypass')"
-          :enabled="skipPermissionsValue"
-          :disabled="!enabled"
-          :show-icon="false"
-          :tooltip="t('permission.mode.bypassTooltip')"
-          @toggle="handleSkipPermissionsChange"
-        />
+        <!-- 第二行：Think / Bypass / Auto Cleanup 开关 -->
+        <div class="toolbar-row">
+          <ThinkingToggle
+            v-if="showModelSelector && backendType === 'claude'"
+            :thinking-mode="currentThinkingMode"
+            :thinking-tokens="thinkingLevel"
+            :thinking-levels="thinkingLevels"
+            @change="handleThinkingLevelChange"
+          />
+          <StatusToggle
+            v-if="showPermissionControls"
+            :label="t('permission.mode.bypass')"
+            :enabled="skipPermissionsValue"
+            :disabled="!enabled"
+            :show-icon="false"
+            :tooltip="t('permission.mode.bypassTooltip')"
+            @toggle="handleSkipPermissionsChange"
+          />
+          <StatusToggle
+            v-if="showContextControls && !inline"
+            class="auto-cleanup-toggle"
+            :label="t('chat.autoCleanupContext')"
+            :enabled="autoCleanupContexts"
+            :disabled="!enabled"
+            :show-icon="false"
+            :tooltip="t('chat.autoCleanupContextTooltip')"
+            @toggle="handleAutoCleanupChange"
+          />
+        </div>
       </div>
 
       <!-- 右侧按钮组 -->
       <div class="toolbar-right">
-        <!-- 上下文使用量指示器 -->
-        <ContextUsageIndicator
-          :session-token-usage="sessionTokenUsage"
-        />
-
-        <StatusToggle
-          v-if="showContextControls && !inline"
-          class="auto-cleanup-toggle"
-          :label="t('chat.autoCleanupContext')"
-          :enabled="autoCleanupContexts"
-          :disabled="!enabled"
-          :show-icon="false"
-          :tooltip="t('chat.autoCleanupContextTooltip')"
-          @toggle="handleAutoCleanupChange"
-        />
 
         <!-- 统计信息 -->
         <div

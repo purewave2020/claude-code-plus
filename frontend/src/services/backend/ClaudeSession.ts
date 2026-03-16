@@ -48,15 +48,15 @@ const CLAUDE_CAPABILITIES: BackendCapabilities = {
   supportedTools: ['read', 'write', 'edit', 'bash', 'mcp'],
   availableModels: [
     {
-      modelId: 'claude-sonnet-4-5-20250929',
-      displayName: 'Claude Sonnet 4.5',
+      modelId: 'claude-sonnet-4-6',
+      displayName: 'Claude Sonnet 4.6',
       isDefault: false,
       supportsThinking: true,
       description: 'Claude Sonnet with extended thinking',
     },
     {
-      modelId: 'claude-opus-4-5-20251101',
-      displayName: 'Claude Opus 4.5',
+      modelId: 'claude-opus-4-6',
+      displayName: 'Claude Opus 4.6',
       isDefault: true,
       supportsThinking: true,
       description: 'Most capable Claude model',

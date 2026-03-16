@@ -21,22 +21,22 @@ vi.mock('@/services/backendCapabilities', () => ({
     if (type === 'claude') {
       return [
         {
-          modelId: 'claude-opus-4-5-20251101',
-          displayName: 'Claude Opus 4.5',
+          modelId: 'claude-opus-4-6',
+          displayName: 'Claude Opus 4.6',
           description: 'Most capable model',
           supportsThinking: true,
           isDefault: false,
         },
         {
-          modelId: 'claude-sonnet-4-5-20250929',
-          displayName: 'Claude Sonnet 4.5',
+          modelId: 'claude-sonnet-4-6',
+          displayName: 'Claude Sonnet 4.6',
           description: 'Balanced performance',
           supportsThinking: true,
           isDefault: true,
         },
         {
-          modelId: 'claude-haiku-4-5-20251001',
-          displayName: 'Claude Haiku 4.5',
+          modelId: 'claude-haiku-4-6',
+          displayName: 'Claude Haiku 4.6',
           description: 'Fast and efficient',
           supportsThinking: true,
           isDefault: false,
@@ -64,9 +64,9 @@ vi.mock('@/services/backendCapabilities', () => ({
   getModelByModelId: (type: BackendType, id: string) => {
     const models = type === 'claude'
       ? [
-          { modelId: 'claude-opus-4-5-20251101', displayName: 'Claude Opus 4.5', supportsThinking: true },
-          { modelId: 'claude-sonnet-4-5-20250929', displayName: 'Claude Sonnet 4.5', supportsThinking: true, isDefault: true },
-          { modelId: 'claude-haiku-4-5-20251001', displayName: 'Claude Haiku 4.5', supportsThinking: true },
+          { modelId: 'claude-opus-4-6', displayName: 'Claude Opus 4.6', supportsThinking: true },
+          { modelId: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', supportsThinking: true, isDefault: true },
+          { modelId: 'claude-haiku-4-6', displayName: 'Claude Haiku 4.6', supportsThinking: true },
         ]
       : [
           { modelId: 'gpt-5.2-codex', displayName: 'gpt-5.2-codex', supportsThinking: true, isDefault: true },

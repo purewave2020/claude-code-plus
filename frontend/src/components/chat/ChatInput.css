@@ -436,12 +436,27 @@
 .bottom-toolbar {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   padding: 4px 10px;
   border-top: 1px solid var(--theme-border, #e1e4e8);
   background: var(--theme-panel-background, #f6f8fa);
   position: relative;
   z-index: 5;
+}
+
+/* 垂直布局的控件组 */
+.toolbar-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
 }
 
 .toolbar-left {
@@ -454,6 +469,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  padding-top: 4px;
 }
 
 .auto-cleanup-toggle {

@@ -19,27 +19,27 @@ export interface ModelConfig {
 export const MODEL_CONFIGS: Record<AiModel, ModelConfig> = {
   [AiModel.DEFAULT]: {
     id: AiModel.DEFAULT,
-    name: 'Claude Sonnet 4.5',
+    name: 'Claude Sonnet 4.6',
     contextLength: 200000,
-    description: '默认模型 - Claude 3.5 Sonnet (2024-10-22)'
+    description: '默认模型 - Claude 4.6 Sonnet'
   },
   [AiModel.OPUS]: {
     id: AiModel.OPUS,
-    name: 'Claude Opus',
+    name: 'Claude Opus 4.6',
     contextLength: 200000,
-    description: 'Claude 3 Opus - 最强大的模型'
+    description: 'Claude 4.6 Opus - 最强大的模型'
   },
   [AiModel.SONNET]: {
     id: AiModel.SONNET,
-    name: 'Claude Sonnet',
+    name: 'Claude Sonnet 4.6',
     contextLength: 200000,
-    description: 'Claude 3.5 Sonnet - 平衡性能和成本'
+    description: 'Claude 4.6 Sonnet - 平衡性能和成本'
   },
   [AiModel.OPUS_PLAN]: {
     id: AiModel.OPUS_PLAN,
-    name: 'Claude Opus (Plan Mode)',
+    name: 'Claude Opus 4.6 (Plan Mode)',
     contextLength: 200000,
-    description: 'Claude 3 Opus - 计划模式'
+    description: 'Claude 4.6 Opus - 计划模式'
   }
 }
 

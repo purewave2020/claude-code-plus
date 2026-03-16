@@ -107,7 +107,6 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
     private var authModeOAuthRadio: JRadioButton? = null
     private var authModeApiKeyRadio: JRadioButton? = null
     private var oauthStatusLabel: JBLabel? = null
-    private var loginButton: JButton? = null
     private var apiKeyPanel: JPanel? = null
     private var apiKeyField: JBPasswordField? = null
     private var baseUrlField: JBTextField? = null
@@ -216,9 +215,6 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
 
         // OAuth status components
         oauthStatusLabel = JBLabel("").apply { font = font.deriveFont(11f) }
-        loginButton = JButton("Login / Re-authenticate").apply {
-            addActionListener { performOAuthLogin() }
-        }
 
         // API Key panel (shown/hidden based on auth mode)
         apiKeyField = JBPasswordField().apply {
@@ -269,16 +265,20 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         }
 
         // OAuth status panel
+        val oauthLoginHint = JBLabel("Please run 'claude login' in terminal to authenticate").apply {
+            font = font.deriveFont(11f)
+            foreground = JBColor(0x808080, 0x999999)
+        }
         val oauthPanel = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             val statusRow = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
                 add(oauthStatusLabel)
             }
-            val loginRow = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
-                add(loginButton)
+            val hintRow = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+                add(oauthLoginHint)
             }
             add(statusRow)
-            add(loginRow)
+            add(hintRow)
         }
 
         // Auth mode toggle behavior
@@ -333,7 +333,7 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
                 }
                 row { comment("Path to Node.js executable. Leave empty to auto-detect from system PATH.") }
                 row("Default model:") { cell(defaultModelCombo!!).columns(COLUMNS_MEDIUM) }
-                row { comment("Opus 4.5 = Most capable | Sonnet 4.5 = Balanced | Haiku 4.5 = Fastest") }
+                row { comment("Opus 4.6 = Most capable | Sonnet 4.6 = Balanced | Haiku 4.6 = Fastest") }
             }
 
             collapsibleGroup("Custom Models") {
@@ -566,7 +566,7 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         val dialogPanel = panel {
             row("Display Name:") { cell(nameField).align(AlignX.FILL) }
             row("Model ID:") { cell(idField).align(AlignX.FILL) }
-            row { comment("Model ID examples: claude-sonnet-4-5-20250929") }
+            row { comment("Model ID examples: claude-sonnet-4-6") }
         }
 
         val result = JOptionPane.showConfirmDialog(mainPanel, dialogPanel,
@@ -643,7 +643,7 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
 
         val selectedModel = defaultModelCombo?.selectedItem as? ModelInfo
         settings.defaultModel = selectedModel?.modelId ?: settings.getAllAvailableModels().firstOrNull { it.isBuiltIn }?.modelId
-            ?: "claude-opus-4-5-20251101"
+            ?: "claude-opus-4-6"
 
         val existing = settings.getCustomModels().associateBy { it.modelId }
         val custom = getCustomModelsFromTable().map { m ->
@@ -771,26 +771,64 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         testResultLabel?.foreground = JBColor.BLUE
         testConnectionButton?.isEnabled = false
 
-        // If OAuth mode, just check credential status
+        // If OAuth mode, verify by running a lightweight CLI command
         if (authModeOAuthRadio?.isSelected == true) {
             com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+                // First check credential file
                 val status = checkOAuthStatus()
-                javax.swing.SwingUtilities.invokeLater {
-                    when (status) {
-                        is OAuthStatus.LoggedIn -> {
-                            testResultLabel?.text = "OAuth token valid"
-                            testResultLabel?.foreground = JBColor(0x59A869, 0x59A869)
+                if (status !is OAuthStatus.LoggedIn) {
+                    javax.swing.SwingUtilities.invokeLater {
+                        when (status) {
+                            OAuthStatus.Expired -> {
+                                testResultLabel?.text = "OAuth token expired, please re-authenticate"
+                                testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
+                            }
+                            else -> {
+                                testResultLabel?.text = "Not logged in via OAuth"
+                                testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
+                            }
                         }
-                        OAuthStatus.Expired -> {
-                            testResultLabel?.text = "OAuth token expired"
-                            testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
-                        }
-                        OAuthStatus.NotLoggedIn -> {
-                            testResultLabel?.text = "Not logged in via OAuth"
-                            testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
-                        }
+                        testConnectionButton?.isEnabled = true
                     }
-                    testConnectionButton?.isEnabled = true
+                    return@executeOnPooledThread
+                }
+
+                // Token file exists and not expired, verify with actual API call
+                try {
+                    val isWindows = System.getProperty("os.name").lowercase().contains("win")
+                    val command = if (isWindows) {
+                        listOf("cmd", "/c", "claude", "--version")
+                    } else {
+                        listOf("claude", "--version")
+                    }
+                    val process = ProcessBuilder(command)
+                        .redirectErrorStream(true)
+                        .start()
+                    val output = process.inputStream.bufferedReader().readText()
+                    val finished = process.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)
+                    val exitCode = if (finished) process.exitValue() else -1
+
+                    javax.swing.SwingUtilities.invokeLater {
+                        if (finished && exitCode == 0) {
+                            val version = output.trim().take(50)
+                            testResultLabel?.text = "OAuth token valid (CLI: $version)"
+                            testResultLabel?.foreground = JBColor(0x59A869, 0x59A869)
+                        } else {
+                            testResultLabel?.text = "OAuth token exists but CLI verification failed"
+                            testResultLabel?.foreground = JBColor(0xE5C07B, 0xE5C07B)
+                        }
+                        testConnectionButton?.isEnabled = true
+                    }
+                    if (!finished) process.destroyForcibly()
+                } catch (e: Exception) {
+                    javax.swing.SwingUtilities.invokeLater {
+                        val expiresDate = java.text.SimpleDateFormat("yyyy-MM-dd").format(
+                            java.util.Date((status as OAuthStatus.LoggedIn).expiresAt)
+                        )
+                        testResultLabel?.text = "OAuth token valid (expires: $expiresDate), CLI not found for verification"
+                        testResultLabel?.foreground = JBColor(0xE5C07B, 0xE5C07B)
+                        testConnectionButton?.isEnabled = true
+                    }
                 }
             }
             return
@@ -895,36 +933,7 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         }
     }
 
-    private fun performOAuthLogin() {
-        loginButton?.isEnabled = false
-        loginButton?.text = "Logging in..."
-        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
-            try {
-                val settings = AgentSettingsService.getInstance()
-                val nodePath = settings.nodePath.ifBlank { "node" }
-                // Try to find the bundled CLI path
-                val cliResource = javaClass.getResource("/bundled/")
-                val cliDir = if (cliResource != null && cliResource.protocol == "file") {
-                    java.nio.file.Path.of(cliResource.toURI()).toString()
-                } else {
-                    null
-                }
-                // Use 'claude login' command directly
-                val process = ProcessBuilder("claude", "login")
-                    .redirectErrorStream(true)
-                    .start()
-                process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)
-            } catch (_: Exception) {
-                // Silently handle - user can check OAuth status
-            } finally {
-                javax.swing.SwingUtilities.invokeLater {
-                    loginButton?.isEnabled = true
-                    loginButton?.text = "Login / Re-authenticate"
-                    refreshOAuthStatus()
-                }
-            }
-        }
-    }
+
 
     private sealed class OAuthStatus {
         data class LoggedIn(val expiresAt: Long) : OAuthStatus()
@@ -936,7 +945,6 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         authModeOAuthRadio = null
         authModeApiKeyRadio = null
         oauthStatusLabel = null
-        loginButton = null
         apiKeyPanel = null
         apiKeyField = null
         baseUrlField = null
