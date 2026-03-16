@@ -238,6 +238,9 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         "context7Mcp=${settings.enableContext7Mcp}(${context7Backends.joinToString()}), " +
                         "terminalMcp=${settings.enableTerminalMcp}(${terminalBackends.joinToString()}), " +
                         "gitMcp=${settings.enableGitMcp}(${gitBackends.joinToString()}), " +
+                        "claudeAuthMode=${settings.claudeAuthMode}, " +
+                        "claudeApiKey=${if (settings.claudeApiKey.isNotBlank()) "(set)" else "(not set)"}, " +
+                        "claudeBaseUrl=${settings.claudeBaseUrl.ifBlank { "(default)" }}, " +
                         "defaultBypass=${settings.defaultBypassPermissions}, " +
                         "claudeAutoCleanup=${settings.claudeDefaultAutoCleanupContexts}, " +
                         "codexAutoCleanup=${settings.codexDefaultAutoCleanupContexts}"
@@ -251,6 +254,9 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                     defaultModel = settings.defaultModel,  // 使用模型 ID（内置或自定义）
                     claude = ClaudeDefaults(
                         nodePath = settings.nodePath.takeIf { it.isNotBlank() },
+                        authMode = settings.claudeAuthMode,
+                        apiKey = settings.claudeApiKey.takeIf { it.isNotBlank() },
+                        baseUrl = settings.claudeBaseUrl.takeIf { it.isNotBlank() },
                         permissionMode = settings.permissionMode.takeIf { it.isNotBlank() && it != "default" },
                         includePartialMessages = settings.includePartialMessages,
                         enableUserInteractionMcp = settings.enableUserInteractionMcp,

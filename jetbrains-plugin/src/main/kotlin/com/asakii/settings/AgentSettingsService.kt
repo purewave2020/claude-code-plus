@@ -25,6 +25,9 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var enableJetBrainsFileMcp: Boolean = true,    // JetBrains File MCP（文件操作工具）
         var enableContext7Mcp: Boolean = false,        // Context7 MCP（获取最新库文档）
         var context7ApiKey: String = "",               // Context7 API Key（可选）
+        var claudeAuthMode: String = "oauth",        // "oauth" | "api_key"
+        var claudeApiKey: String = "",               // ANTHROPIC_API_KEY
+        var claudeBaseUrl: String = "",              // ANTHROPIC_BASE_URL
         var enableTerminalMcp: Boolean = false,        // Terminal MCP（IDEA 内置终端，默认禁用）
         var terminalDisableBuiltinBash: Boolean = true, // 启用 Terminal MCP 时禁用内置 Bash
         var terminalMaxOutputLines: Int = 500,         // Terminal 输出最大行数
@@ -1361,6 +1364,18 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         get() = state.nodePath
         set(value) { state.nodePath = value }
 
+    var claudeAuthMode: String
+        get() = state.claudeAuthMode
+        set(value) { state.claudeAuthMode = value }
+
+    var claudeApiKey: String
+        get() = state.claudeApiKey
+        set(value) { state.claudeApiKey = value }
+
+    var claudeBaseUrl: String
+        get() = state.claudeBaseUrl
+        set(value) { state.claudeBaseUrl = value }
+
     var codexPath: String
         get() = state.codexPath
         set(value) { state.codexPath = value }
@@ -1765,6 +1780,26 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
                 else -> "ultra"
             }
         }
+
+    // ==================== API Key Source Detection ====================
+
+    enum class ApiKeySource { PLUGIN_SETTINGS, SYSTEM_ENV, NONE }
+
+    fun getApiKeySource(): ApiKeySource {
+        return when {
+            state.claudeApiKey.isNotBlank() -> ApiKeySource.PLUGIN_SETTINGS
+            System.getenv("ANTHROPIC_API_KEY")?.isNotBlank() == true -> ApiKeySource.SYSTEM_ENV
+            else -> ApiKeySource.NONE
+        }
+    }
+
+    fun getBaseUrlSource(): ApiKeySource {
+        return when {
+            state.claudeBaseUrl.isNotBlank() -> ApiKeySource.PLUGIN_SETTINGS
+            System.getenv("ANTHROPIC_BASE_URL")?.isNotBlank() == true -> ApiKeySource.SYSTEM_ENV
+            else -> ApiKeySource.NONE
+        }
+    }
 
     companion object {
         const val MCP_BACKEND_ALL = "all"

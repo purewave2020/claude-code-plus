@@ -12,6 +12,9 @@ import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import java.awt.*
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
@@ -99,6 +102,19 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
     private var ultraTokensSpinner: JSpinner? = null
     private var permissionModeCombo: ComboBox<String>? = null
     private var includePartialMessagesCheckbox: JBCheckBox? = null
+
+    // API Configuration components
+    private var authModeOAuthRadio: JRadioButton? = null
+    private var authModeApiKeyRadio: JRadioButton? = null
+    private var oauthStatusLabel: JBLabel? = null
+    private var loginButton: JButton? = null
+    private var apiKeyPanel: JPanel? = null
+    private var apiKeyField: JBPasswordField? = null
+    private var baseUrlField: JBTextField? = null
+    private var apiKeySourceLabel: JBLabel? = null
+    private var baseUrlSourceLabel: JBLabel? = null
+    private var testConnectionButton: JButton? = null
+    private var testResultLabel: JBLabel? = null
 
     // Custom Models 组件
     private var customModelsTable: JBTable? = null
@@ -190,7 +206,117 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
             tableHeader.reorderingAllowed = false
         }
 
+        // Initialize auth mode radio buttons
+        authModeOAuthRadio = JRadioButton("Claude Account (OAuth)")
+        authModeApiKeyRadio = JRadioButton("API Key")
+        val authModeGroup = ButtonGroup().apply {
+            add(authModeOAuthRadio)
+            add(authModeApiKeyRadio)
+        }
+
+        // OAuth status components
+        oauthStatusLabel = JBLabel("").apply { font = font.deriveFont(11f) }
+        loginButton = JButton("Login / Re-authenticate").apply {
+            addActionListener { performOAuthLogin() }
+        }
+
+        // API Key panel (shown/hidden based on auth mode)
+        apiKeyField = JBPasswordField().apply {
+            columns = 30
+            document.addDocumentListener(object : javax.swing.event.DocumentListener {
+                override fun insertUpdate(e: javax.swing.event.DocumentEvent?) = updateApiKeySourceLabel()
+                override fun removeUpdate(e: javax.swing.event.DocumentEvent?) = updateApiKeySourceLabel()
+                override fun changedUpdate(e: javax.swing.event.DocumentEvent?) = updateApiKeySourceLabel()
+            })
+        }
+        baseUrlField = JBTextField().apply {
+            columns = 30
+            emptyText.text = "https://api.anthropic.com (default)"
+            document.addDocumentListener(object : javax.swing.event.DocumentListener {
+                override fun insertUpdate(e: javax.swing.event.DocumentEvent?) = updateBaseUrlSourceLabel()
+                override fun removeUpdate(e: javax.swing.event.DocumentEvent?) = updateBaseUrlSourceLabel()
+                override fun changedUpdate(e: javax.swing.event.DocumentEvent?) = updateBaseUrlSourceLabel()
+            })
+        }
+        apiKeySourceLabel = JBLabel("").apply { font = font.deriveFont(11f) }
+        baseUrlSourceLabel = JBLabel("").apply { font = font.deriveFont(11f) }
+        testConnectionButton = JButton("Test Connection").apply {
+            addActionListener { testApiConnection() }
+        }
+        testResultLabel = JBLabel("").apply { font = font.deriveFont(11f) }
+
+        // Build the API key sub-panel as a regular JPanel
+        apiKeyPanel = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            val apiKeyRow = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+                add(JLabel("API Key:"))
+                add(apiKeyField)
+            }
+            val apiKeySourceRow = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+                add(apiKeySourceLabel)
+            }
+            val baseUrlRow = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+                add(JLabel("Base URL:"))
+                add(baseUrlField)
+            }
+            val baseUrlSourceRow = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+                add(baseUrlSourceLabel)
+            }
+            add(apiKeyRow)
+            add(apiKeySourceRow)
+            add(baseUrlRow)
+            add(baseUrlSourceRow)
+        }
+
+        // OAuth status panel
+        val oauthPanel = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            val statusRow = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+                add(oauthStatusLabel)
+            }
+            val loginRow = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+                add(loginButton)
+            }
+            add(statusRow)
+            add(loginRow)
+        }
+
+        // Auth mode toggle behavior
+        fun updateAuthModeVisibility() {
+            val isApiKey = authModeApiKeyRadio?.isSelected == true
+            apiKeyPanel?.isVisible = isApiKey
+            oauthPanel.isVisible = !isApiKey
+        }
+        authModeOAuthRadio!!.addActionListener { updateAuthModeVisibility(); refreshOAuthStatus() }
+        authModeApiKeyRadio!!.addActionListener { updateAuthModeVisibility() }
+
+        // Auth mode selection panel (avoid DSL buttonsGroup requirement)
+        val authModePanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+            add(JLabel("Authentication:"))
+            add(authModeOAuthRadio)
+            add(authModeApiKeyRadio)
+        }
+
+        // Combined API config panel
+        val apiConfigPanel = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            add(authModePanel)
+            add(oauthPanel)
+            add(apiKeyPanel)
+            val testRow = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+                add(testConnectionButton)
+                add(testResultLabel)
+            }
+            add(testRow)
+        }
+
         return panel {
+            group("API Configuration") {
+                row {
+                    cell(apiConfigPanel).align(AlignX.FILL)
+                }
+            }
+
             group("Default Permissions") {
                 row { cell(defaultBypassPermissionsCheckbox!!) }
                 row { comment("Skip confirmation dialogs for file edits and bash commands.") }
@@ -504,7 +630,11 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
             exploreSelectionHintArea?.text != effectiveHint ||
             getTools() != effectiveTools
 
-        return generalModified || agentsModified
+        val authModeModified = getSelectedAuthMode() != settings.claudeAuthMode
+        val apiKeyModified = String(apiKeyField?.password ?: charArrayOf()) != settings.claudeApiKey
+        val baseUrlModified = (baseUrlField?.text ?: "") != settings.claudeBaseUrl
+
+        return generalModified || agentsModified || authModeModified || apiKeyModified || baseUrlModified
     }
 
     override fun apply() {
@@ -540,11 +670,32 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
             selectionHint = exploreSelectionHintArea?.text ?: ""
         )
         settings.customAgents = json.encodeToString(AgentsConfigData(mapOf("ExploreWithJetbrains" to exploreConfig)))
+
+        settings.claudeAuthMode = getSelectedAuthMode()
+        settings.claudeApiKey = String(apiKeyField?.password ?: charArrayOf())
+        settings.claudeBaseUrl = baseUrlField?.text?.trim() ?: ""
+
         settings.notifyChange()
     }
 
     override fun reset() {
         val settings = AgentSettingsService.getInstance()
+        // Restore auth mode
+        when (settings.claudeAuthMode) {
+            "api_key" -> authModeApiKeyRadio?.isSelected = true
+            else -> authModeOAuthRadio?.isSelected = true
+        }
+        apiKeyField?.text = settings.claudeApiKey
+        baseUrlField?.text = settings.claudeBaseUrl
+        updateApiKeySourceLabel()
+        updateBaseUrlSourceLabel()
+        refreshOAuthStatus()
+        // Update panel visibility after restoring auth mode
+        val isApiKey = authModeApiKeyRadio?.isSelected == true
+        apiKeyPanel?.isVisible = isApiKey
+        // OAuth panel visibility: find sibling - oauthStatusLabel's grandparent
+        oauthStatusLabel?.parent?.parent?.isVisible = !isApiKey
+
         nodePathField?.text = settings.nodePath
 
         customModelsTableModel?.rowCount = 0
@@ -591,7 +742,208 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         } catch (e: Exception) { AgentsConfigData() }
     }
 
+    private fun updateApiKeySourceLabel() {
+        val fieldHasValue = apiKeyField?.password?.isNotEmpty() == true
+        val (text, color) = when {
+            fieldHasValue -> "Source: Plugin settings" to JBColor.foreground()
+            System.getenv("ANTHROPIC_API_KEY")?.isNotBlank() == true ->
+                "Source: System environment variable" to JBColor.foreground()
+            else -> "Not configured" to JBColor(0xFF6B6B, 0xFF6B6B)
+        }
+        apiKeySourceLabel?.text = text
+        apiKeySourceLabel?.foreground = color
+    }
+
+    private fun updateBaseUrlSourceLabel() {
+        val fieldHasValue = baseUrlField?.text?.isNotBlank() == true
+        val (text, color) = when {
+            fieldHasValue -> "Source: Plugin settings" to JBColor.foreground()
+            System.getenv("ANTHROPIC_BASE_URL")?.isNotBlank() == true ->
+                "Source: System environment variable" to JBColor.foreground()
+            else -> "Using default" to JBColor.GRAY
+        }
+        baseUrlSourceLabel?.text = text
+        baseUrlSourceLabel?.foreground = color
+    }
+
+    private fun testApiConnection() {
+        testResultLabel?.text = "Testing..."
+        testResultLabel?.foreground = JBColor.BLUE
+        testConnectionButton?.isEnabled = false
+
+        // If OAuth mode, just check credential status
+        if (authModeOAuthRadio?.isSelected == true) {
+            com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+                val status = checkOAuthStatus()
+                javax.swing.SwingUtilities.invokeLater {
+                    when (status) {
+                        is OAuthStatus.LoggedIn -> {
+                            testResultLabel?.text = "OAuth token valid"
+                            testResultLabel?.foreground = JBColor(0x59A869, 0x59A869)
+                        }
+                        OAuthStatus.Expired -> {
+                            testResultLabel?.text = "OAuth token expired"
+                            testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
+                        }
+                        OAuthStatus.NotLoggedIn -> {
+                            testResultLabel?.text = "Not logged in via OAuth"
+                            testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
+                        }
+                    }
+                    testConnectionButton?.isEnabled = true
+                }
+            }
+            return
+        }
+
+        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                val apiKey = String(apiKeyField?.password ?: charArrayOf()).ifBlank {
+                    System.getenv("ANTHROPIC_API_KEY") ?: ""
+                }
+                if (apiKey.isBlank()) {
+                    javax.swing.SwingUtilities.invokeLater {
+                        testResultLabel?.text = "No API key configured"
+                        testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
+                        testConnectionButton?.isEnabled = true
+                    }
+                    return@executeOnPooledThread
+                }
+
+                val baseUrl = baseUrlField?.text?.trim()?.ifBlank { null }
+                    ?: System.getenv("ANTHROPIC_BASE_URL")
+                    ?: "https://api.anthropic.com"
+
+                val url = java.net.URL("${baseUrl.trimEnd('/')}/v1/models")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("x-api-key", apiKey)
+                conn.setRequestProperty("anthropic-version", "2023-06-01")
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+
+                val responseCode = conn.responseCode
+                javax.swing.SwingUtilities.invokeLater {
+                    when {
+                        responseCode == 200 -> {
+                            testResultLabel?.text = "Connection successful"
+                            testResultLabel?.foreground = JBColor(0x59A869, 0x59A869)
+                        }
+                        responseCode == 401 -> {
+                            testResultLabel?.text = "Invalid API key (401)"
+                            testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
+                        }
+                        responseCode == 403 -> {
+                            testResultLabel?.text = "Access denied (403)"
+                            testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
+                        }
+                        else -> {
+                            testResultLabel?.text = "Unexpected response: $responseCode"
+                            testResultLabel?.foreground = JBColor(0xE5C07B, 0xE5C07B)
+                        }
+                    }
+                    testConnectionButton?.isEnabled = true
+                }
+                conn.disconnect()
+            } catch (e: Exception) {
+                javax.swing.SwingUtilities.invokeLater {
+                    testResultLabel?.text = "Connection failed: ${e.message}"
+                    testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
+                    testConnectionButton?.isEnabled = true
+                }
+            }
+        }
+    }
+
+    private fun getSelectedAuthMode(): String {
+        return if (authModeApiKeyRadio?.isSelected == true) "api_key" else "oauth"
+    }
+
+    private fun refreshOAuthStatus() {
+        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            val status = checkOAuthStatus()
+            javax.swing.SwingUtilities.invokeLater {
+                val (text, color) = when (status) {
+                    is OAuthStatus.LoggedIn -> {
+                        val expiresDate = java.text.SimpleDateFormat("yyyy-MM-dd").format(java.util.Date(status.expiresAt))
+                        "Logged in (token expires: $expiresDate)" to JBColor(0x59A869, 0x59A869)
+                    }
+                    OAuthStatus.Expired -> "Token expired, please re-authenticate" to JBColor(0xFF6B6B, 0xFF6B6B)
+                    OAuthStatus.NotLoggedIn -> "Not logged in" to JBColor(0xFF6B6B, 0xFF6B6B)
+                }
+                oauthStatusLabel?.text = text
+                oauthStatusLabel?.foreground = color
+            }
+        }
+    }
+
+    private fun checkOAuthStatus(): OAuthStatus {
+        try {
+            val credFile = java.nio.file.Path.of(System.getProperty("user.home"), ".claude", ".credentials.json")
+            if (!java.nio.file.Files.exists(credFile)) return OAuthStatus.NotLoggedIn
+            val content = java.nio.file.Files.readString(credFile)
+            val jsonElement = kotlinx.serialization.json.Json.parseToJsonElement(content)
+            val oauth = jsonElement.jsonObject["claudeAiOauth"]?.jsonObject ?: return OAuthStatus.NotLoggedIn
+            val expiresAt = oauth["expiresAt"]?.jsonPrimitive?.longOrNull ?: return OAuthStatus.NotLoggedIn
+            return if (expiresAt > System.currentTimeMillis()) {
+                OAuthStatus.LoggedIn(expiresAt)
+            } else {
+                OAuthStatus.Expired
+            }
+        } catch (_: Exception) {
+            return OAuthStatus.NotLoggedIn
+        }
+    }
+
+    private fun performOAuthLogin() {
+        loginButton?.isEnabled = false
+        loginButton?.text = "Logging in..."
+        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                val settings = AgentSettingsService.getInstance()
+                val nodePath = settings.nodePath.ifBlank { "node" }
+                // Try to find the bundled CLI path
+                val cliResource = javaClass.getResource("/bundled/")
+                val cliDir = if (cliResource != null && cliResource.protocol == "file") {
+                    java.nio.file.Path.of(cliResource.toURI()).toString()
+                } else {
+                    null
+                }
+                // Use 'claude login' command directly
+                val process = ProcessBuilder("claude", "login")
+                    .redirectErrorStream(true)
+                    .start()
+                process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)
+            } catch (_: Exception) {
+                // Silently handle - user can check OAuth status
+            } finally {
+                javax.swing.SwingUtilities.invokeLater {
+                    loginButton?.isEnabled = true
+                    loginButton?.text = "Login / Re-authenticate"
+                    refreshOAuthStatus()
+                }
+            }
+        }
+    }
+
+    private sealed class OAuthStatus {
+        data class LoggedIn(val expiresAt: Long) : OAuthStatus()
+        data object Expired : OAuthStatus()
+        data object NotLoggedIn : OAuthStatus()
+    }
+
     override fun disposeUIResources() {
+        authModeOAuthRadio = null
+        authModeApiKeyRadio = null
+        oauthStatusLabel = null
+        loginButton = null
+        apiKeyPanel = null
+        apiKeyField = null
+        baseUrlField = null
+        apiKeySourceLabel = null
+        baseUrlSourceLabel = null
+        testConnectionButton = null
+        testResultLabel = null
         nodePathField = null
         defaultModelCombo = null
         defaultThinkingLevelCombo = null

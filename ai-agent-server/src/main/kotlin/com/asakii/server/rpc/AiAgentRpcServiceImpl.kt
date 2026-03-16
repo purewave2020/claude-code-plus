@@ -1098,6 +1098,19 @@ class AiAgentRpcServiceImpl(
             }
         }
 
+        // Build environment variables for API configuration
+        // Only inject API key env vars when using api_key auth mode
+        val envVars = mutableMapOf<String, String>()
+        if (defaults.authMode == "api_key") {
+            defaults.apiKey?.let { envVars["ANTHROPIC_API_KEY"] = it }
+            defaults.baseUrl?.let { envVars["ANTHROPIC_BASE_URL"] = it }
+        }
+        if (envVars.isNotEmpty()) {
+            sdkLog.info("🔑 [buildClaudeOverrides] API env vars: ${envVars.keys.joinToString()}")
+        } else {
+            sdkLog.info("🔑 [buildClaudeOverrides] Auth mode: ${defaults.authMode} (no API env vars injected)")
+        }
+
         val claudeOptions = ClaudeAgentOptions(
             model = model,
             cwd = cwd,
@@ -1127,6 +1140,8 @@ class AiAgentRpcServiceImpl(
             agents = agents.ifEmpty { null },
             // Node.js 可执行文件路径（用户配置 > 环境变量 > 默认 "node"）
             nodePath = defaults.nodePath,
+            // Environment variables for API configuration (ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL)
+            env = envVars,
             // Claude CLI settings.json 路径（用于加载环境变量等配置）
             settings = defaults.settings,
             // IDEA 文件同步 hooks（由 jetbrains-plugin 提供）

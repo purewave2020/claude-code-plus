@@ -43,6 +43,11 @@ data class ClaudeDefaults(
     val permissionMode: String? = null,
     // Node.js 可执行文件路径，null 时使用系统 PATH 中的 "node"
     val nodePath: String? = null,
+    // Authentication mode: "oauth" or "api_key"
+    val authMode: String = "oauth",
+    // API configuration (injected as environment variables to CLI subprocess)
+    val apiKey: String? = null,       // ANTHROPIC_API_KEY
+    val baseUrl: String? = null,      // ANTHROPIC_BASE_URL
     // Claude CLI settings.json 路径，null 时不指定（CLI 会自动查找 ~/.claude/settings.json）
     val settings: String? = null,
     // 集成 MCP 服务器启用配置
