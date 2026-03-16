@@ -294,14 +294,9 @@
               @update:reasoning-effort="handleCodexReasoningEffortChange"
             />
           </div>
-
-          <!-- 上下文使用量指示器 -->
-          <ContextUsageIndicator
-            :session-token-usage="sessionTokenUsage"
-          />
         </div>
 
-        <!-- 第二行：Think / Bypass / Auto Cleanup 开关 -->
+        <!-- 第二行：Think / Bypass / Auto Cleanup 开关 / 上下文使用量指示器 -->
         <div class="toolbar-row">
           <ThinkingToggle
             v-if="showModelSelector && backendType === 'claude'"
@@ -328,6 +323,10 @@
             :show-icon="false"
             :tooltip="t('chat.autoCleanupContextTooltip')"
             @toggle="handleAutoCleanupChange"
+          />
+          <!-- 上下文使用量指示器 -->
+          <ContextUsageIndicator
+            :session-token-usage="sessionTokenUsage"
           />
         </div>
       </div>

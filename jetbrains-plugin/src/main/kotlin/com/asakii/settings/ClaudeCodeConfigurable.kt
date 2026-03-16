@@ -779,7 +779,7 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
                 if (status !is OAuthStatus.LoggedIn) {
                     javax.swing.SwingUtilities.invokeLater {
                         when (status) {
-                            OAuthStatus.Expired -> {
+                            is OAuthStatus.Expired -> {
                                 testResultLabel?.text = "OAuth token expired, please re-authenticate"
                                 testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
                             }
@@ -794,6 +794,19 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
                 }
 
                 // Token file exists and not expired, verify with actual API call
+                val accessToken = status.accessToken
+                val (isValid, errorMessage) = verifyOAuthToken(accessToken)
+
+                if (!isValid) {
+                    javax.swing.SwingUtilities.invokeLater {
+                        testResultLabel?.text = errorMessage ?: "OAuth token invalid"
+                        testResultLabel?.foreground = JBColor(0xFF6B6B, 0xFF6B6B)
+                        testConnectionButton?.isEnabled = true
+                    }
+                    return@executeOnPooledThread
+                }
+
+                // API token is valid, also check CLI availability as additional info
                 try {
                     val isWindows = System.getProperty("os.name").lowercase().contains("win")
                     val command = if (isWindows) {
@@ -814,19 +827,16 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
                             testResultLabel?.text = "OAuth token valid (CLI: $version)"
                             testResultLabel?.foreground = JBColor(0x59A869, 0x59A869)
                         } else {
-                            testResultLabel?.text = "OAuth token exists but CLI verification failed"
-                            testResultLabel?.foreground = JBColor(0xE5C07B, 0xE5C07B)
+                            testResultLabel?.text = "OAuth token valid (CLI check failed)"
+                            testResultLabel?.foreground = JBColor(0x59A869, 0x59A869)
                         }
                         testConnectionButton?.isEnabled = true
                     }
                     if (!finished) process.destroyForcibly()
                 } catch (e: Exception) {
                     javax.swing.SwingUtilities.invokeLater {
-                        val expiresDate = java.text.SimpleDateFormat("yyyy-MM-dd").format(
-                            java.util.Date((status as OAuthStatus.LoggedIn).expiresAt)
-                        )
-                        testResultLabel?.text = "OAuth token valid (expires: $expiresDate), CLI not found for verification"
-                        testResultLabel?.foreground = JBColor(0xE5C07B, 0xE5C07B)
+                        testResultLabel?.text = "OAuth token valid (CLI not found)"
+                        testResultLabel?.foreground = JBColor(0x59A869, 0x59A869)
                         testConnectionButton?.isEnabled = true
                     }
                 }
@@ -906,8 +916,8 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
                         val expiresDate = java.text.SimpleDateFormat("yyyy-MM-dd").format(java.util.Date(status.expiresAt))
                         "Logged in (token expires: $expiresDate)" to JBColor(0x59A869, 0x59A869)
                     }
-                    OAuthStatus.Expired -> "Token expired, please re-authenticate" to JBColor(0xFF6B6B, 0xFF6B6B)
-                    OAuthStatus.NotLoggedIn -> "Not logged in" to JBColor(0xFF6B6B, 0xFF6B6B)
+                    is OAuthStatus.Expired -> "Token expired, please re-authenticate" to JBColor(0xFF6B6B, 0xFF6B6B)
+                    is OAuthStatus.NotLoggedIn -> "Not logged in" to JBColor(0xFF6B6B, 0xFF6B6B)
                 }
                 oauthStatusLabel?.text = text
                 oauthStatusLabel?.foreground = color
@@ -923,21 +933,52 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
             val jsonElement = kotlinx.serialization.json.Json.parseToJsonElement(content)
             val oauth = jsonElement.jsonObject["claudeAiOauth"]?.jsonObject ?: return OAuthStatus.NotLoggedIn
             val expiresAt = oauth["expiresAt"]?.jsonPrimitive?.longOrNull ?: return OAuthStatus.NotLoggedIn
+            val accessToken = oauth["accessToken"]?.jsonPrimitive?.content ?: return OAuthStatus.NotLoggedIn
             return if (expiresAt > System.currentTimeMillis()) {
-                OAuthStatus.LoggedIn(expiresAt)
+                OAuthStatus.LoggedIn(expiresAt, accessToken)
             } else {
-                OAuthStatus.Expired
+                OAuthStatus.Expired(accessToken)
             }
         } catch (_: Exception) {
             return OAuthStatus.NotLoggedIn
         }
     }
 
+    /**
+     * 验证 OAuth Token 是否有效（通过调用 Anthropic API）
+     * @param accessToken OAuth access token
+     * @return Pair of (isValid, errorMessage)
+     */
+    private fun verifyOAuthToken(accessToken: String): Pair<Boolean, String?> {
+        return try {
+            val baseUrl = "https://api.anthropic.com"
+            val url = java.net.URL("${baseUrl}/v1/models")
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            // OAuth 使用 Bearer token 格式
+            conn.setRequestProperty("Authorization", "Bearer $accessToken")
+            conn.setRequestProperty("anthropic-version", "2023-06-01")
+            conn.connectTimeout = 10000
+            conn.readTimeout = 10000
 
+            val responseCode = conn.responseCode
+            when {
+                responseCode == 200 -> true to null
+                responseCode == 401 -> false to "OAuth token invalid or expired (401)"
+                responseCode == 403 -> false to "OAuth token unauthorized (403) - please re-authenticate"
+                responseCode >= 500 -> false to "Anthropic API server error ($responseCode)"
+                else -> false to "API request failed with code $responseCode"
+            }
+        } catch (e: java.net.UnknownHostException) {
+            false to "Network error: cannot reach Anthropic API"
+        } catch (e: Exception) {
+            false to "Verification failed: ${e.message}"
+        }
+    }
 
     private sealed class OAuthStatus {
-        data class LoggedIn(val expiresAt: Long) : OAuthStatus()
-        data object Expired : OAuthStatus()
+        data class LoggedIn(val expiresAt: Long, val accessToken: String) : OAuthStatus()
+        data class Expired(val accessToken: String) : OAuthStatus()
         data object NotLoggedIn : OAuthStatus()
     }
 
