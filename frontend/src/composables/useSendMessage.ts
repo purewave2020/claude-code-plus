@@ -59,6 +59,8 @@ export interface SendMessageOptions {
   onSend: (contents: ContentBlock[], options?: SendOptions) => void
   /** Callback when force-sending a message (interrupt and send) */
   onForceSend: (contents: ContentBlock[], options?: SendOptions) => void
+  /** Callback after a message is sent (for adding to history) */
+  onAfterSend?: (text: string) => void
 }
 
 export function useSendMessage(options: SendMessageOptions) {
@@ -73,7 +75,8 @@ export function useSendMessage(options: SendMessageOptions) {
     activeFileEnabled,
     currentActiveFile,
     onSend,
-    onForceSend
+    onForceSend,
+    onAfterSend
   } = options
 
   /**
@@ -153,6 +156,11 @@ export function useSendMessage(options: SendMessageOptions) {
     // Send message (parent handles queue logic and XML conversion)
     onSend(contents, { isSlashCommand, ideContext })
 
+    // Add to history after successful send
+    if (onAfterSend) {
+      onAfterSend(text)
+    }
+
     // Clear input
     clearInput()
   }
@@ -172,6 +180,12 @@ export function useSendMessage(options: SendMessageOptions) {
 
     // Force send message (parent handles interrupt and XML conversion)
     onForceSend(contents, { ideContext })
+
+    // Add to history after successful send
+    if (onAfterSend) {
+      const text = getPlainText()
+      onAfterSend(text)
+    }
 
     // Clear input
     clearInput()
@@ -200,6 +214,11 @@ export function useSendMessage(options: SendMessageOptions) {
 
     // Send message (parent handles queue logic)
     onSend(contents, { isSlashCommand, ideContext })
+
+    // Add to history after successful send
+    if (onAfterSend) {
+      onAfterSend(text)
+    }
 
     // Clear input
     clearInput()

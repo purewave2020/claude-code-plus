@@ -136,6 +136,13 @@ class GenerateCommitMessageService(private val project: Project) {
                     )
                 }
                 else -> {
+                    // Build environment variables for API configuration
+                    val envVars = mutableMapOf<String, String>()
+                    if (settings.claudeAuthMode == "api_key") {
+                        settings.claudeApiKey.takeIf { it.isNotBlank() }?.let { envVars["ANTHROPIC_API_KEY"] = it }
+                        settings.claudeBaseUrl.takeIf { it.isNotBlank() }?.let { envVars["ANTHROPIC_BASE_URL"] = it }
+                    }
+
                     val claudeOptions = ClaudeAgentOptions(
                         nodePath = settings.nodePath.takeIf { it.isNotBlank() },
                         cwd = projectPath?.let { Paths.get(it) },
@@ -147,7 +154,8 @@ class GenerateCommitMessageService(private val project: Project) {
                         mcpServers = mapOf<String, McpServerSpec>("jetbrains_git" to gitMcpServer),
                         extraArgs = mapOf("output-format" to "stream-json"),
                         noSessionPersistence = !settings.gitGenerateSaveSession,
-                        maxThinkingTokens = settings.effectiveGitGenerateClaudeThinkingTokens
+                        maxThinkingTokens = settings.effectiveGitGenerateClaudeThinkingTokens,
+                        env = envVars
                     )
 
                     AiAgentConnectOptions(
@@ -214,7 +222,8 @@ class GenerateCommitMessageService(private val project: Project) {
                                                         if (text.isNotBlank()) {
                                                             indicator.text = text
                                                             updateDetails("📝 $text...")
-                                                            logger.debug { "Text: ${content.text.take(100)}" }
+                                                            // 记录完整文本内容以便调试（特别是当 AI 没有调用工具时）
+                                                            logger.info { "AI output text: ${content.text.take(500)}" }
                                                         }
                                                     }
                                                     else -> {} // 忽略其他内容类型（如 ToolUseContent）
@@ -248,12 +257,16 @@ class GenerateCommitMessageService(private val project: Project) {
                                             }
                                         }
                                         is UiResultMessage -> {
-                                            logger.info { "Result: subtype=${event.subtype}, isError=${event.isError}, numTurns=${event.numTurns}" }
+                                            logger.info { "Result: subtype=${event.subtype}, isError=${event.isError}, numTurns=${event.numTurns}, toolCallCount=$toolCallCount" }
                                             if (!event.isError && toolCallCount > 0) {
                                                 success = true
                                             }
                                             indicator.text = if (success) "Done!" else "Completed"
                                             indicator.text2 = if (success) "Commit message generated" else "Check commit panel"
+                                            // 如果没有调用工具，记录更详细的日志
+                                            if (toolCallCount == 0) {
+                                                logger.warn { "Query completed but no tools were called. Result: $event" }
+                                            }
                                             logger.info { "Query completed, cancelling collector" }
                                             cancel()  // 主动取消收集器
                                         }
@@ -294,7 +307,12 @@ class GenerateCommitMessageService(private val project: Project) {
             if (success) {
                 showNotification("Commit message generated successfully", NotificationType.INFORMATION)
             } else if (toolCallCount == 0) {
-                showNotification("No tools were called. Please try again.", NotificationType.WARNING)
+                // AI 没有调用任何工具，可能是模型理解问题或连接问题
+                logger.warn { "Git Generate completed without calling any tools. Provider: $provider" }
+                showNotification(
+                    "No tools were called. AI may not have responded correctly. Check logs or try again.",
+                    NotificationType.WARNING
+                )
             }
 
         } catch (e: Exception) {

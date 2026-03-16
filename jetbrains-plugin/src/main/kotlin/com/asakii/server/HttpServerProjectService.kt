@@ -239,7 +239,7 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         "terminalMcp=${settings.enableTerminalMcp}(${terminalBackends.joinToString()}), " +
                         "gitMcp=${settings.enableGitMcp}(${gitBackends.joinToString()}), " +
                         "claudeAuthMode=${settings.claudeAuthMode}, " +
-                        "claudeApiKey=${if (settings.claudeApiKey.isNotBlank()) "(set)" else "(not set)"}, " +
+                        "claudeApiKey=${if (settings.claudeApiKey.isNotBlank()) "(set, len=${settings.claudeApiKey.length})" else "(not set)"}, " +
                         "claudeBaseUrl=${settings.claudeBaseUrl.ifBlank { "(default)" }}, " +
                         "defaultBypass=${settings.defaultBypassPermissions}, " +
                         "claudeAutoCleanup=${settings.claudeDefaultAutoCleanupContexts}, " +

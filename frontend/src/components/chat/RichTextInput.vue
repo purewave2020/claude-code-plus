@@ -588,6 +588,12 @@ function insertNewLine() {
   editor.value.chain().focus().splitBlock().run()
 }
 
+// 移动光标到文档末尾
+function moveCursorToEnd() {
+  if (!editor.value) return
+  editor.value.chain().focus().endOfDocument().run()
+}
+
 // 清理
 onBeforeUnmount(() => {
   editor.value?.destroy()
@@ -608,6 +614,7 @@ defineExpose({
   extractContentBlocks,
   deleteToLineStart,
   insertNewLine,
+  moveCursorToEnd,
 })
 </script>
 

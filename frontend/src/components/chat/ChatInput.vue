@@ -516,6 +516,7 @@ import { usePendingTasks, type PendingTask } from '@/composables/usePendingTasks
 import { useTokenDisplay, type TokenUsage } from '@/composables/useTokenDisplay'
 import { useContextHandling } from '@/composables/useContextHandling'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import { useInputHistory } from '@/composables/useInputHistory'
 // Multi-backend types
 import type { BackendType } from '@/types/backend'
 import type { ThinkingConfig } from '@/types/thinking'
@@ -806,8 +807,17 @@ const {
   activeFileEnabled,
   currentActiveFile,
   onSend: (contents, options) => emit('send', contents, options),
-  onForceSend: (contents, options) => emit('force-send', contents, options)
+  onForceSend: (contents, options) => emit('force-send', contents, options),
+  onAfterSend: (text) => addToHistory(text)
 })
+
+// ========== Input History (使用 composable) ==========
+const {
+  addToHistory,
+  navigateUp: navigateHistoryUp,
+  navigateDown: navigateHistoryDown,
+  resetNavigation: resetHistoryNavigation
+} = useInputHistory({ maxHistorySize: 100 })
 
 // ========== Keyboard Shortcuts (使用 composable) ==========
 const { handleKeydown } = useKeyboardShortcuts({
@@ -826,6 +836,13 @@ const { handleKeydown } = useKeyboardShortcuts({
   toggleThinkingEnabled,
   cycleCodexReasoningEffort,
   handleForceSend,
+  // Input history functions
+  navigateHistoryUp,
+  navigateHistoryDown,
+  setInputText: (text: string) => { inputText.value = text },
+  getInputText: () => inputText.value,
+  // Popup states
+  isPopupOpen: computed(() => showAtSymbolPopup.value || showSlashCommandPopup.value || showContextSelectorPopup.value),
   // Emits
   onStop: () => emit('stop'),
   onCancel: () => emit('cancel')

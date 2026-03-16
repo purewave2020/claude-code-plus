@@ -12,6 +12,7 @@ import type { BackendType } from '@/types/backend'
 export interface RichTextInputRef {
   insertNewLine: () => void
   deleteToLineStart: () => void
+  moveCursorToEnd?: () => void
 }
 
 /**
@@ -23,25 +24,34 @@ export interface KeyboardShortcutsOptions {
   enabled: ComputedRef<boolean>
   inline: ComputedRef<boolean>
   backendType: ComputedRef<BackendType>
-  
+
   // Refs
   richTextInputRef: Ref<RichTextInputRef | undefined>
   showThinkingConfig: Ref<boolean>
-  
+
   // Composable functions - @ symbol
   checkAtSymbol: () => void
-  
+
   // Composable functions - permission modes
   cyclePermissionMode: () => void
   cycleCodexSandboxMode: () => void
-  
+
   // Composable functions - thinking
   toggleThinkingEnabled: (source: 'keyboard' | 'click') => Promise<void>
   cycleCodexReasoningEffort: () => void
-  
+
   // Composable functions - send
   handleForceSend: () => void
-  
+
+  // Input history functions
+  navigateHistoryUp?: (currentInput: string) => string | null
+  navigateHistoryDown?: (currentInput: string) => string | null
+  setInputText?: (text: string) => void
+  getInputText?: () => string
+
+  // Popup states (to disable history when popups are open)
+  isPopupOpen?: ComputedRef<boolean>
+
   // Emits
   onStop: () => void
   onCancel: () => void
@@ -88,11 +98,54 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
 
   /**
    * Main keydown handler for input element
-   * Handles all keyboard shortcuts: ESC, Tab, Shift+Tab, Ctrl+Enter, Ctrl+B, Ctrl+J, Ctrl+U, Shift+Enter
+   * Handles all keyboard shortcuts: ESC, Tab, Shift+Tab, Ctrl+Enter, Ctrl+B, Ctrl+J, Ctrl+U, Shift+Enter, Up/Down
    */
   async function handleKeydown(event: KeyboardEvent) {
-    // Arrow keys - trigger @ symbol check
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+    // Check if any popup is open that uses arrow keys
+    const popupOpen = options.isPopupOpen?.value ?? false
+
+    // Arrow Up - navigate to older history entry (only when no popup is open)
+    if (event.key === 'ArrowUp' && !event.ctrlKey && !event.metaKey && !event.altKey && !popupOpen) {
+      const navigateUp = options.navigateHistoryUp
+      const setInputText = options.setInputText
+      const getInputText = options.getInputText
+
+      if (navigateUp && setInputText && getInputText) {
+        const historyEntry = navigateUp(getInputText())
+        if (historyEntry !== null) {
+          event.preventDefault()
+          setInputText(historyEntry)
+          // Move cursor to end of input after setting text
+          nextTick(() => {
+            richTextInputRef.value?.moveCursorToEnd?.()
+          })
+          return
+        }
+      }
+    }
+
+    // Arrow Down - navigate to newer history entry (only when no popup is open)
+    if (event.key === 'ArrowDown' && !event.ctrlKey && !event.metaKey && !event.altKey && !popupOpen) {
+      const navigateDown = options.navigateHistoryDown
+      const setInputText = options.setInputText
+      const getInputText = options.getInputText
+
+      if (navigateDown && setInputText && getInputText) {
+        const historyEntry = navigateDown(getInputText())
+        if (historyEntry !== null) {
+          event.preventDefault()
+          setInputText(historyEntry)
+          // Move cursor to end of input after setting text
+          nextTick(() => {
+            richTextInputRef.value?.moveCursorToEnd?.()
+          })
+          return
+        }
+      }
+    }
+
+    // Arrow keys (left/right/home/end) - trigger @ symbol check
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
       nextTick(() => checkAtSymbol())
     }
 

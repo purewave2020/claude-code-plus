@@ -553,9 +553,9 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
     private fun getCustomModelsFromTable(): List<ModelInfo> {
         val model = customModelsTableModel ?: return emptyList()
         return (0 until model.rowCount).mapNotNull { i ->
-            val name = model.getValueAt(i, 0) as? String ?: return@mapNotNull null
-            val id = model.getValueAt(i, 1) as? String ?: return@mapNotNull null
-            ModelInfo(name, id, false)
+            val displayName = model.getValueAt(i, 0) as? String ?: return@mapNotNull null
+            val modelId = model.getValueAt(i, 1) as? String ?: return@mapNotNull null
+            ModelInfo(modelId, displayName, false)
         }
     }
 
