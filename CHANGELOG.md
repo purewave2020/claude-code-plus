@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-03-16
+
+### Added
+
+- OAuth subscription authentication support with token validation
+- Automatic release workflow triggered on tag push
+- `verifyToken` method for OAuth token verification
+
+### Changed
+
+- Update model IDs and display names to version 4.6 (Claude Opus 4.6)
+- Enhance input history navigation with improved keyboard shortcuts
+- Improve up/down arrow key handling for navigating input history
+- Enhance OAuth token validation with better error handling
+
 ## [2.0.2] - 2026-01-25
 
 ### Fixed
