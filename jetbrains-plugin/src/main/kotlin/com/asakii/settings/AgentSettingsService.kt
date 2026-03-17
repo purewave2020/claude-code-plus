@@ -147,7 +147,12 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
         var customAgents: String = "{}",
 
         // 自定义模型列表（JSON 序列化）
-        var customModels: String = "[]"
+        var customModels: String = "[]",
+
+        // 代理配置
+        var httpProxy: String = "",              // HTTP 代理 (http://host:port)
+        var httpsProxy: String = "",             // HTTPS 代理 (http://host:port)
+        var noProxy: String = ""                 // 不使用代理的地址 (逗号分隔)
     )
 
     private var state = State()
@@ -1422,6 +1427,41 @@ class AgentSettingsService : PersistentStateComponent<AgentSettingsService.State
     var customModelsJson: String
         get() = state.customModels
         set(value) { state.customModels = value }
+
+    // ==================== Proxy Configuration ====================
+
+    var httpProxy: String
+        get() = state.httpProxy
+        set(value) { state.httpProxy = value }
+
+    var httpsProxy: String
+        get() = state.httpsProxy
+        set(value) { state.httpsProxy = value }
+
+    var noProxy: String
+        get() = state.noProxy
+        set(value) { state.noProxy = value }
+
+    /**
+     * 获取代理环境变量映射
+     * @return 包含 HTTP_PROXY, HTTPS_PROXY, NO_PROXY 的环境变量映射
+     */
+    fun getProxyEnvVars(): Map<String, String> {
+        val envVars = mutableMapOf<String, String>()
+        state.httpProxy.takeIf { it.isNotBlank() }?.let {
+            envVars["HTTP_PROXY"] = it
+            envVars["http_proxy"] = it
+        }
+        state.httpsProxy.takeIf { it.isNotBlank() }?.let {
+            envVars["HTTPS_PROXY"] = it
+            envVars["https_proxy"] = it
+        }
+        state.noProxy.takeIf { it.isNotBlank() }?.let {
+            envVars["NO_PROXY"] = it
+            envVars["no_proxy"] = it
+        }
+        return envVars
+    }
 
     var codexCustomModelsJson: String
         get() = state.codexCustomModels

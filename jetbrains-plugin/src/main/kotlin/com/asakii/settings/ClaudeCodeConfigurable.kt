@@ -115,6 +115,11 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
     private var testConnectionButton: JButton? = null
     private var testResultLabel: JBLabel? = null
 
+    // Proxy Configuration components
+    private var httpProxyField: JBTextField? = null
+    private var httpsProxyField: JBTextField? = null
+    private var noProxyField: JBTextField? = null
+
     // Custom Models 组件
     private var customModelsTable: JBTable? = null
     private var customModelsTableModel: DefaultTableModel? = null
@@ -241,6 +246,20 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         }
         testResultLabel = JBLabel("").apply { font = font.deriveFont(11f) }
 
+        // Proxy Configuration components
+        httpProxyField = JBTextField().apply {
+            columns = 30
+            emptyText.text = "http://proxy.example.com:8080"
+        }
+        httpsProxyField = JBTextField().apply {
+            columns = 30
+            emptyText.text = "http://proxy.example.com:8080"
+        }
+        noProxyField = JBTextField().apply {
+            columns = 30
+            emptyText.text = "localhost,127.0.0.1,.local"
+        }
+
         // Build the API key sub-panel as a regular JPanel
         apiKeyPanel = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -315,6 +334,21 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
                 row {
                     cell(apiConfigPanel).align(AlignX.FILL)
                 }
+            }
+
+            group("Proxy Configuration") {
+                row("HTTP Proxy:") {
+                    cell(httpProxyField!!).columns(COLUMNS_LARGE)
+                }
+                row { comment("HTTP proxy URL (e.g., http://proxy.example.com:8080)") }
+                row("HTTPS Proxy:") {
+                    cell(httpsProxyField!!).columns(COLUMNS_LARGE)
+                }
+                row { comment("HTTPS proxy URL (e.g., http://proxy.example.com:8080)") }
+                row("No Proxy:") {
+                    cell(noProxyField!!).columns(COLUMNS_LARGE)
+                }
+                row { comment("Comma-separated list of hosts to bypass proxy (e.g., localhost,127.0.0.1)") }
             }
 
             group("Default Permissions") {
@@ -634,7 +668,11 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         val apiKeyModified = String(apiKeyField?.password ?: charArrayOf()) != settings.claudeApiKey
         val baseUrlModified = (baseUrlField?.text ?: "") != settings.claudeBaseUrl
 
-        return generalModified || agentsModified || authModeModified || apiKeyModified || baseUrlModified
+        val proxyModified = (httpProxyField?.text ?: "") != settings.httpProxy ||
+            (httpsProxyField?.text ?: "") != settings.httpsProxy ||
+            (noProxyField?.text ?: "") != settings.noProxy
+
+        return generalModified || agentsModified || authModeModified || apiKeyModified || baseUrlModified || proxyModified
     }
 
     override fun apply() {
@@ -674,6 +712,11 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         settings.claudeAuthMode = getSelectedAuthMode()
         settings.claudeApiKey = String(apiKeyField?.password ?: charArrayOf())
         settings.claudeBaseUrl = baseUrlField?.text?.trim() ?: ""
+
+        // Save proxy configuration
+        settings.httpProxy = httpProxyField?.text?.trim() ?: ""
+        settings.httpsProxy = httpsProxyField?.text?.trim() ?: ""
+        settings.noProxy = noProxyField?.text?.trim() ?: ""
 
         settings.notifyChange()
     }
@@ -715,6 +758,11 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         includePartialMessagesCheckbox?.isSelected = true
         defaultBypassPermissionsCheckbox?.isSelected = settings.defaultBypassPermissions
         defaultAutoCleanupContextsCheckbox?.isSelected = settings.claudeDefaultAutoCleanupContexts
+
+        // Restore proxy configuration
+        httpProxyField?.text = settings.httpProxy
+        httpsProxyField?.text = settings.httpsProxy
+        noProxyField?.text = settings.noProxy
 
         val config = parseAgentsConfig(settings.customAgents)
         val explore = config.agents["ExploreWithJetbrains"]
@@ -993,6 +1041,9 @@ class ClaudeCodeConfigurable : SearchableConfigurable {
         baseUrlSourceLabel = null
         testConnectionButton = null
         testResultLabel = null
+        httpProxyField = null
+        httpsProxyField = null
+        noProxyField = null
         nodePathField = null
         defaultModelCombo = null
         defaultThinkingLevelCombo = null

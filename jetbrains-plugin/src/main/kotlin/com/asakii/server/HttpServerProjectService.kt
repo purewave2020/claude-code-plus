@@ -241,6 +241,9 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         "claudeAuthMode=${settings.claudeAuthMode}, " +
                         "claudeApiKey=${if (settings.claudeApiKey.isNotBlank()) "(set, len=${settings.claudeApiKey.length})" else "(not set)"}, " +
                         "claudeBaseUrl=${settings.claudeBaseUrl.ifBlank { "(default)" }}, " +
+                        "httpProxy=${settings.httpProxy.ifBlank { "(not set)" }}, " +
+                        "httpsProxy=${settings.httpsProxy.ifBlank { "(not set)" }}, " +
+                        "noProxy=${settings.noProxy.ifBlank { "(not set)" }}, " +
                         "defaultBypass=${settings.defaultBypassPermissions}, " +
                         "claudeAutoCleanup=${settings.claudeDefaultAutoCleanupContexts}, " +
                         "codexAutoCleanup=${settings.codexDefaultAutoCleanupContexts}"
@@ -257,6 +260,9 @@ class HttpServerProjectService(private val project: Project) : Disposable {
                         authMode = settings.claudeAuthMode,
                         apiKey = settings.claudeApiKey.takeIf { it.isNotBlank() },
                         baseUrl = settings.claudeBaseUrl.takeIf { it.isNotBlank() },
+                        httpProxy = settings.httpProxy.takeIf { it.isNotBlank() },
+                        httpsProxy = settings.httpsProxy.takeIf { it.isNotBlank() },
+                        noProxy = settings.noProxy.takeIf { it.isNotBlank() },
                         permissionMode = settings.permissionMode.takeIf { it.isNotBlank() && it != "default" },
                         includePartialMessages = settings.includePartialMessages,
                         enableUserInteractionMcp = settings.enableUserInteractionMcp,

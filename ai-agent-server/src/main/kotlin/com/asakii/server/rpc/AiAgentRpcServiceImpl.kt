@@ -1105,6 +1105,21 @@ class AiAgentRpcServiceImpl(
             defaults.apiKey?.let { envVars["ANTHROPIC_API_KEY"] = it }
             defaults.baseUrl?.let { envVars["ANTHROPIC_BASE_URL"] = it }
         }
+
+        // Add proxy configuration
+        defaults.httpProxy?.takeIf { it.isNotBlank() }?.let {
+            envVars["HTTP_PROXY"] = it
+            envVars["http_proxy"] = it
+        }
+        defaults.httpsProxy?.takeIf { it.isNotBlank() }?.let {
+            envVars["HTTPS_PROXY"] = it
+            envVars["https_proxy"] = it
+        }
+        defaults.noProxy?.takeIf { it.isNotBlank() }?.let {
+            envVars["NO_PROXY"] = it
+            envVars["no_proxy"] = it
+        }
+
         if (envVars.isNotEmpty()) {
             sdkLog.info("🔑 [buildClaudeOverrides] API env vars: ${envVars.keys.joinToString()}")
         } else {

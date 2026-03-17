@@ -19,7 +19,7 @@ data class CustomModelInfo(
  */
 data class AiAgentServiceConfig(
     val defaultProvider: AiAgentProvider = AiAgentProvider.CLAUDE,
-    val defaultModel: String = "claude-opus-4-5-20251101",
+    val defaultModel: String = "claude-opus-4-6",
     val defaultSystemPrompt: String? = null,
     val claude: ClaudeDefaults = ClaudeDefaults(),
     val codex: CodexDefaults = CodexDefaults(),
@@ -74,6 +74,10 @@ data class ClaudeDefaults(
     // 思考配置
     val defaultThinkingLevel: String = "HIGH",  // 默认思考等级：OFF, LOW, MEDIUM, HIGH, VERY_HIGH, CUSTOM
     val defaultThinkingTokens: Int = 8192,      // 默认思考 token 数量
+    // 代理配置
+    val httpProxy: String? = null,              // HTTP 代理 (http://host:port)
+    val httpsProxy: String? = null,             // HTTPS 代理 (http://host:port)
+    val noProxy: String? = null,                // 不使用代理的地址
     // IDEA 文件同步 hooks（由 jetbrains-plugin 提供）
     // PRE_TOOL_USE: 保存 IDEA 中的文件到磁盘
     // POST_TOOL_USE: 重新加载文件到 IDEA
